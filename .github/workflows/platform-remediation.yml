@@ -22,6 +22,10 @@ on:
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
       - 'VTU/**/func/bc-crypto-buysell.php'
       - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
+      - 'VTU/**/func/bc-payout-worker.php'
+      - 'VTU/**/func/bc-service-dispatch-worker.php'
+      - 'VTU/**/cron/process_payout_reservations.php'
+      - 'VTU/**/cron/process_service_dispatch.php'
       - 'VTU/**/func/bc-update-manifest-guard.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/execute_update.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/cron_update.php'
@@ -179,6 +183,10 @@ on:
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
       - 'VTU/**/func/bc-crypto-buysell.php'
       - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
+      - 'VTU/**/func/bc-payout-worker.php'
+      - 'VTU/**/func/bc-service-dispatch-worker.php'
+      - 'VTU/**/cron/process_payout_reservations.php'
+      - 'VTU/**/cron/process_service_dispatch.php'
       - 'VTU/**/func/bc-update-manifest-guard.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/execute_update.php'
       - 'VTU/DGV7.0-SAAS/bc-spadmin/cron_update.php'
@@ -380,6 +388,7 @@ jobs:
           php VTU/tests/checkout_intents_foundation_test.php
           php VTU/tests/service_dispatch_lease_foundation_test.php
           php VTU/tests/crypto_buysell_foundation_test.php
+          php VTU/tests/held_workers_foundation_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
           php -l PAYHUB/includes/functions.php
@@ -632,6 +641,11 @@ jobs:
         env:
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/crypto_buysell_mysql_test.php
+
+      - name: Held payout & service-dispatch workers and crash reaper in disposable MySQL
+        env:
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/held_workers_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest

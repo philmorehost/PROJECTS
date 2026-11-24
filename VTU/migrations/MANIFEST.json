@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-2",
+  "version": "2026.11.18-remediation-manifest-3",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -138,6 +138,14 @@
     {
       "name": "bc-update-manifest-guard.php",
       "sha256": "75bc2e6f6f3370a91b09fc09a270165657d9e9caf07014fcb97df1ced62b1f21"
+    },
+    {
+      "name": "bc-payout-worker.php",
+      "sha256": "963d78636549830a9aa83c468b7659fb39869d38c52a91eeb7461b18f0e75ed5"
+    },
+    {
+      "name": "bc-service-dispatch-worker.php",
+      "sha256": "d5d3436d95ab3a276bc0e56c36f5555a2b60182d79cb0792ea8a6b3bc5381692"
     }
   ],
   "required_innodb_tables": [
