@@ -12,7 +12,16 @@ if(($argv[1]??'')==='missing'){
  $start=microtime(true);vn(!bc_live_media_prepare($dir.'/valid.mp4','liveliness_video'),'stalled inspector refused');
  vn(microtime(true)-$start<8,'stalled inspector terminated within bound');
 }else{
- foreach(['valid.mp4','valid.webm','live.webm'] as $file)vn(bc_live_media_prepare($dir.'/'.$file,'liveliness_video'),'valid AV accepted '.$file);
+ foreach(['valid.mp4','valid.webm','live.webm'] as $file){
+  $ok=bc_live_media_prepare($dir.'/'.$file,'liveliness_video');
+  if(!$ok){
+   $mime=(new finfo(FILEINFO_MIME_TYPE))->file($dir.'/'.$file);
+   $p=proc_open(['/usr/bin/ffprobe','-v','error','-show_entries','format=duration,format_name:stream=codec_type,codec_name,width,height,duration','-of','json',$dir.'/'.$file],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+   fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);proc_close($p);
+   echo '::error::Synthetic fixture diagnostic '.json_encode([$file,$mime,$out,$err])."\n";
+  }
+  vn($ok,'valid AV accepted '.$file);
+ }
  foreach(['long.mp4','silent.mp4','audio.mp4','tiny.mp4','junk.mp4','oversize.mp4'] as $file)vn(!bc_live_media_prepare($dir.'/'.$file,'liveliness_video'),'invalid evidence refused '.$file);
  vn(!bc_video_evidence_inspect($dir.'/valid.mp4','video/webm'),'MIME/container mismatch refused');
 }
