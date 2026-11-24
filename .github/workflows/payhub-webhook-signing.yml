@@ -71,6 +71,8 @@ jobs:
           php -l PAYHUB/includes/webhook-outbox.php
           php -l PAYHUB/includes/webhook-recovery.php
           php -l PAYHUB/includes/webhook-money.php
+          php -l PAYHUB/includes/webhook-monitor.php
+          php -l PAYHUB/bin/monitor-webhook-outbox.php
           php -l PAYHUB/bin/recover-webhook-outbox.php
           php -l PAYHUB/tests/webhook_retry_mysql_test.php
           php -l PAYHUB/webhook-paystack.php
