@@ -38,7 +38,7 @@ if (!function_exists('bc_chk_settle_verified_intent')) {
         if (empty($rec['ok'])) {
             return $rec;
         }
-        if (($rec['code'] ?? '') === 'already_final') {
+        if (!empty($rec['replayed']) || ($rec['code'] ?? '') === 'already_final') {
             return ['ok' => true, 'code' => 'already_settled', 'state' => 'settled', 'credited' => false];
         }
 
@@ -67,7 +67,13 @@ if (!function_exists('bc_chk_settle_verified_intent')) {
             ]
         );
         if (empty($cred['ok'])) {
+            if (($cred['reason'] ?? '') === 'historical_reference_requires_reconciliation') {
+                return ['ok' => true, 'code' => 'already_settled', 'state' => 'settled', 'credited' => false];
+            }
             return ['ok' => false, 'code' => 'wallet_credit_failed', 'detail' => $cred];
+        }
+        if (($cred['reason'] ?? '') === 'already_settled') {
+            return ['ok' => true, 'code' => 'already_settled', 'state' => 'settled', 'credited' => false];
         }
         return [
             'ok' => true,
