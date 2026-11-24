@@ -423,7 +423,7 @@ jobs:
           php VTU/tests/schema_manifest_test.php
           php VTU/tests/schema_autoheal_test.php
           php VTU/tests/apply_migrations_test.php
-          php VTU/DGV7.0-SAAS/tests/bc_tables_gate_test.php
+          php -n VTU/DGV7.0-SAAS/tests/bc_tables_gate_test.php
           php VTU/tests/release_readiness_test.php
           php VTU/bin/verify-release-readiness.php > /dev/null
           php VTU/bin/apply-migrations.php --dry-run > /dev/null
