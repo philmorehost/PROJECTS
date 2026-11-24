@@ -122,6 +122,8 @@ jobs:
           php -l PAYHUB/api/virtual-accounts.php
           php -l PAYHUB/merchant/reconcile.php
           php -l PAYHUB/includes/transaction-expiry-cron.php
+          php -l PAYHUB/includes/db.php
+          php -l PAYHUB/tests/payhub_schema_autoheal_runtime_test.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/api-reference.php
           php -l PAYHUB/tests/payhub_dva_reconcile_contract_test.php
@@ -142,6 +144,8 @@ jobs:
         run: php PAYHUB/tests/webhook_log_hardening_test.php
       - name: PayHub installer migration policy (no database or network)
         run: php PAYHUB/tests/payhub_installer_migrations_test.php
+      - name: PayHub runtime schema auto-heal contract
+        run: php PAYHUB/tests/payhub_schema_autoheal_runtime_test.php
       - name: Reviewed fulfilment producer inventory (source only)
         run: php PAYHUB/tests/fulfilment_inventory_test.php
       - name: PayHub DVA reconciliation & verify contract (source only)

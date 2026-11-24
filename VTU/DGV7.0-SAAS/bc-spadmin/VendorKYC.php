@@ -16,29 +16,109 @@ if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema(
 
 $vkyc_labels = [0 => 'Unverified', 1 => 'Under review', 2 => 'Verified', 3 => 'Rejected'];
 $vkyc_badges = [0 => 'secondary', 1 => 'warning', 2 => 'success', 3 => 'danger'];
-$vkyc_check_labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo (selfie)', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address', 'business_registration' => 'KYB: Business registration / CAC', 'beneficial_ownership' => 'KYB: Beneficial ownership'];
+$vkyc_check_labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'selfie' => 'Live photo (selfie)', 'liveliness_picture' => 'Live photo (selfie)', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address', 'business_registration' => 'KYB: Business registration / CAC', 'beneficial_ownership' => 'KYB: Beneficial ownership'];
 
 // Stream one submitted document to the signed-in super admin only. The
 // upload directory denies direct HTTP access (.htaccess), so this
-// authenticated viewer is the only way in.
+// authenticated viewer is the only way in. Supports HTTP byte-range
+// requests so liveliness videos stream and scrub smoothly in <video>.
 if (isset($_GET['doc'])) {
     $doc_id = (int)$_GET['doc'];
     $dq = mysqli_query($connection_server, "SELECT * FROM sas_vendor_kyc_documents WHERE id='$doc_id' LIMIT 1");
     $doc = $dq ? mysqli_fetch_assoc($dq) : null;
-    $base = realpath($_SERVER['DOCUMENT_ROOT'] . '/uploads/kyc-vendor');
+    $doc_root = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+    if ($doc_root === '') {
+        $doc_root = realpath(__DIR__ . '/..') ?: (__DIR__ . '/..');
+    }
+    $base = realpath($doc_root . '/uploads/kyc-vendor');
     $path = ($doc && $base) ? $base . DIRECTORY_SEPARATOR . basename((string)$doc['file_name']) : '';
     if (!$doc || $path === '' || !is_file($path)) {
         http_response_code(404);
         exit('Document not found.');
     }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-    $mimes = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'pdf' => 'application/pdf', 'mp4' => 'video/mp4', 'mov' => 'video/quicktime', 'webm' => 'video/webm', 'mkv' => 'video/x-matroska'];
-    header('Content-Type: ' . ($mimes[$ext] ?? 'application/octet-stream'));
+    $mimes = [
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'pdf' => 'application/pdf',
+        'mp4' => 'video/mp4',
+        'mov' => 'video/quicktime',
+        'webm' => 'video/webm',
+        'mkv' => 'video/x-matroska',
+    ];
+    $mime = $mimes[$ext] ?? '';
+    if ($mime === '' && function_exists('finfo_open')) {
+        $fi = @finfo_open(FILEINFO_MIME_TYPE);
+        if ($fi) {
+            $detected = @finfo_file($fi, $path);
+            @finfo_close($fi);
+            if (is_string($detected) && $detected !== '') {
+                $mime = $detected;
+            }
+        }
+    }
+    if ($mime === '') {
+        $mime = !empty($doc['mime_type']) ? (string)$doc['mime_type'] : 'application/octet-stream';
+    }
+    $size = filesize($path);
+    $start = 0;
+    $end = $size > 0 ? $size - 1 : 0;
+
+    header('Content-Type: ' . $mime);
     header('Content-Disposition: inline; filename="' . basename($path) . '"');
+    header('Accept-Ranges: bytes');
     header('X-Content-Type-Options: nosniff');
-    header('Cache-Control: private, no-store');
-    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-    readfile($path);
+    header('Cache-Control: private, max-age=3600');
+
+    if ($size > 0 && !empty($_SERVER['HTTP_RANGE']) && preg_match('/^bytes=(\d*)-(\d*)$/i', trim((string)$_SERVER['HTTP_RANGE']), $rm)) {
+        if ($rm[1] !== '') {
+            $start = (int)$rm[1];
+        }
+        if ($rm[2] !== '') {
+            $end = (int)$rm[2];
+        }
+        if ($rm[1] === '' && $rm[2] !== '') {
+            $start = max(0, $size - (int)$rm[2]);
+            $end = $size - 1;
+        }
+        if ($start > $end || $start >= $size) {
+            http_response_code(416);
+            header("Content-Range: bytes */$size");
+            exit;
+        }
+        $end = min($end, $size - 1);
+        http_response_code(206);
+        header("Content-Range: bytes $start-$end/$size");
+        header('Content-Length: ' . ($end - $start + 1));
+    } else {
+        header('Content-Length: ' . $size);
+    }
+
+    $fp = fopen($path, 'rb');
+    if ($fp) {
+        if ($start > 0) {
+            fseek($fp, $start);
+        }
+        $remaining = $size > 0 ? ($end - $start + 1) : 0;
+        while ($remaining > 0 && !feof($fp)) {
+            $chunk = fread($fp, min(65536, $remaining));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            echo $chunk;
+            $remaining -= strlen($chunk);
+        }
+        fclose($fp);
+    }
     exit;
 }
 
@@ -126,12 +206,7 @@ if (!empty($_SESSION['product_purchase_response'])) {
     unset($_SESSION['product_purchase_response']);
 }
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
 <?php bc_adm_head("Vendor KYC / KYB Review | " . ($get_all_super_admin_site_details["site_title"] ?? 'VTU Platform'), array("area" => "spadmin")); ?>
-</head>
-<body>
 <?php bc_adm_sidebar(array("area" => "spadmin")); ?>
 <?php bc_adm_topbar(array("area" => "spadmin", "title" => "VENDOR KYC / KYB REVIEW", "crumb" => "Home / Compliance / Vendor KYC")); ?>
 
@@ -177,10 +252,54 @@ if (!empty($_SESSION['product_purchase_response'])) {
                   <div class="col-md-6">Still needed: <strong><?php echo $pending ? implode(', ', array_map(function ($c) use ($vkyc_check_labels) { return $vkyc_check_labels[$c] ?? $c; }, $pending)) : 'nothing — file complete'; ?></strong></div>
                 </div>
                 <?php if ($docs): ?>
-                <div class="mt-2 small">
-                  <?php foreach ($docs as $doc): ?>
-                  <a class="btn btn-sm btn-outline-secondary rounded-pill me-1 mb-1" target="_blank" rel="noopener" href="VendorKYC.php?doc=<?php echo (int)$doc['id']; ?>"><?php echo htmlspecialchars($vkyc_check_labels[$doc['doc_type']] ?? $doc['doc_type'], ENT_QUOTES, 'UTF-8'); ?> <span class="badge bg-<?php echo $doc['status'] === 'approved' ? 'success' : ($doc['status'] === 'rejected' ? 'danger' : 'warning'); ?>"><?php echo htmlspecialchars((string)$doc['status'], ENT_QUOTES, 'UTF-8'); ?></span></a>
-                  <?php endforeach; ?>
+                <div class="mt-3">
+                  <div class="small fw-bold text-muted mb-2">Submitted KYC / KYB Documents &amp; Media</div>
+                  <div class="row g-2">
+                    <?php foreach ($docs as $doc):
+                        $doc_id = (int)$doc['id'];
+                        $doc_url = 'VendorKYC.php?doc=' . $doc_id;
+                        $doc_label = $vkyc_check_labels[$doc['doc_type']] ?? $doc['doc_type'];
+                        $doc_ext = strtolower(pathinfo((string)($doc['file_name'] ?? ''), PATHINFO_EXTENSION));
+                        $doc_mime = strtolower((string)($doc['mime_type'] ?? ''));
+                        $is_video = (strpos($doc_mime, 'video/') === 0) || in_array($doc_ext, ['mp4', 'mov', 'webm', 'mkv'], true) || $doc['doc_type'] === 'liveliness_video';
+                        $is_image = !$is_video && ((strpos($doc_mime, 'image/') === 0) || in_array($doc_ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true));
+                        $is_pdf = ($doc_mime === 'application/pdf') || $doc_ext === 'pdf';
+                        $media_kind = $is_video ? 'video' : ($is_image ? 'image' : ($is_pdf ? 'pdf' : 'other'));
+                        $badge_cls = $doc['status'] === 'approved' ? 'success' : ($doc['status'] === 'rejected' ? 'danger' : 'warning');
+                    ?>
+                    <div class="col-sm-6 col-lg-4">
+                      <div class="border rounded-3 p-2 bg-light h-100 d-flex flex-column justify-content-between gap-2">
+                        <div class="d-flex align-items-center justify-content-between gap-2">
+                          <span class="small fw-semibold text-truncate" title="<?php echo htmlspecialchars($doc_label, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($doc_label, ENT_QUOTES, 'UTF-8'); ?></span>
+                          <span class="badge bg-<?php echo $badge_cls; ?>"><?php echo htmlspecialchars((string)$doc['status'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                        <div class="rounded-2 overflow-hidden bg-white border d-flex align-items-center justify-content-center" style="min-height:130px;max-height:180px;">
+                          <?php if ($is_image): ?>
+                            <img src="<?php echo htmlspecialchars($doc_url, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($doc_label, ENT_QUOTES, 'UTF-8'); ?>" loading="lazy" class="img-fluid w-100" style="max-height:175px;object-fit:contain;cursor:pointer;" onclick="vkycOpenPreview(<?php echo htmlspecialchars(json_encode($doc_url), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($doc_label), ENT_QUOTES, 'UTF-8'); ?>, 'image')">
+                          <?php elseif ($is_video): ?>
+                            <video controls preload="metadata" playsinline class="w-100 bg-dark" style="max-height:175px;">
+                              <source src="<?php echo htmlspecialchars($doc_url, ENT_QUOTES, 'UTF-8'); ?>"<?php if ($doc_mime !== ''): ?> type="<?php echo htmlspecialchars($doc_mime, ENT_QUOTES, 'UTF-8'); ?>"<?php endif; ?>>
+                            </video>
+                          <?php elseif ($is_pdf): ?>
+                            <button type="button" class="btn btn-link text-decoration-none text-danger fw-semibold py-4" onclick="vkycOpenPreview(<?php echo htmlspecialchars(json_encode($doc_url), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($doc_label), ENT_QUOTES, 'UTF-8'); ?>, 'pdf')">
+                              <i class="bi bi-file-earmark-pdf fs-2 d-block mb-1"></i>Click to preview PDF
+                            </button>
+                          <?php else: ?>
+                            <a href="<?php echo htmlspecialchars($doc_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="btn btn-link text-decoration-none py-4">
+                              <i class="bi bi-file-earmark-text fs-2 d-block mb-1"></i>Open file
+                            </a>
+                          <?php endif; ?>
+                        </div>
+                        <div class="d-flex gap-2">
+                          <?php if ($media_kind !== 'other'): ?>
+                          <button type="button" class="btn btn-sm btn-outline-primary flex-fill" onclick="vkycOpenPreview(<?php echo htmlspecialchars(json_encode($doc_url), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($doc_label), ENT_QUOTES, 'UTF-8'); ?>, <?php echo htmlspecialchars(json_encode($media_kind), ENT_QUOTES, 'UTF-8'); ?>)">Preview</button>
+                          <?php endif; ?>
+                          <a class="btn btn-sm btn-outline-secondary flex-fill" target="_blank" rel="noopener" href="<?php echo htmlspecialchars($doc_url, ENT_QUOTES, 'UTF-8'); ?>">Open</a>
+                        </div>
+                      </div>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
                 </div>
                 <?php endif; ?>
                 <?php if ((int)($vendor['kyc_status'] ?? 0) !== 2): ?>
@@ -216,8 +335,74 @@ if (!empty($_SESSION['product_purchase_response'])) {
         </div>
       </div>
     </section>
-<?php bc_adm_foot(array("area" => "spadmin")); ?>
-</body>
-</html>
 
+    <div class="modal fade" id="vkycPreviewModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+          <div class="modal-header border-0">
+            <h5 class="modal-title fw-bold" id="vkycPreviewTitle">Document Preview</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center bg-light rounded-3 mx-3 mb-2 p-2" id="vkycPreviewBody" style="min-height:220px;"></div>
+          <div class="modal-footer border-0">
+            <a id="vkycPreviewOpen" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary rounded-pill px-3">Open in new tab</a>
+            <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    function vkycOpenPreview(url, label, kind) {
+        var modalEl = document.getElementById('vkycPreviewModal');
+        var titleEl = document.getElementById('vkycPreviewTitle');
+        var bodyEl = document.getElementById('vkycPreviewBody');
+        var openEl = document.getElementById('vkycPreviewOpen');
+        if (!modalEl || !bodyEl) {
+            window.open(url, '_blank', 'noopener');
+            return;
+        }
+        titleEl.textContent = label || 'Document Preview';
+        openEl.href = url;
+        bodyEl.innerHTML = '';
+        if (kind === 'video') {
+            var v = document.createElement('video');
+            v.controls = true;
+            v.autoplay = true;
+            v.playsInline = true;
+            v.className = 'w-100 rounded-3 bg-dark';
+            v.style.maxHeight = '70vh';
+            v.src = url;
+            bodyEl.appendChild(v);
+        } else if (kind === 'pdf') {
+            var f = document.createElement('iframe');
+            f.src = url;
+            f.className = 'w-100 border-0 rounded-3';
+            f.style.height = '70vh';
+            bodyEl.appendChild(f);
+        } else {
+            var img = document.createElement('img');
+            img.src = url;
+            img.alt = label || 'Document';
+            img.className = 'img-fluid rounded-3';
+            img.style.maxHeight = '70vh';
+            bodyEl.appendChild(img);
+        }
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else {
+            modalEl.style.display = 'block';
+            modalEl.classList.add('show');
+        }
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('vkycPreviewModal');
+        if (!modalEl) return;
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            var bodyEl = document.getElementById('vkycPreviewBody');
+            if (bodyEl) bodyEl.innerHTML = '';
+        });
+    });
+    </script>
+<?php bc_adm_foot(array("area" => "spadmin")); ?>
 <script src="../asset/bc-admin-inline-otp.js" defer></script>

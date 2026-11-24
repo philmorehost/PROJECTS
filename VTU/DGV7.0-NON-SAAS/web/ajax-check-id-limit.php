@@ -3,6 +3,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
 bc_secure_session_start();
 include_once("../func/bc-config.php");
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 
 $data = json_decode(file_get_contents("php://input"), true);
 if(!$data) exit(json_encode(["status" => "error", "message" => "Invalid Request"]));

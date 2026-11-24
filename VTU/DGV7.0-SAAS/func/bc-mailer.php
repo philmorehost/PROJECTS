@@ -105,15 +105,98 @@ function bc_resolve_from_name($from, $headers)
     return bc_sanitize_from_name($name);
 }
 
+if (!function_exists('bc_resolve_smtp_config')) {
+    function bc_resolve_smtp_config($platform_only = false)
+    {
+        global $connection_server;
+        $vid = function_exists('resolveVendorID') ? resolveVendorID() : 0;
+        $smtp_config = null;
+
+        if ($connection_server instanceof mysqli) {
+            if (!$platform_only && $vid > 0) {
+                $q = @mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
+                if ($q && ($r = mysqli_fetch_assoc($q))) {
+                    if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
+                }
+            }
+
+            if (!$smtp_config) {
+                $q = @mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_super_admin LIMIT 1");
+                if ($q && ($r = mysqli_fetch_assoc($q))) {
+                    if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
+                }
+            }
+        }
+        return $smtp_config;
+    }
+}
+
+if (!function_exists('bc_flush_deferred_mail_queue')) {
+    function bc_flush_deferred_mail_queue()
+    {
+        if (empty($GLOBALS['bc_deferred_mail_queue']) || !is_array($GLOBALS['bc_deferred_mail_queue'])) {
+            return;
+        }
+        // Release any active PHP session lock and flush the HTTP response to the browser
+        // BEFORE opening SMTP sockets so Pay Bills / redirects return immediately.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            @litespeed_finish_request();
+        }
+        $queue = $GLOBALS['bc_deferred_mail_queue'];
+        $GLOBALS['bc_deferred_mail_queue'] = array();
+        foreach ($queue as $job) {
+            bc_deliver_prepared_mail(
+                $job['from'],
+                $job['to'],
+                $job['subject'],
+                $job['message'],
+                $job['headers'],
+                $job['platform_only'],
+                $job['smtp_config'] ?? null,
+                $job['safe_from'] ?? null
+            );
+        }
+    }
+}
+
 function customBCMailSender($from,$to,$subject,$message,$headers, $background = true, $platform_only = false){
     global $connection_server;
     require_once __DIR__ . '/email-design.php';
     $message = mailDesignTemplate($subject, $message, array(), true);
 
-    // Branch DG6.7 Optimization: Optionally skip blocking SMTP for login notifications
-    // if requested, or if the server is known to be slow.
-    // For now, we will use a shorter timeout to prevent "everlasting" loads.
+    if ($background && PHP_SAPI !== 'cli' && !$platform_only) {
+        $preloaded_smtp = bc_resolve_smtp_config(false);
+        $preloaded_from = bc_resolve_safe_from_address($connection_server, $preloaded_smtp['smtp_user'] ?? null);
+        if (!isset($GLOBALS['bc_deferred_mail_queue']) || !is_array($GLOBALS['bc_deferred_mail_queue'])) {
+            $GLOBALS['bc_deferred_mail_queue'] = array();
+        }
+        $GLOBALS['bc_deferred_mail_queue'][] = array(
+            'from' => $from,
+            'to' => $to,
+            'subject' => $subject,
+            'message' => $message,
+            'headers' => $headers,
+            'platform_only' => false,
+            'smtp_config' => $preloaded_smtp,
+            'safe_from' => $preloaded_from,
+        );
+        if (empty($GLOBALS['bc_deferred_mail_registered'])) {
+            $GLOBALS['bc_deferred_mail_registered'] = true;
+            register_shutdown_function('bc_flush_deferred_mail_queue');
+        }
+        return true;
+    }
 
+    return bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $platform_only);
+}
+
+function bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $platform_only = false, $preloaded_smtp = null, $preloaded_safe_from = null) {
+    global $connection_server;
     $sent = false;
 	try {
         if (!bc_mailer_library_available()) {
@@ -123,23 +206,7 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
             throw new RuntimeException('PHPMailer library is not installed');
         }
 		$smtpMAIL = new PHPMailer(true);
-         // Resolve SMTP Context (Vendor vs Platform)
-         $vid = resolveVendorID();
-         $smtp_config = null;
-
-          if (!$platform_only && $vid > 0) {
-              $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
-              if ($q && ($r = mysqli_fetch_assoc($q))) {
-                  if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-              }
-          }
-
-          if (!$smtp_config) {
-              $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_super_admin LIMIT 1");
-              if ($q && ($r = mysqli_fetch_assoc($q))) {
-                  if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-              }
-          }
+        $smtp_config = is_array($preloaded_smtp) ? $preloaded_smtp : bc_resolve_smtp_config($platform_only);
 
         if ($platform_only && (!$smtp_config || !filter_var($smtp_config['smtp_user']??'',FILTER_VALIDATE_EMAIL))) return false;
 
@@ -153,7 +220,11 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 
         // GUARANTEE a valid From address (see bc_resolve_safe_from_address). Using the raw
         // DB value here let a bad smtp_user poison both the SMTP path AND the mail() fallback.
-        $smtp_user = bc_resolve_safe_from_address($connection_server, $smtp_user);
+        if (is_string($preloaded_safe_from) && filter_var($preloaded_safe_from, FILTER_VALIDATE_EMAIL)) {
+            $smtp_user = $preloaded_safe_from;
+        } else {
+            $smtp_user = bc_resolve_safe_from_address($connection_server, $smtp_user);
+        }
 
 		$smtpMAIL->isSMTP();
 		$smtpMAIL->Host = $smtp_host;
@@ -163,7 +234,8 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 
 		$smtpMAIL->Port = $smtp_port;
         $smtpMAIL->CharSet = 'UTF-8';
-        $smtpMAIL->Timeout = 7; // Branch DG6.7 Optimization: Shorter timeout for faster failover
+        $smtpMAIL->Timeout = 5;
+        $smtpMAIL->Timelimit = 8;
 		
 		$smtpMAIL->Username = $smtp_user;
 		$smtpMAIL->Password = $smtp_pass;
@@ -221,7 +293,10 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
         // From" rejection complains about. Raw mail() applies no Content-Transfer-Encoding,
         // so base64-encode the body here too (same reasoning as the primary path's
         // Encoding='base64').
-        $safe_from = bc_resolve_safe_from_address($connection_server, $smtp_user ?? null);
+        // Also guard catch fallback against closed $connection_server during shutdown.
+        $safe_from = (is_string($preloaded_safe_from) && filter_var($preloaded_safe_from, FILTER_VALIDATE_EMAIL))
+            ? $preloaded_safe_from
+            : (($connection_server instanceof mysqli) ? bc_resolve_safe_from_address($connection_server, $smtp_user ?? null) : ($smtp_user ?? 'notification@cheaperdata.com.ng'));
         $fallback_headers = "MIME-Version: 1.0\r\n";
         $fallback_headers .= "Content-type: text/html; charset=UTF-8\r\n";
         $fallback_headers .= "From: " . bc_resolve_from_name($from, $headers) . " <" . $safe_from . ">\r\n";

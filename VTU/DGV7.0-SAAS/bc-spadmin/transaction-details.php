@@ -16,7 +16,8 @@ if (!is_array($spadmin) || empty($spadmin['id']) || $ref === '') {
     exit;
 }
 
-$row = bc_receipt_fetch($connection_server, "1=1", $ref);
+$source = preg_replace('/[^a-z]/', '', strtolower((string)($_GET['source'] ?? '')));
+$row = bc_receipt_fetch_spadmin($connection_server, $ref, $source);
 $site = (string)($GLOBALS['get_all_super_admin_site_details']['site_title'] ?? 'Receipt');
 
 echo json_encode(bc_receipt_payload($row, true, $site));
