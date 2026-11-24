@@ -49,10 +49,20 @@ function bc_video_evidence_inspect($tmp,$mime) {
     $binary=defined('BC_FFPROBE_PATH')?BC_FFPROBE_PATH:'/usr/bin/ffprobe';
     if (!is_string($binary)||$binary===''||$binary[0]!=='/'||!is_executable($binary)) return false;
     foreach(['proc_open','proc_get_status','proc_terminate','proc_close','stream_set_blocking'] as $fn)if(!function_exists($fn))return false;
+    $metadata=bc_video_evidence_probe(bc_video_evidence_command($binary,$mime,$path));
+    if(!is_array($metadata))return false;
+    if(!isset($metadata['format']['duration'])||$metadata['format']['duration']==='N/A'){
+        // Inspect video packet timing separately. Do not ask ffprobe to parse Opus packets as frames.
+        $clock=bc_video_evidence_probe(bc_video_evidence_command($binary,$mime,$path,true));
+        if(!is_array($clock))return false;
+        $metadata['packets']=$clock['packets']??null;
+    }
+    return bc_video_evidence_metadata_valid($metadata);
+}
+function bc_video_evidence_probe($args) {
     $process=null;$pipes=[];$output='';$errors='';$finished=false;$exit=-1;
     try {
         // Force only an expected container demuxer; disallow network protocols and playlist formats.
-        $args=bc_video_evidence_command($binary,$mime,$path);
         $process=@proc_open($args,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);
         if(!is_resource($process))return false;
         fclose($pipes[0]);
@@ -70,7 +80,8 @@ function bc_video_evidence_inspect($tmp,$mime) {
         if(!$finished)return false;
         $output.=stream_get_contents($pipes[1],262145-strlen($output));
         $errors.=stream_get_contents($pipes[2],8193-strlen($errors));
-        return $exit===0 && $errors==='' && strlen($output)<=262144 && bc_video_evidence_metadata_valid(json_decode($output,true));
+        if($exit!==0||$errors!==''||strlen($output)>262144)return false;
+        $parsed=json_decode($output,true);return is_array($parsed)?$parsed:false;
     } catch(Throwable $e) { return false; }
     finally {
         if(is_resource($process)) {
@@ -81,6 +92,8 @@ function bc_video_evidence_inspect($tmp,$mime) {
     }
 }
 
-function bc_video_evidence_command($binary,$mime,$path) {
-    return [$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska','-show_packets','-show_entries','packet=pts_time,duration_time:format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic','-of','json',$path];
+function bc_video_evidence_command($binary,$mime,$path,$packet_clock=false) {
+    $args=[$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska'];
+    if($packet_clock)$args=array_merge($args,['-select_streams','v:0','-show_packets']);
+    return array_merge($args,['-show_entries','packet=pts_time,duration_time:format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic','-of','json',$path]);
 }
