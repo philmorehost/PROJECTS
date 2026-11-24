@@ -22,6 +22,18 @@ if (PHP_SAPI === 'cli') {
     if ($vendorId <= 0) { fwrite(STDERR, "Missing --vendor=ID.\n"); exit(2); }
     require_once __DIR__ . '/../func/bc-connect.php';
     require_once __DIR__ . '/../func/bc-giftcard-worker.php';
-    echo json_encode(['ok' => false, 'code' => 'no_live_provider_transport_configured', 'vendor_id' => $vendorId, 'limit' => $limit]) . "\n";
-    exit(1);
+    $endpoint = (string)(getenv('BC_GIFTCARD_PROVIDER_ENDPOINT') ?: '');
+    $secret   = (string)(getenv('BC_GIFTCARD_PROVIDER_HMAC_SECRET') ?: '');
+    if ($endpoint === '' || $secret === '') {
+        echo json_encode(['ok' => false, 'code' => 'no_live_provider_transport_configured', 'vendor_id' => $vendorId, 'limit' => $limit]) . "\n";
+        exit(1);
+    }
+    try {
+        $transport = bc_gc_make_http_transport($endpoint, $secret);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'code' => 'invalid_provider_endpoint', 'error' => $e->getMessage()]) . "\n";
+        exit(2);
+    }
+    echo json_encode(bc_gc_run_worker($vendorId, $transport, $limit), JSON_THROW_ON_ERROR) . "\n";
+    exit(0);
 }

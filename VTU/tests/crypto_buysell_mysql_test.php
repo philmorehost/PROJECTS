@@ -145,6 +145,19 @@ try {
         'deposit_address' => 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL',
     ]);
     cbs_chk($sOrd1['http_code'] === 200 && !$sOrd1['body']['order']['replayed'] && $sOrd2['body']['order']['replayed'], 'create_sell is idempotent on replay');
+
+    $dwRes = bc_cbs_run_deposit_watcher($db, 1, fn($ord) => [
+        'observed' => true,
+        'network' => 'TRON',
+        'asset' => 'USDT',
+        'tx_hash' => 'tron_sell_watch_tx_01',
+        'log_index' => 0,
+        'observed_units_1e8' => '500000000',
+        'confirmations' => 20,
+        'required_confirmations' => 19,
+        'reorg_detected' => false,
+    ]);
+    cbs_chk($dwRes['ok'] && $dwRes['processed'] === 1 && $dwRes['results'][0]['state'] === 'credited', 'deposit watcher settled matched final sell order');
     putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED');
 
     // 5. MyISAM refusal on non-FK table

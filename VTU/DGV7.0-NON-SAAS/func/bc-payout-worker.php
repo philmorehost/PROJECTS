@@ -6,6 +6,7 @@
  * transport timeouts/exceptions record 'unknown' and never auto-refund or retry.
  */
 require_once __DIR__ . '/bc-payout-reservations.php';
+require_once __DIR__ . '/bc-worker-http.php';
 
 if (!function_exists('bc_payout_worker_enabled')) {
     function bc_payout_worker_enabled() {
@@ -103,5 +104,34 @@ if (!function_exists('bc_payout_run_worker')) {
             $results[] = ['reference' => $ref, 'ok' => !empty($obs['ok']), 'state' => $obs['state'] ?? 'unknown'];
         }
         return ['ok' => true, 'code' => 'completed', 'processed' => count($results), 'results' => $results];
+    }
+}
+
+if (!function_exists('bc_payout_make_http_transport')) {
+    function bc_payout_make_http_transport($endpointUrl, $hmacSecret) {
+        $sender = bc_worker_make_signed_json_transport($endpointUrl, $hmacSecret);
+        return static function (array $reservation) use ($sender) {
+            $ref = (string)($reservation['reference'] ?? '');
+            $payload = [
+                'action'         => 'payout_dispatch',
+                'vendor_id'      => (int)($reservation['vendor_id'] ?? 0),
+                'user_id'        => (int)($reservation['user_id'] ?? 0),
+                'reference'      => $ref,
+                'amount_minor'   => (string)($reservation['amount_minor'] ?? '0'),
+                'currency'       => (string)($reservation['currency'] ?? 'NGN'),
+                'channel'        => (string)($reservation['channel'] ?? ''),
+                'destination_id' => (string)($reservation['destination_hash'] ?? ''),
+            ];
+            $resp = $sender($payload, $ref);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (!in_array($cand, ['confirmed_success', 'confirmed_failure', 'unknown'], true)) {
+                $cand = 'unknown';
+            }
+            return [
+                'outcome'            => $cand,
+                'provider_reference' => (string)($resp['provider_reference'] ?? ($resp['provider_ref'] ?? '')),
+                'error'              => (string)($resp['error'] ?? ''),
+            ];
+        };
     }
 }

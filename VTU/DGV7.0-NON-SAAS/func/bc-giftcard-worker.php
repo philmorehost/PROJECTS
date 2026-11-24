@@ -6,6 +6,7 @@
  * timeouts/exceptions record 'unknown' and never auto-refund or retry.
  */
 require_once __DIR__ . '/bc-giftcard-settlement.php';
+require_once __DIR__ . '/bc-worker-http.php';
 
 if (!function_exists('bc_gc_worker_enabled')) {
     function bc_gc_worker_enabled() {
@@ -112,5 +113,36 @@ if (!function_exists('bc_gc_run_worker')) {
             ];
         }
         return ['ok' => true, 'code' => 'completed', 'processed' => count($results), 'results' => $results];
+    }
+}
+
+if (!function_exists('bc_gc_make_http_transport')) {
+    function bc_gc_make_http_transport($endpointUrl, $hmacSecret) {
+        $sender = bc_worker_make_signed_json_transport($endpointUrl, $hmacSecret);
+        return static function (array $order) use ($sender) {
+            $ref = (string)($order['reference'] ?? '');
+            $payload = [
+                'action'       => 'giftcard_dispatch',
+                'vendor_id'    => (int)($order['vendor_id'] ?? 0),
+                'user_id'      => (int)($order['user_id'] ?? 0),
+                'reference'    => $ref,
+                'product_code' => (string)($order['product_code'] ?? ''),
+                'quantity'     => (int)($order['quantity'] ?? 1),
+                'amount_minor' => (string)($order['amount_minor'] ?? '0'),
+                'currency'     => (string)($order['currency'] ?? 'NGN'),
+            ];
+            $resp = $sender($payload, $ref);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (!in_array($cand, ['confirmed_success', 'confirmed_failure', 'unknown'], true)) {
+                $cand = 'unknown';
+            }
+            return [
+                'outcome'            => $cand,
+                'provider_reference' => (string)($resp['provider_reference'] ?? ($resp['provider_ref'] ?? '')),
+                'encrypted_code'     => (string)($resp['encrypted_code'] ?? ''),
+                'encrypted_pin'      => (string)($resp['encrypted_pin'] ?? ''),
+                'error'              => (string)($resp['error'] ?? ''),
+            ];
+        };
     }
 }

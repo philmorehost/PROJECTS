@@ -5,6 +5,7 @@
  * Crash reaping moves expired active leases to 'unknown' without retry.
  */
 require_once __DIR__ . '/bc-service-dispatch-lease.php';
+require_once __DIR__ . '/bc-worker-http.php';
 
 if (!function_exists('bc_sdl_worker_enabled')) {
     function bc_sdl_worker_enabled() {
@@ -74,5 +75,33 @@ if (!function_exists('bc_sdl_run_worker')) {
             $results[] = ['request_id' => $reqId, 'ok' => !empty($comp['ok']), 'state' => $comp['state'] ?? 'unknown'];
         }
         return ['ok' => true, 'code' => 'completed', 'processed' => count($results), 'results' => $results];
+    }
+}
+
+if (!function_exists('bc_sdl_make_http_transport')) {
+    function bc_sdl_make_http_transport($endpointUrl, $hmacSecret) {
+        $sender = bc_worker_make_signed_json_transport($endpointUrl, $hmacSecret);
+        return static function (array $row, array $lease) use ($sender) {
+            $reqId = (int)($row['request_id'] ?? 0);
+            $payloadData = is_string($row['payload'] ?? null) ? json_decode($row['payload'], true) : (is_array($row['payload'] ?? null) ? $row['payload'] : []);
+            $payload = [
+                'action'      => 'service_dispatch',
+                'request_id'  => $reqId,
+                'service_type'=> (string)($row['type'] ?? ''),
+                'provider'    => (string)($row['provider'] ?? ''),
+                'lease_token' => (string)($lease['lease_token'] ?? ''),
+                'payload'     => is_array($payloadData) ? $payloadData : [],
+            ];
+            $resp = $sender($payload, 'sdl-' . $reqId);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (!in_array($cand, ['confirmed_success', 'confirmed_failure', 'unknown'], true)) {
+                $cand = 'unknown';
+            }
+            return [
+                'outcome'            => $cand,
+                'provider_reference' => (string)($resp['provider_reference'] ?? ($resp['provider_ref'] ?? '')),
+                'error'              => (string)($resp['error'] ?? ''),
+            ];
+        };
     }
 }
