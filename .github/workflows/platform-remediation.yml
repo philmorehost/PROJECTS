@@ -5,6 +5,8 @@ on:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/func/bc-service-attempt-journal.php'
+      - 'VTU/migrations/20261118_service_attempt_journal.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -112,6 +114,8 @@ on:
       - 'VTU/cryptocurrency-idea/**'
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
+      - 'VTU/**/func/bc-service-attempt-journal.php'
+      - 'VTU/migrations/20261118_service_attempt_journal.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -271,6 +275,7 @@ jobs:
           php VTU/tests/admin_pin_setup_test.php
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
+          php VTU/tests/service_attempt_journal_test.php
           php VTU/tests/vendor_compliance_review_test.php
           php VTU/tests/video_evidence_test.php
           php VTU/tests/security_question_policy_test.php
@@ -458,6 +463,12 @@ jobs:
           BC_QUESTION_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/security_question_mysql_test.php
+
+      - name: Held provider attempt journal race and reconciliation receipts in disposable MySQL
+        env:
+          BC_ATTEMPT_JOURNAL_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/service_attempt_journal_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest
