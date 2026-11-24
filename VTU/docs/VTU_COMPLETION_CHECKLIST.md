@@ -58,3 +58,7 @@ These are seven broad remaining workstreams, NOT seven small patches or a quanti
 - `VTU/docs/LANDING_APP_BRANDING.md`, `GIFTCARD_SETTLEMENT_SAFETY.md`: design and containment boundaries.
 
 There is no honest single "all done" number while major provider-backed financial workflows and independent acceptance remain. Each completed source increment should state its tests and remaining boundary, with live outcomes recorded separately.
+
+### Read-only monitoring follow-up
+
+A bounded operator CLI `PAYHUB/bin/monitor-webhook-outbox.php` now reports page-scoped state/age counts without payloads, network calls or evidence mutation. It is not installed as a cron/alert and does not establish recovery eligibility, global totals, downstream settlement or production health. External monitoring/alert integration, restricted operator operation and real endpoint acceptance remain. Sandbox token-race protection and the nine-surface regression inventory were merged in PR #287 after native CI passed.

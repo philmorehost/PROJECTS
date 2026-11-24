@@ -294,5 +294,21 @@ try {
     $workers=[];for($i=0;$i<6;$i++){$proc=proc_open([PHP_BINARY,__FILE__,'worker',$name,'90','sandbox'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($proc))throw new RuntimeException('sandbox worker failed');fclose($pipes[0]);$workers[]=[$proc,$pipes];}
     $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean sandbox worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','competing sandbox refused');}
     retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM sandbox_fixture_claims')->fetchColumn()===1,'one sandbox claim under independent process concurrency without webhook dependence');retrycheck($db->query('SELECT checkout_token FROM transactions WHERE id=90')->fetchColumn()===null,'sandbox consumes token atomically');retrycheck(!sandboxfixtureclaim($db,90),'consumed sandbox token cannot replay');
+    require_once __DIR__.'/../includes/webhook-monitor.php';
+    $db->exec('CREATE TEMPORARY TABLE webhook_outbox(transaction_id INT PRIMARY KEY,created_at TIMESTAMP)');
+    $db->exec('CREATE TEMPORARY TABLE webhook_retry_claims(transaction_id INT PRIMARY KEY,state VARCHAR(30))');
+    $db->exec('CREATE TEMPORARY TABLE webhook_logs(id INT PRIMARY KEY,transaction_id INT)');
+    $db->exec("INSERT INTO webhook_outbox VALUES(1,DATE_SUB(NOW(),INTERVAL 2 DAY)),(2,NOW()),(3,DATE_SUB(NOW(),INTERVAL 2 DAY)),(4,NOW()),(5,NOW()),(6,NOW())");
+    $db->exec("INSERT INTO webhook_retry_claims VALUES(3,'attempting'),(4,'unknown'),(5,'succeeded'),(6,'unexpected')");
+    $db->exec('INSERT INTO webhook_logs VALUES(1,2),(2,2),(3,4)');
+    $beforeMonitor=$db->query('SELECT * FROM webhook_retry_claims ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC);
+    $page=payhub_outbox_monitor($db,0,3,900);retrycheck($page['scanned']===3 && $page['has_more'] && $page['next_after']===3,'monitor bounded keyset page');
+    retrycheck($page['counts']['unattempted']===1 && $page['counts']['existing_evidence']===1 && $page['counts']['claimed_attempting']===1,'monitor classifies without duplicate log amplification');
+    retrycheck($page['aged_counts']['unattempted']===1 && $page['aged_counts']['claimed_attempting']===1 && $page['aged_counts']['existing_evidence']===0,'monitor distinguishes aged events');
+    $page2=payhub_outbox_monitor($db,3,3,900);retrycheck(!$page2['has_more'] && $page2['scanned']===3 && $page2['counts']['claimed_unknown']===1 && $page2['counts']['claimed_succeeded']===1 && $page2['counts']['requires_review']===1,'monitor preserves uncertain/completed/unrecognized state categories');
+    retrycheck(payhub_outbox_monitor($db,6)['scanned']===0,'empty monitor page');
+    foreach([[-1,10,900],[0,201,900],[0,0,900],[0,10,59],[0,10,604801]] as $args)retryreject(fn()=>payhub_outbox_monitor($db,...$args),'monitor rejects invalid bounds');
+    $db->beginTransaction();retryreject(fn()=>payhub_outbox_monitor($db),'monitor refuses caller transaction');$db->rollBack();
+    retrycheck($beforeMonitor===$db->query('SELECT * FROM webhook_retry_claims ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC),'monitor never alters claim evidence');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}
