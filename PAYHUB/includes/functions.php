@@ -1761,6 +1761,12 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         }
 
         $targetAccClean = ltrim((string)$va['account_number'], '0');
+        $vaCountStmt = $db->prepare("SELECT COUNT(*) FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ?");
+        $vaCountStmt->execute([(string)$va['account_number'], str_pad($targetAccClean, 10, '0', STR_PAD_LEFT), $targetAccClean]);
+        if ((int)$vaCountStmt->fetchColumn() !== 1) {
+            return null;
+        }
+        $receivingAcc = preg_match('/\A[0-9]{10}\z/', (string)$va['account_number']) ? (string)$va['account_number'] : null;
         $from = gmdate('Y-m-d\T00:00:00\Z', min($createdTs, time()) - 86400);
         $to = gmdate('Y-m-d\T23:59:59\Z', max($createdTs, time()) + 86400);
         $response = paystack_call("transaction?from=" . urlencode($from) . "&to=" . urlencode($to) . "&status=success", 'GET', [], ($isTestInt === 1));
@@ -1771,8 +1777,8 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         $vaMeta = normalize_metadata_array($va['metadata'] ?? null);
         $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
         $insertSql = ($driver === 'sqlite')
-            ? "INSERT OR IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)"
-            : "INSERT IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)";
+            ? "INSERT OR IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, currency, gateway_reference, metadata, receiving_account_number) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?, ?, ?)"
+            : "INSERT IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, currency, gateway_reference, metadata, receiving_account_number) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?, ?, ?)";
 
         foreach ($response['data'] as $rtx) {
             if (($rtx['status'] ?? '') !== 'success') continue;
@@ -1795,10 +1801,13 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                 $amount = (float)$rtx['amount'] / 100;
                 $custEmail = (string)($rtx['customer']['email'] ?? ($va['customer_email'] ?? $tx['customer_email']));
                 $channelType = (string)($rtx['channel'] ?? 'dedicated_account');
+                $txCurrency = (is_string($rtx['currency'] ?? null) && trim($rtx['currency']) !== '')
+                    ? strtoupper(substr(trim($rtx['currency']), 0, 10))
+                    : 'NGN';
                 $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
                     ? ((float)$rtx['fees'] / 100)
                     : null;
-                $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
+                $isIntl = is_international_payment($txCurrency, $rtx['authorization'] ?? [], $channelType);
                 $fee = calculate_fees($amount, $isIntl, $userId, $gatewayFee, $channelType);
                 $settled = round(max(0.0, $amount - $fee), 2);
                 $rtxMeta = array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta);
@@ -1813,7 +1822,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                 $db->beginTransaction();
                 try {
                     $insStmt = $db->prepare($insertSql);
-                    $insStmt->execute([$userId, $rtxRef, $amount, $amount, $custEmail, $channelType, $isTestInt, $rtx['id'] ?? null, $txMetaJson]);
+                    $insStmt->execute([$userId, $rtxRef, $amount, $amount, $custEmail, $channelType, $isTestInt, $txCurrency, $rtx['id'] ?? null, $txMetaJson, $receivingAcc]);
                     if ($insStmt->rowCount() === 1) {
                         $tId = $db->lastInsertId();
                         if (claim_transaction_for_fulfilment($tId)) {

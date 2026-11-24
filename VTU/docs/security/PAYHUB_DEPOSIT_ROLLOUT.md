@@ -44,8 +44,11 @@ Rollback: disable the environment flag first; preserve the new claims/history/mu
 ```
 node VTU/tests/harness/run-test.mjs tests/payhub_deposits_test.php
 node VTU/tests/harness/run-test.mjs tests/payhub_settlement_hold_test.php
+php PAYHUB/tests/payhub_dva_reconcile_contract_test.php
 BC_PAYHUB_DEPOSITS_CI=1 BC_TEST_EDITION=SAAS php VTU/tests/payhub_deposits_mysql_test.php
 BC_PAYHUB_DEPOSITS_CI=1 BC_TEST_EDITION=NON-SAAS php VTU/tests/payhub_deposits_mysql_test.php
+PAYHUB_PAIRED_CI=1 BC_TEST_EDITION=SAAS php VTU/tests/payhub_paired_stack_mysql_test.php
+PAYHUB_PAIRED_CI=1 BC_TEST_EDITION=NON-SAAS php VTU/tests/payhub_paired_stack_mysql_test.php
 ```
 
-Native tests create/drop uniquely named disposable databases only and use mocked verification, including concurrent independent workers and injected receipt failure. Never run the CI fixture against production credentials/databases.
+Native tests create/drop uniquely named disposable databases only and use mocked/local verification callbacks, including concurrent independent workers and injected receipt failure. Never run the CI fixture against production credentials/databases. Paired PayHub -> VTU fixtures verify outbox/signing/claim/verify contract alignment across both SAAS and NON-SAAS receivers, not real public HTTPS/TLS/DNS or live bank settlement.
