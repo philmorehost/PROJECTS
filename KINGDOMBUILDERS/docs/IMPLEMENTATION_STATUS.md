@@ -278,3 +278,47 @@ both code screens), `tests/run.php` (code hashing, single use, expiry, no row
 before confirmation, existing-address behaviour, reCAPTCHA decisions, settings
 validation, schema version), and the HTTP smoke suite (trap field, no row before
 the code, wrong code, confirmation, sign-in code with a trusted device) in CI.
+
+### Build 0.12.0: one assessment, revisable answers, 50 questions in 20 minutes
+
+- **One attempt per member.** The `one_attempt` toggle is gone: `Quiz::start()`
+  refuses a second attempt for anyone who already submitted (the check and the
+  insert share one transaction and a `FOR UPDATE` lock). **Leaving the page also
+  ends the paper**: a confirmation warns first, then `POST api/quiz action=leave`
+  (or a `keepalive` beacon when the tab is closed) submits it with the answers
+  saved so far, so the attempt cannot be restarted. The quiz route sends a
+  finished attempt straight to its result, the dashboard and the mobile dock show
+  *Assessment completed* instead of a start button, and a direct POST to
+  `/quiz/start` is refused with an explanation.
+- **Answers can be changed.** A saved answer is no longer final while the attempt
+  is running: picking another option updates the row in place, the last choice is
+  what gets scored, and a repeated identical request is still idempotent. The rule
+  honours `allow_back` (now on by default), stops at the deadline, and stops
+  completely once the paper is submitted.
+- **A real answer sheet.** The question strip is a menu: *Answer sheet 23/50*
+  expands the numbered grid, every answered question is marked, and any question
+  can be revisited. *Previous* always works while the attempt runs; *Next* needs
+  an answer for the question on screen; the final button becomes *Submit
+  assessment* and warns when questions are still blank.
+- **50 questions, 20 minutes.** `questions_per_attempt` = 50 and a new
+  `duration_minutes` = 20 define a single total budget fixed when the paper
+  starts. `seconds_per_question` survives only as the fallback pace when no total
+  is set, so an old snapshot keeps the deadline it was created with.
+- **The bank can fill the paper.** The starter bank grows from 41 to 80 questions
+  across Matthew, Mark, Luke, John, Acts, Genesis, Exodus, Psalms, Proverbs,
+  Isaiah, Jonah, Romans, Hebrews, 1 Corinthians and Ephesians, and loading it is
+  idempotent. The question page warns when fewer than 50 questions are active and
+  offers *Load starter questions*. The random sampler now scales its attempts with
+  the requested count and de-duplicates before fetching bodies.
+- **Upgrade path.** Schema version 3 applies the new defaults (50 questions, 20
+  minutes, revisable answers) once to an existing installation and removes the
+  obsolete `one_attempt` row; later administrator changes survive. Attempts that
+  were already open keep their frozen snapshot.
+
+Verification: PHP lint, `tests/quiz_screen.php` (screen copy, the 50/20 budget, and
+the change-answer rules against a stubbed database), `tests/run.php` (no change
+after submission, one attempt per member, skip/answer transitions, the starter bank,
+a 50-question paper with no repeats, the schema level), the HTTP smoke suite (change
+an answer, submit, old link redirects, second start refused, dock and dashboard
+states), plus the dock, email and CSS suites.
+

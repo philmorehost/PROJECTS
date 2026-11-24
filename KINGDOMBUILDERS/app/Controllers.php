@@ -231,10 +231,12 @@ final class Controllers {
             render('member/verify-required');
         }
         $active=DB::one('SELECT id,started_at FROM attempts WHERE active_user_id=?',[$user['id']]);
+        // One assessment per member: a finished attempt replaces the "start" button.
+        $taken=$active?null:DB::one('SELECT id,submitted_at FROM attempts WHERE user_id=? AND status<>"active" ORDER BY submitted_at DESC LIMIT 1',[$user['id']]);
         $history=DB::all('SELECT id,score,total_questions,percentage,started_at,submitted_at,status,settings_snapshot FROM attempts WHERE user_id=? AND status<>"active" ORDER BY started_at DESC LIMIT 10',[$user['id']]);
         $aggregate=DB::one('SELECT COUNT(*) AS completed, MAX(percentage) AS best, AVG(percentage) AS average FROM attempts WHERE user_id=? AND status<>"active"',[$user['id']]);
         $memberStats=['completed'=>(int)($aggregate['completed']??0),'best'=>$aggregate['best']!==null?round((float)$aggregate['best'],1):null,'average'=>$aggregate['average']!==null?round((float)$aggregate['average'],1):null];
-        render('member/dashboard',['user'=>$user,'active'=>$active,'history'=>$history,'memberStats'=>$memberStats,'count'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1')]);
+        render('member/dashboard',['user'=>$user,'active'=>$active,'taken'=>$taken,'history'=>$history,'memberStats'=>$memberStats,'count'=>DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1')]);
     }
     public static function account(): never {
         $user=Auth::requireUser(); $error=null;
@@ -269,7 +271,15 @@ final class Controllers {
             $id=Quiz::start((int)$user['id']); redirect_query('quiz',['id'=>$id]);
         }
         $id=query('id');
-        if ($route==='quiz') render('member/quiz',['attempt'=>Quiz::payload($id,(int)$user['id']),'user'=>$user]);
+        if ($route==='quiz') {
+            $attempt=Quiz::owned($id,(int)$user['id']);
+            // The quiz page is only for a running attempt. A finished one goes to
+            // its result, so reloading the old link can never reopen the questions.
+            if ($attempt['status']==='active') render('member/quiz',['attempt'=>Quiz::payload($id,(int)$user['id']),'user'=>$user]);
+            if ($attempt['status']==='submitted') { flash('This assessment has been submitted. Each member may take it once.','info'); redirect_query('result',['id'=>$id]); }
+            flash('Your time ran out, so the assessment was submitted automatically.','info');
+            redirect_query('result',['id'=>$id]);
+        }
         if ($route==='api/quiz') {
             header('Content-Type: application/json; charset=utf-8');
             $data=json_decode((string)file_get_contents('php://input',false,null,0,65537),true);
@@ -281,6 +291,9 @@ final class Controllers {
             if($action==='answer') json_response(Quiz::answer($id,(int)$user['id'],(int)($data['position']??-1),(int)($data['choice']??-2)));
             if($action==='flag') json_response(Quiz::flag($id,(int)$user['id']));
             if($action==='finish') json_response(Quiz::finish($id,(int)$user['id']));
+            // Closing or leaving the quiz page ends the attempt: the saved answers
+            // are scored and the one allowed attempt is used.
+            if($action==='leave') json_response(Quiz::leave($id,(int)$user['id']));
             json_response(['error'=>'Unknown action.'],400);
         }
         if($route==='result') {

@@ -17,7 +17,7 @@ namespace {
     const ATTEMPT = '7d1d5c1e-1111-4aaa-8bbb-1234567890ab';
 
     function dock_html(array $state): string {
-        $defaults = ['isAdmin' => false, 'current' => 'dashboard', 'dockAttempt' => null, 'dockQuizOpen' => true, 'dockVerified' => true];
+        $defaults = ['isAdmin' => false, 'current' => 'dashboard', 'dockAttempt' => null, 'dockTaken' => null, 'dockQuizOpen' => true, 'dockVerified' => true];
         extract(array_merge($defaults, $state), EXTR_SKIP);
         ob_start();
         require dirname(__DIR__) . '/app/Views/_dock.php';
@@ -49,6 +49,12 @@ namespace {
     dock_assert(str_contains($resume, 'href="/quiz?id=' . ATTEMPT . '"'), 'resume links to the saved attempt');
     dock_assert(str_contains($resume, 'dock-ping'), 'resume tab shows the attention badge');
     dock_assert(!str_contains($resume, 'action="/quiz/start"'), 'resume does not start a second attempt');
+
+    // 2b. One assessment per member: a completed attempt never offers a restart.
+    $done = dock_html(['current' => 'dashboard', 'dockTaken' => ['id' => ATTEMPT]]);
+    dock_assert(labels($done) === ['Home', 'Completed', 'Profile'], 'dock labels: Completed after the attempt is submitted');
+    dock_assert(!str_contains($done, 'action="/quiz/start"') && !str_contains($done, '/quiz?id='), 'a completed member gets no start or resume link');
+    dock_assert(str_contains($done, '<svg'), 'the completed tab keeps its icon');
 
     // 3. A closed assessment is an inert label rather than a dead link.
     $closed = dock_html(['current' => 'dashboard', 'dockQuizOpen' => false]);

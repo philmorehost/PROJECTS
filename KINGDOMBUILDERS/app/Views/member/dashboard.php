@@ -18,17 +18,26 @@
     <p>Explore the Scriptures through thoughtful, multiple-choice questions. Take your place in the story.</p>
     <div class="quiz-facts">
       <span><strong><?= min($count,(int)Settings::get('questions_per_attempt')) ?></strong>questions</span>
-      <span><strong><?= Settings::get('timer_enabled')?(int)Settings::get('seconds_per_question').'s':'∞' ?></strong>per question, total budget</span>
+      <span><strong><?= (int)Settings::get('duration_minutes') ?> min</strong>for the whole paper</span>
       <span><strong><?= (int)Settings::get('pass_mark') ?>%</strong>pass mark</span>
     </div>
     <?php if($active): ?>
       <a class="button light" href="<?= e(url('quiz',['id'=>$active['id']])) ?>">Resume your quiz →</a>
+    <?php elseif($taken): ?>
+      <a class="button light" href="<?= e(url('result',['id'=>$taken['id']])) ?>"><?= KB\Quiz::reviewEnabled() ? 'Review your result →' : 'View your score →' ?></a>
+      <span class="badge neutral">Assessment completed</span>
     <?php elseif(Settings::get('quiz_open')): ?>
       <form method="post" action="<?= e(url('quiz/start')) ?>"><?= Security::csrfField() ?><button class="button light">Begin your quiz <span aria-hidden="true">↗</span></button></form>
     <?php else: ?>
       <span class="badge neutral">Assessments are currently closed</span>
     <?php endif; ?>
-    <small>Once you choose an answer it is saved and locked — so read carefully. Focus changes may be recorded.</small>
+    <?php if($taken): ?>
+      <small>You have taken this assessment. Each member may take it once, so this attempt is your result.</small>
+    <?php elseif($active): ?>
+      <small>Your clock is already running — resume to finish within the original <?= (int)Settings::get('duration_minutes') ?> minutes.<?= Settings::get('allow_back') ? ' Any answer can still be changed until you submit.' : '' ?></small>
+    <?php else: ?>
+      <small>One attempt only: once you submit, the assessment is complete. <?= Settings::get('allow_back') ? 'You get the full ' . (int)Settings::get('duration_minutes') . ' minutes and can change any answer until you submit.' : 'Read each question carefully before you save.' ?> Focus changes may be recorded.</small>
+    <?php endif; ?>
   </section>
   <section class="panel member-note modern-member-note">
     <span class="feature-number">A MOMENT TO REMEMBER</span>

@@ -6,6 +6,7 @@ declare(strict_types=1);
  *
  *   php tests/otp_probe.php user grace@example.test   -> 1 or 0
  *   php tests/otp_probe.php code grace@example.test   -> six digits
+ *   php tests/otp_probe.php count questions           -> row count
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require dirname(__DIR__) . '/app/bootstrap.php';
@@ -25,5 +26,9 @@ if ($command === 'code') {
     fwrite(STDERR, "No code found for that address.\n");
     exit(1);
 }
-fwrite(STDERR, "Usage: otp_probe.php user|code <email>\n");
+if ($command === 'count' && in_array($email, ['questions', 'users', 'attempts'], true)) {
+    echo (int) KB\DB::value('SELECT COUNT(*) FROM ' . $email), PHP_EOL;
+    exit(0);
+}
+fwrite(STDERR, "Usage: otp_probe.php user|code <email> | count <table>\n");
 exit(2);

@@ -6,10 +6,11 @@ final class Settings {
     private static ?array $cache = null;
     public const DEFAULTS = [
         'site_title' => 'KINGDOMBUILDERS', 'site_tagline' => 'Grow in the Word. Build a life of purpose.',
-        'registration_open' => true, 'quiz_open' => true, 'questions_per_attempt' => 15,
-        'seconds_per_question' => 30, 'timer_enabled' => true, 'pass_mark' => 50,
-        'randomize_questions' => true, 'randomize_answers' => true, 'allow_back' => false,
-        'practice_feedback' => false, 'review_questions' => false, 'one_attempt' => false, 'max_tab_switches' => 3,
+        // One assessment per member: 50 questions inside a 20-minute total budget.
+        'registration_open' => true, 'quiz_open' => true, 'questions_per_attempt' => 50,
+        'duration_minutes' => 20, 'seconds_per_question' => 24, 'timer_enabled' => true, 'pass_mark' => 50,
+        'randomize_questions' => true, 'randomize_answers' => true, 'allow_back' => true,
+        'practice_feedback' => false, 'review_questions' => false, 'max_tab_switches' => 3,
         'smtp_enabled' => false, 'smtp_host' => '', 'smtp_port' => 587, 'smtp_security' => 'tls',
         'smtp_username' => '', 'smtp_secret' => '', 'from_email' => '', 'from_name' => 'KINGDOMBUILDERS',
         'admin_email' => '', 'php_cli_path' => '', 'large_text' => false,
@@ -46,7 +47,7 @@ final class Settings {
         }
         if (mb_strlen($out['site_title']) < 2 || mb_strlen($out['site_title']) > 80) throw new UserError('Site title must be between 2 and 80 characters.');
         if (mb_strlen($out['site_tagline']) > 200 || mb_strlen($out['from_name']) > 120) throw new UserError('Please shorten the tagline or sender name.');
-        foreach (['questions_per_attempt'=>[1,100], 'seconds_per_question'=>[5,300], 'pass_mark'=>[0,100], 'max_tab_switches'=>[0,100], 'smtp_port'=>[1,65535], 'registration_cap'=>[0,1000]] as $key=>$range) {
+        foreach (['questions_per_attempt'=>[1,200], 'duration_minutes'=>[1,300], 'seconds_per_question'=>[5,300], 'pass_mark'=>[0,100], 'max_tab_switches'=>[0,100], 'smtp_port'=>[1,65535], 'registration_cap'=>[0,1000]] as $key=>$range) {
             if ($out[$key] < $range[0] || $out[$key] > $range[1]) throw new UserError($key . ' is outside its permitted range.');
         }
         if (!in_array($out['smtp_security'], ['tls','ssl','none'], true)) throw new UserError('Choose a supported SMTP security mode.');
