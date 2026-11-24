@@ -25,9 +25,37 @@ class Database {
             $autohealFile = __DIR__ . '/../install/schema-autoheal.php';
             if (is_file($autohealFile)) {
                 try {
-                    require_once $autohealFile;
-                    if (function_exists('payhub_install_apply_migrations')) {
-                        payhub_install_apply_migrations(self::$pdo);
+                    $needsHeal = false;
+                    try {
+                        $chk = self::$pdo->query('SELECT COUNT(*) FROM schema_migrations_applied');
+                        $appliedCount = $chk ? (int)$chk->fetchColumn() : 0;
+                        if ($chk) {
+                            $chk->closeCursor();
+                        }
+                        if ($appliedCount < 7) {
+                            $needsHeal = true;
+                        }
+                    } catch (Throwable $probeErr) {
+                        $needsHeal = true;
+                    }
+
+                    if ($needsHeal) {
+                        require_once $autohealFile;
+                        if (function_exists('payhub_install_apply_migrations')) {
+                            // Isolate migration DDL on a disposable connection so self::$pdo
+                            // can never be wedged or disrupted by migration statements.
+                            $healOpts = [
+                                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                                PDO::ATTR_EMULATE_PREPARES => true,
+                            ];
+                            if (defined('PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')) {
+                                $healOpts[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+                            }
+                            $healPdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS, $healOpts);
+                            payhub_install_apply_migrations($healPdo);
+                            $healPdo = null;
+                        }
                     }
                 } catch (Throwable $e) {
                     error_log('[PAYHUB] schema auto-heal skipped: ' . $e->getMessage());

@@ -124,6 +124,7 @@ jobs:
           php -l PAYHUB/includes/transaction-expiry-cron.php
           php -l PAYHUB/includes/db.php
           php -l PAYHUB/tests/payhub_schema_autoheal_runtime_test.php
+          php -l PAYHUB/tests/payhub_schema_autoheal_mysql_test.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/api-reference.php
           php -l PAYHUB/tests/payhub_dva_reconcile_contract_test.php
@@ -180,6 +181,10 @@ jobs:
         env:
           PAYHUB_LOG_SCHEMA_CI: '1'
         run: php PAYHUB/tests/webhook_log_schema_mysql_test.php
+      - name: PayHub live MySQL PDO auto-heal (no unconsumed rowsets or 2014 errors)
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/payhub_schema_autoheal_mysql_test.php
       - name: Durable manual retry claims and independent-process concurrency
         env:
           PAYHUB_LOG_SCHEMA_CI: '1'
