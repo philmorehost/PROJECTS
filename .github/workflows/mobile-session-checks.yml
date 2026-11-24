@@ -4,6 +4,7 @@ on:
     paths:
       - 'VTU/ANDROID - iOS/**'
       - 'VTU/tests/native_kyc_video_test.py'
+      - 'VTU/tests/ios_kyc_capture_test.py'
       - 'VTU/**/web/api/mobile-home.php'
       - 'VTU/**/func/bc-user-action-confirm.php'
       - 'VTU/**/asset/bc-user-action-otp.js'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'VTU/ANDROID - iOS/**'
       - 'VTU/tests/native_kyc_video_test.py'
+      - 'VTU/tests/ios_kyc_capture_test.py'
       - 'VTU/**/web/api/mobile-home.php'
       - 'VTU/**/func/bc-user-action-confirm.php'
       - 'VTU/**/asset/bc-user-action-otp.js'
@@ -43,6 +45,7 @@ jobs:
         run: |
           python3 "VTU/ANDROID - iOS/tools/check-mobile-session.py"
           python3 VTU/tests/native_kyc_video_test.py
+          python3 VTU/tests/ios_kyc_capture_test.py
           python3 "VTU/ANDROID - iOS/tools/check-mobile-receipts.py"
           python3 "VTU/ANDROID - iOS/tools/check-mobile-redesign.py"
           python3 VTU/DGV7.0-SAAS/tests/user_login_otp_clients_test.py

@@ -48,6 +48,7 @@ targets:
         # No speech/AVFoundation use in this app, but the photo/camera keys are required by the KYC
         # upload screen and cost nothing to declare.
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Photo library access is used to upload your KYC documents."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Microphone access records your live KYC video."
         INFOPLIST_KEY_NSCameraUsageDescription: "Camera access is used to capture your KYC documents and selfie."
 
     # No Swift Package dependencies: VoveID was removed permanently (VoveSDK was imported by
