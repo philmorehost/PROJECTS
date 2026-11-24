@@ -498,11 +498,16 @@ function bc_get_app_redirect_info($vendor_id) {
         @mysqli_query($connection_server, "ALTER TABLE sas_site_details ADD COLUMN app_redirect_mode VARCHAR(10) DEFAULT 'off'");
     }
 
-    $q = mysqli_query($connection_server, "SELECT apk_download_url, app_redirect_mode FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+    try {
+    $q = mysqli_query($connection_server, "SELECT apk_download_url, app_redirect_mode, personal_web_access FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+    } catch (Throwable $e) { return $result; }
     if ($q && ($r = mysqli_fetch_assoc($q))) {
         $link = trim($r['apk_download_url'] ?? '');
+        if (!bc_fintech_android_app_url_valid($link)) return $result;
         $mode = strtolower(trim($r['app_redirect_mode'] ?? 'off'));
         if (!in_array($mode, ['off', 'prompt', 'force'], true)) $mode = 'off';
+        // Optional signed-in website access must not be defeated by an anonymous forced redirect.
+        if (($r['personal_web_access'] ?? 'optional') !== 'app_only' && $mode === 'force') $mode = 'prompt';
         if (empty($link)) $mode = 'off'; // nothing to redirect/prompt to
         $result = ['mode' => $mode, 'link' => $link];
     }
