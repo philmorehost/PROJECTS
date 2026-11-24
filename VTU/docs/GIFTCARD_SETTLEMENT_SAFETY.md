@@ -65,11 +65,37 @@ The separate payout, administrative withdrawal and crypto-provisioning blocks re
   ownership changes, same usernames in different tenants, insufficient funds,
   statement/commit failure, blocked actors and provider unknown outcomes.
 
+## Held settlement foundation (unactivated)
+
+Both editions now include `func/bc-giftcard-settlement.php` and unapplied DDL
+`VTU/migrations/20261118_giftcard_settlement.sql` (`sas_giftcard_orders`,
+`sas_giftcard_order_events`, `sas_giftcard_escrows`, `sas_giftcard_escrow_events`):
+
+- **Direct Reloadly orders (`bc_gc_reserve_order`, `bc_gc_observe_order`,
+  `bc_gc_cancel_held_order`)**: server-side fixed-point NGN quote snapshots using
+  `sas_vendor_giftcard_products.vendor_markup`, atomic InnoDB debit +
+  `sas_wallet_mutation_events` claim + `sas_transactions` receipt (`status=2`),
+  `unknown` state preservation without auto-refund, and atomic
+  `sas_giftcard_inventory` delivery on `confirmed_success` (refusing empty card codes).
+- **P2P escrow (`bc_gc_p2p_hold`, `bc_gc_p2p_release`, `bc_gc_p2p_refund`)**:
+  ascending user-ID row lock ordering (`min/max`) alongside inventory row lock,
+  atomic listing lock (`is_for_sale=1 -> 0`) + buyer debit, and single atomic release
+  (net seller credit + ownership transfer) or single refund + relist.
+
+**`GIFTCARD_SETTLEMENT_HOLD` remains active on all HTTP/UI routes.** These functions
+are not wired into `GiftCard.php`, `web/api/gift-card.php`, or `placeReloadlyOrder()`;
+production activation still requires operator schema migration, historical escrow/trade
+reconciliation, Reloadly live/sandbox idempotency acceptance, and encrypted card code
+key-management review.
+
 ## Validation and limits
 
 Synthetic tests call held low-level helpers with no database/provider available,
 verify that they refuse every request without touching session/auth state, and check
-that both web/API gates precede the legacy purchase branches. Native CI runs the
-same test independently for SAAS and NON-SAAS. These are containment tests, not an
-end-to-end settlement or provider guarantee. No real card, escrow, wallet, mail or
-provider calls were made. No deployment. Crypto staging remains paused.
+that both web/API gates precede the legacy purchase branches. Additionally,
+`VTU/tests/giftcard_settlement_foundation_test.php` and
+`VTU/tests/giftcard_settlement_mysql_test.php` test the held settlement foundation
+(fixed-point order/P2P split math, concurrency races, trigger-injected rollbacks,
+outer-transaction/MyISAM refusal, and atomic release/refund invariants) across both
+`SAAS` and `NON-SAAS` on disposable MySQL 8.0. These do not execute live Reloadly
+API calls, run live migrations, or authorize lifting `GIFTCARD_SETTLEMENT_HOLD`.
