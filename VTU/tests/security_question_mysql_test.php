@@ -17,7 +17,7 @@ $db->query('CREATE TABLE sas_security_quests(id INT PRIMARY KEY,quest VARCHAR(25
 $db->query('CREATE TABLE sas_settings(vendor_id INT,setting_name VARCHAR(100),setting_value TEXT,UNIQUE(vendor_id,setting_name)) ENGINE=InnoDB');
 $hash=password_hash('Fixture password',PASSWORD_DEFAULT);$stmt=$db->prepare("INSERT INTO sas_users VALUES(2,7,'same','','',?),(3,8,'same','1','untouched',?)");$stmt->bind_param('ss',$hash,$hash);$stmt->execute();
 $src=file_get_contents($base.'web/api/security-quest.php');$dispatch=substr($src,strpos($src,'$has_quest ='));$dispatch=substr($dispatch,0,strpos($dispatch,'mysqli_close('));
-$run=function($act,$input=[])use($db,$dispatch){$vendor_id=7;$user=$db->query('SELECT * FROM sas_users WHERE id=2')->fetch_assoc();$data=$input;$action=$act;$GLOBALS['response']=null;eval($dispatch);return $GLOBALS['response'];};
+$run=function($act,$input=[])use($db,$dispatch,$connection_server){$vendor_id=7;$user=$db->query('SELECT * FROM sas_users WHERE id=2')->fetch_assoc();$data=$input;$action=$act;$GLOBALS['response']=null;eval($dispatch);return $GLOBALS['response'];};
 $r=$run('get');qm($r['status']==='success'&&!$r['has_quest']&&count($r['quest_bank'])===1,'setup catalogue');
 qm($run('set',['quest_id'=>'99','answer'=>'answer'])['status']==='failed','invalid question rejected');
 qm($run('set',['quest_id'=>'1','answer'=>'Answer'])['status']==='success','setup stored');
