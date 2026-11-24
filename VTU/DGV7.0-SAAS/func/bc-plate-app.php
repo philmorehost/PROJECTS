@@ -1732,7 +1732,7 @@ if (!function_exists('bc_app_foot')) {
 <?php endif; ?>
 <script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/assets-2/vendor/sweetalert2/sweetalert2.all.min.js?v=11.0.16" defer></script>
 <script src="<?php echo htmlspecialchars($base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/bc-custom-all.js" defer></script>
-<?php bc_app_flash(); ?>
+<?php bc_app_flash(); if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); } ?>
 <script>
 (function () {
     'use strict';
@@ -1955,8 +1955,10 @@ if (!function_exists('bc_app_foot')) {
     document.addEventListener('submit', function (e) {
         var form = e.target;
         if (!form || form.tagName !== 'FORM') return;
+        if (e.defaultPrevented) return;
         if (((form.getAttribute('method') || 'get').toLowerCase()) === 'get') return;
         if (form.hasAttribute('data-bc-nolock')) return;
+        if (typeof form.checkValidity === 'function' && !form.checkValidity()) return;
         if (form.dataset.bcLocked) { e.preventDefault(); e.stopPropagation(); return; }
         form.dataset.bcLocked = '1';
         /* A disabled submitter can drop its name/value from the payload in
@@ -1981,8 +1983,11 @@ if (!function_exists('bc_app_foot')) {
             }
         });
         setTimeout(function () { unlockForm(form); }, 20000);
-    }, true);
+    }, false);
     window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-bc-locked]').forEach(unlockForm);
+    });
+    window.addEventListener('pagehide', function () {
         document.querySelectorAll('form[data-bc-locked]').forEach(unlockForm);
     });
 })();

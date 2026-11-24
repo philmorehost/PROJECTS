@@ -42,8 +42,14 @@ if (!$is_manual && (time() - $last_sync < $throttle_duration)) {
     exit();
 }
 
-// Update source-specific last-sync timestamp
+// Update source-specific last-sync timestamp, then immediately release the PHP
+// session lock before making external HTTP requests to PayHub/Paystack/Monnify/Payvessel.
+// Holding the session lock across multiple 30-60s cURL calls stalls all concurrent page loads
+// for this user (e.g., Pay Bills navigation after opening Dashboard).
 if (!$is_manual) $_SESSION[$throttle_key] = time();
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 
 $response = [
     "payhub" => ["status" => "skipped", "message" => "Already synced or not eligible"],

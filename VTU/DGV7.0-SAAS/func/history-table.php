@@ -3,13 +3,15 @@
 // Expects: $query_result (mysqli result), $is_admin (bool), $is_batch (bool)
 
 $is_batch = $is_batch ?? false;
+$show_vendor_col = !empty($show_vendor_info) && !$is_batch;
+$tx_receipt_source = isset($tx_receipt_source) ? (string)$tx_receipt_source : '';
 
 if ($query_result && mysqli_num_rows($query_result) >= 1) {
     $show_actions = ($is_admin && ((isset($is_payment_order) && $is_payment_order) || (isset($is_fund_transfer) && $is_fund_transfer))) || (!$is_admin);
     echo '<div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-3">';
     echo '<div class="table-responsive">';
     echo '<table class="table table-hover align-middle mb-0">';
-    echo '<thead class="bg-light"><tr><th class="border-0 px-4 py-3">Type</th><th class="border-0 py-3">' . ($is_batch ? 'Batch ID' : 'Reference') . '</th><th class="border-0 py-3 text-end px-4">' . ($is_batch ? 'Details' : 'Amount') . '</th><th class="border-0 py-3 text-center">Status</th>' . ($show_actions ? '<th class="border-0 py-3 text-center">Action</th>' : '') . '</tr></thead>';
+    echo '<thead class="bg-light"><tr><th class="border-0 px-4 py-3">Type</th>' . ($show_vendor_col ? '<th class="border-0 py-3">Vendor</th>' : '') . '<th class="border-0 py-3">' . ($is_batch ? 'Batch ID' : 'Reference') . '</th><th class="border-0 py-3 text-end px-4">' . ($is_batch ? 'Details' : 'Amount') . '</th><th class="border-0 py-3 text-center">Status</th>' . ($show_actions ? '<th class="border-0 py-3 text-center">Action</th>' : '') . '</tr></thead>';
     echo '<tbody>';
 
     while ($row = mysqli_fetch_assoc($query_result)) {
@@ -46,7 +48,7 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
             $amount_display = '<div class="fw-bold">₦'.$amount.'</div>';
             $status_text = tranStatus($row['status']);
             $status_class = ($row['status'] == 1 ? 'text-success' : ($row['status'] == 2 ? 'text-warning' : 'text-danger'));
-            $onclick = 'showTransactionDetails(' . json_encode((string)$ref, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ', ' . ($is_admin ? 'true' : 'false') . ')';
+            $onclick = 'showTransactionDetails(' . json_encode((string)$ref, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ', ' . ($is_admin ? 'true' : 'false') . ($tx_receipt_source !== '' ? ', ' . json_encode($tx_receipt_source, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : '') . ')';
         }
 
         $date = date('M d, Y H:i', strtotime($row['date']));
@@ -55,8 +57,28 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
         echo '<td class="px-4">
                 ' . (!empty($row["product_unique_id"]) ? '<div class="text-primary fw-bold mb-1" style="font-size:15px; letter-spacing: 0.5px;">' . htmlspecialchars($row["product_unique_id"]) . '</div>' : '') . '
                 <div class="fw-bold text-dark" style="font-size:13px;">' . htmlspecialchars($type) . '</div>
-                <div class="text-muted" style="font-size:11px;">' . $date . '</div>
+                <div class="text-muted" style="font-size:11px;">' . $date . (!empty($show_vendor_col) && !empty($row['username']) ? ' · Customer: <strong>' . htmlspecialchars((string)$row['username'], ENT_QUOTES, 'UTF-8') . '</strong>' : '') . '</div>
               </td>';
+        if ($show_vendor_col) {
+            $v_name = trim((string)($row['vendor_name'] ?? ''));
+            if ($v_name === '' && !empty($row['vendor_business_name'])) {
+                $v_name = trim((string)$row['vendor_business_name']);
+            }
+            if ($v_name === '' && !empty($row['vendor_id'])) {
+                $v_name = 'Vendor #' . (int)$row['vendor_id'];
+            }
+            $v_email = trim((string)($row['vendor_email'] ?? ''));
+            $v_site = trim((string)($row['vendor_website'] ?? ''));
+            echo '<td>';
+            echo '<div class="fw-semibold text-dark" style="font-size:13px;">' . htmlspecialchars($v_name !== '' ? $v_name : 'Unknown Vendor', ENT_QUOTES, 'UTF-8') . '</div>';
+            if ($v_email !== '') {
+                echo '<div class="text-muted" style="font-size:11px;">' . htmlspecialchars($v_email, ENT_QUOTES, 'UTF-8') . '</div>';
+            }
+            if ($v_site !== '') {
+                echo '<div class="text-primary" style="font-size:11px;">' . htmlspecialchars($v_site, ENT_QUOTES, 'UTF-8') . '</div>';
+            }
+            echo '</td>';
+        }
         echo '<td><span class="badge bg-light text-dark fw-normal border">' . htmlspecialchars($ref) . '</span></td>';
         echo '<td class="text-end px-4">
                 ' . $amount_display . '

@@ -137,6 +137,14 @@ on:
       - 'VTU/**/bc-spadmin/PasswordRecovery.php'
       - 'VTU/**/asset/bc-login-resend.js'
       - 'VTU/**/bc-spadmin/VendorKYC.php'
+      - 'VTU/**/bc-spadmin/Transactions.php'
+      - 'VTU/**/bc-spadmin/UserTransactions.php'
+      - 'VTU/**/bc-spadmin/transaction-details.php'
+      - 'VTU/**/func/history-table.php'
+      - 'VTU/**/func/bc-config.php'
+      - 'VTU/**/web/ajax-sync-accounts.php'
+      - 'VTU/**/web/ajax-check-id-limit.php'
+      - 'VTU/tests/admin_perf_and_spadmin_ui_test.php'
       - 'VTU/**/bc-admin/Withdrawals.php'
       - 'VTU/**/web/Login.php'
       - 'VTU/**/func/bc-complimentary-upgrade.php'
@@ -311,6 +319,14 @@ on:
       - 'VTU/**/bc-spadmin/PasswordRecovery.php'
       - 'VTU/**/asset/bc-login-resend.js'
       - 'VTU/**/bc-spadmin/VendorKYC.php'
+      - 'VTU/**/bc-spadmin/Transactions.php'
+      - 'VTU/**/bc-spadmin/UserTransactions.php'
+      - 'VTU/**/bc-spadmin/transaction-details.php'
+      - 'VTU/**/func/history-table.php'
+      - 'VTU/**/func/bc-config.php'
+      - 'VTU/**/web/ajax-sync-accounts.php'
+      - 'VTU/**/web/ajax-check-id-limit.php'
+      - 'VTU/tests/admin_perf_and_spadmin_ui_test.php'
       - 'VTU/**/bc-admin/Withdrawals.php'
       - 'VTU/**/web/Login.php'
       - 'VTU/**/func/bc-complimentary-upgrade.php'
@@ -479,6 +495,7 @@ jobs:
           php -n VTU/tests/app_update_worker_test.php
           php -n VTU/tests/paid_gateway_test.php
           php -n VTU/tests/action_channels_test.php
+          php -n VTU/tests/admin_perf_and_spadmin_ui_test.php
           php VTU/DGV7.0-SAAS/cron/process_app_updates.php --help
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
           BC_APP_UPDATE_WORKER_ENABLED=0 php VTU/DGV7.0-NON-SAAS/cron/process_app_updates.php --vendor=7 --send | grep 'disabled'
@@ -494,6 +511,17 @@ jobs:
           php -l VTU/DGV7.0-SAAS/bc-spadmin/MarketPlace.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/CreateAPI.php
           php -l VTU/DGV7.0-SAAS/bc-spadmin/ApiEdit.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/VendorKYC.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/VendorRegistrations.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/Transactions.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/UserTransactions.php
+          php -l VTU/DGV7.0-SAAS/bc-spadmin/transaction-details.php
+          php -l VTU/DGV7.0-SAAS/func/bc-mailer.php
+          php -l VTU/DGV7.0-NON-SAAS/func/bc-mailer.php
+          php -l VTU/DGV7.0-SAAS/func/bc-config.php
+          php -l VTU/DGV7.0-NON-SAAS/func/bc-config.php
+          php -l VTU/DGV7.0-SAAS/web/ajax-sync-accounts.php
+          php -l VTU/DGV7.0-SAAS/web/ajax-check-id-limit.php
 
       - name: Surface regression failure diagnostics
         if: failure()

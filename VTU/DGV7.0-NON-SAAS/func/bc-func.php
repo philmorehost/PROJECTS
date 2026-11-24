@@ -1454,7 +1454,7 @@ function beeMailer($recipient_email, $email_subject, $email_body)
 	return $sent;
 }
 
-function sendVendorEmail($recipient_email, $email_subject, $email_body)
+function sendVendorEmail($recipient_email, $email_subject, $email_body, $background = null)
 {
 	global $connection_server, $get_logged_user_details, $get_logged_admin_details, $get_all_site_details, $get_all_super_admin_site_details;
 	if (isset($get_logged_user_details) && !empty($get_logged_user_details["username"])) {
@@ -1491,13 +1491,26 @@ function sendVendorEmail($recipient_email, $email_subject, $email_body)
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, true);
 
-    // Branch DG6.7: Don't block login UI for background email notifications
-    $is_background = (stripos($email_subject, "Login") !== false || stripos($email_subject, "Account") !== false);
+    // Keep security/OTP/verification/password emails synchronous; dispatch transactional/notification emails in shutdown background so checkout/Pay Bills never hangs on SMTP.
+    if ($background === null) {
+        $is_sync_critical = (
+            stripos($email_subject, "OTP") !== false ||
+            stripos($email_subject, "Verification") !== false ||
+            stripos($email_subject, "Verify") !== false ||
+            stripos($email_subject, "Code") !== false ||
+            stripos($email_subject, "Password") !== false ||
+            stripos($email_subject, "Reset") !== false ||
+            stripos($email_subject, "Pin") !== false
+        );
+        $is_background = !$is_sync_critical;
+    } else {
+        $is_background = (bool)$background;
+    }
 	return customBCMailSender('', $recipient_email, $email_subject, $mail_html_body, $mail_headers, $is_background);
 	//fwrite(fopen("./email-msg.txt", "a++"), "\n".$recipient_email." || ".strtoupper($email_subject)." || ".$email_body."\n");
 }
 
-function sendSuperAdminEmail($recipient_email, $email_subject, $email_body)
+function sendSuperAdminEmail($recipient_email, $email_subject, $email_body, $background = null)
 {
 	global $connection_server, $get_logged_spadmin_details, $get_all_super_admin_site_details;
 	if (isset($get_logged_spadmin_details) && !empty($get_logged_spadmin_details["email"])) {
@@ -1527,8 +1540,20 @@ function sendSuperAdminEmail($recipient_email, $email_subject, $email_body)
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, false);
 
-    // Branch DG6.7: Don't block UI for background email notifications
-    $is_background = (stripos($email_subject, "Login") !== false || stripos($email_subject, "Account") !== false);
+    if ($background === null) {
+        $is_sync_critical = (
+            stripos($email_subject, "OTP") !== false ||
+            stripos($email_subject, "Verification") !== false ||
+            stripos($email_subject, "Verify") !== false ||
+            stripos($email_subject, "Code") !== false ||
+            stripos($email_subject, "Password") !== false ||
+            stripos($email_subject, "Reset") !== false ||
+            stripos($email_subject, "Pin") !== false
+        );
+        $is_background = !$is_sync_critical;
+    } else {
+        $is_background = (bool)$background;
+    }
 	return customBCMailSender('', $recipient_email, $email_subject, $mail_html_body, $mail_headers, $is_background);
 	//fwrite(fopen("./email-msg.txt", "a++"), "\n".$recipient_email." || ".strtoupper($email_subject)." || ".$email_body."\n");
 }
@@ -1643,7 +1668,8 @@ function getUserMonnifyAccessToken()
 
 				$header_field_array = array("Authorization: Basic " . base64_encode($monnify_public_key . ":" . $monnify_secret_key), "Content-Type: application/json", "Content-Length: 0");
 				curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-				curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+				curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -1718,7 +1744,8 @@ function getVendorUserMonnifyAccessToken()
 
 				$header_field_array = array("Authorization: Basic " . base64_encode($monnify_public_key . ":" . $monnify_secret_key), "Content-Type: application/json", "Content-Length: 0");
 				curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-				curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+				curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -1793,7 +1820,8 @@ function getVendorMonnifyAccessToken()
 
 				$header_field_array = array("Authorization: Basic " . base64_encode($monnify_public_key . ":" . $monnify_secret_key), "Content-Type: application/json", "Content-Length: 0");
 				curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-				curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+				curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 				curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -1868,7 +1896,8 @@ function getSuperAdminMonnifyAccessToken()
 
 			$header_field_array = array("Authorization: Basic " . base64_encode($monnify_public_key . ":" . $monnify_secret_key), "Content-Type: application/json", "Content-Length: 0");
 			curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-			curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+			curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 			curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 			curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -1923,7 +1952,8 @@ function getMonnifyBanks($generatedAccessToken)
 
 	$header_field_array = array("Authorization: Bearer " . $generatedAccessToken, "Content-Type: application/json");
 	curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-	curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+	curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -1980,7 +2010,8 @@ function makeMonnifyRequest($req_method, $generatedAccessToken, $parameter_url, 
 
 	$header_field_array = array("Authorization: Bearer " . $generatedAccessToken, "Content-Type: application/json");
 	curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-	curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+	curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -2737,7 +2768,8 @@ function makePayvesselRequest($req_method, $generatedAccessToken, $parameter_url
 
 	$header_field_array = array("api-key: " . $key_explode[0], "api-secret: Bearer " . $key_explode[1], "Content-Type: application/json");
 	curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-	curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+	curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -2795,7 +2827,8 @@ function makeBeewaveRequest($req_method, $generatedAccessToken, $parameter_url, 
 
 	$header_field_array = array("Accept: application/json", "Content-Type: application/json");
 	curl_setopt($curl_request, CURLOPT_HTTPHEADER, $header_field_array);
-	curl_setopt($curl_request, CURLOPT_TIMEOUT, 60);
+	curl_setopt($curl_request, CURLOPT_CONNECTTIMEOUT, 5);
+				curl_setopt($curl_request, CURLOPT_TIMEOUT, 20);
 
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYHOST, 2);
 	curl_setopt($curl_request, CURLOPT_SSL_VERIFYPEER, true);
@@ -2896,7 +2929,8 @@ function makePaystackRequest($req_method, $parameter_url, $req_body, $vid = null
         "Cache-Control: no-cache",
         "User-Agent: Mozilla/5.0 (Platform API)"
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
 
     $result = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -3258,7 +3292,8 @@ function makePayhubRequest($req_method, $parameter_url, $req_body, $vid = null, 
     ];
 
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
 
     $result = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

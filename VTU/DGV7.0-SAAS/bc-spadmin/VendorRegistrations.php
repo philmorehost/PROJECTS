@@ -331,8 +331,83 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
             <div class="col-12">
                 <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
                     <div class="card-header bg-white py-4 border-0">
-                        <h5 class="fw-bold mb-0 text-primary">Pending Vendor Approvals</h5>
-                        <p class="text-muted small mb-0">Review and authorize new vendor registration requests</p><a href="VendorRegistrationSettings.php">Vendor registration ON/OFF &amp; security</a>
+                        <?php
+                            $active_vr_tab = (($_GET['tab'] ?? '') === 'blocked') ? 'blocked' : 'pending';
+                            $vr_policy = null;
+                            try { $vr_policy = bc_vreg_policy(); } catch (Throwable $e) { $vr_policy = ['blocked' => '']; }
+                            $blocked_domains_list = preg_split('/[\s,;]+/', strtolower('uploading.com mail.tm mailinator.com guerrillamail.com 10minutemail.com temp-mail.org yopmail.com ' . ($vr_policy['blocked'] ?? '')), -1, PREG_SPLIT_NO_EMPTY);
+
+                            $sql = "SELECT pv.*, bp.name as package_name
+                                    FROM sas_pending_vendors pv
+                                    LEFT JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
+                                    WHERE pv.status IN (0, 2)
+                                    ORDER BY pv.reg_date DESC";
+                            $result = mysqli_query($connection_server, $sql);
+                            if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
+
+                            $pending_rows = [];
+                            $blocked_rows = [];
+                            if ($result && mysqli_num_rows($result) > 0) {
+                                while ($r = mysqli_fetch_assoc($result)) {
+                                    $block_reason = '';
+                                    if ((int)($r['status'] ?? 0) === 2) {
+                                        $block_reason = 'Declined / Archived';
+                                    } else {
+                                        $invoice_ok = true;
+                                        try { bc_vreg_invoice($r); } catch (Throwable $e) { $invoice_ok = false; }
+
+                                        $email_domain = '';
+                                        $email_str = strtolower(trim((string)($r['email'] ?? '')));
+                                        if (strpos($email_str, '@') !== false) {
+                                            $email_domain = substr(strrchr($email_str, '@'), 1);
+                                        }
+                                        $domain_blocked = false;
+                                        if ($email_domain !== '') {
+                                            foreach ($blocked_domains_list as $bad_dom) {
+                                                if ($email_domain === $bad_dom || substr($email_domain, -strlen('.' . $bad_dom)) === '.' . $bad_dom) {
+                                                    $domain_blocked = true;
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                        if (!$invoice_ok) {
+                                            $block_reason = 'Untrusted / Legacy Invoice';
+                                        } elseif (empty($r['email_verified_at'])) {
+                                            $block_reason = 'Unverified Email';
+                                        } elseif ($domain_blocked) {
+                                            $block_reason = 'Blocked Email Domain';
+                                        }
+                                    }
+
+                                    if ($block_reason !== '') {
+                                        $r['_block_reason'] = $block_reason;
+                                        $blocked_rows[] = $r;
+                                    } else {
+                                        $pending_rows[] = $r;
+                                    }
+                                }
+                            }
+                        ?>
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                            <div>
+                                <h5 class="fw-bold mb-0 text-primary">Vendor Registrations</h5>
+                                <p class="text-muted small mb-0">Review and authorize new vendor registration requests</p>
+                                <a href="VendorRegistrationSettings.php" class="small">Vendor registration ON/OFF &amp; security</a>
+                            </div>
+                            <ul class="nav nav-pills gap-2" id="vrTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <a href="VendorRegistrations.php?tab=pending" data-vr-tab="pending" class="nav-link rounded-pill fw-semibold <?php echo $active_vr_tab === 'pending' ? 'active' : ''; ?>">
+                                        Pending Vendor Approval <span class="badge <?php echo $active_vr_tab === 'pending' ? 'bg-white text-primary' : 'bg-primary text-white'; ?> ms-1"><?php echo count($pending_rows); ?></span>
+                                    </a>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <a href="VendorRegistrations.php?tab=blocked" data-vr-tab="blocked" class="nav-link rounded-pill fw-semibold <?php echo $active_vr_tab === 'blocked' ? 'active bg-danger text-white' : 'text-danger border border-danger-subtle'; ?>">
+                                        Blocked Vendor Registrations <span class="badge <?php echo $active_vr_tab === 'blocked' ? 'bg-white text-danger' : 'bg-danger text-white'; ?> ms-1"><?php echo count($blocked_rows); ?></span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <?php if(isset($_SESSION['page_alert'])): ?>
@@ -344,6 +419,9 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                             </div>
                         <?php endif; ?>
 
+                        <?php
+                            $vr_render_table = function ($rows, $is_blocked_tab) use ($connection_server, $vr_policy) {
+                        ?>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
                                 <thead class="bg-light">
@@ -353,22 +431,16 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                         <th>Subscription</th>
                                         <th>Order Summary</th>
                                         <th>Payment Verification</th>
+                                        <?php if ($is_blocked_tab): ?><th>Block Status</th><?php endif; ?>
                                         <th>Date</th>
                                         <th class="text-end pe-4">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php
-                                        $sql = "SELECT pv.*, bp.name as package_name
-                                                FROM sas_pending_vendors pv
-                                                LEFT JOIN sas_billing_packages bp ON pv.billing_package_id = bp.id
-                                                WHERE pv.status=0
-                                                ORDER BY pv.reg_date DESC";
-                                        $result = mysqli_query($connection_server, $sql);
-                                        if (!$result) { error_log("[VendorReg] Error fetching registrations: " . mysqli_error($connection_server)); }
                                         $count = 1;
-                                        if(mysqli_num_rows($result) > 0):
-                                            while($row = mysqli_fetch_assoc($result)):
+                                        if(count($rows) > 0):
+                                            foreach($rows as $row):
                                     ?>
                                     <tr>
                                         <td class="ps-4 text-muted"><?php echo $count++; ?></td>
@@ -378,20 +450,18 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                             <div class="small text-muted mt-1"><?php echo htmlspecialchars($row['email']); ?> | <?php echo htmlspecialchars($row['phone_number']); ?></div>
                                         </td>
                                         <td>
-                                            <span class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3"><?php echo htmlspecialchars($row['package_name']); ?></span>
+                                            <span class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3"><?php echo htmlspecialchars((string)$row['package_name']); ?></span>
                                         </td>
                                         <td>
                                             <div class="small">
                                                 <ul class="list-unstyled mb-0">
-                                                    <li><i class="bi bi-check2-circle text-success me-1"></i> <?php echo htmlspecialchars($row['package_name']); ?></li>
+                                                    <li><i class="bi bi-check2-circle text-success me-1"></i> <?php echo htmlspecialchars((string)$row['package_name']); ?></li>
                                                     <?php 
-                                                        // Legacy checks
                                                         if($row['order_apk']): ?><li><i class="bi bi-plus-circle text-primary me-1"></i> Android APK</li><?php endif; 
                                                         if($row['order_ios']): ?><li><i class="bi bi-plus-circle text-primary me-1"></i> iOS App</li><?php endif; 
                                                         if($row['order_playstore']): ?><li><i class="bi bi-plus-circle text-primary me-1"></i> Playstore Listing</li><?php endif; 
                                                         if($row['order_sms_bridge']): ?><li><i class="bi bi-plus-circle text-primary me-1"></i> PrintHub APP</li><?php endif;
                                                         
-                                                        // Dynamic Addons lookup
                                                         if(!empty($row['selected_addons'])) {
                                                             $addon_ids = explode(',', $row['selected_addons']);
                                                             $addon_ids_clean = array_map('intval', $addon_ids);
@@ -428,11 +498,17 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                 <div class="mt-1"><a href="/<?php echo htmlspecialchars($row['payment_proof_path']); ?>" target="_blank" class="btn btn-link btn-sm p-0 fw-bold"><i class="bi bi-image me-1"></i>View Proof</a></div>
                                             <?php endif; ?>
                                         </td>
+                                        <?php if ($is_blocked_tab): ?>
+                                        <td>
+                                            <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2"><?php echo htmlspecialchars((string)($row['_block_reason'] ?? 'Blocked'), ENT_QUOTES, 'UTF-8'); ?></span>
+                                        </td>
+                                        <?php endif; ?>
                                         <td class="small text-muted"><?php echo date('M d, Y', strtotime($row['reg_date'])); ?></td>
                                         <td class="text-end pe-4">
                                             <div class="d-flex flex-column gap-1 align-items-end">
                                                 <span class="small"><?php echo empty($row['email_verified_at'])?'Email: NOT VERIFIED':'Email ownership verified'; ?></span>
                                                 <span class="small"><?php echo htmlspecialchars(($row['business_name']??'').' / '.($row['business_registration_no']??''),ENT_QUOTES,'UTF-8'); ?></span>
+                                                <?php if ((int)($row['status'] ?? 0) === 0): ?>
                                                 <details class="text-start"><summary>KYC / KYB review</summary><form method="post" class="border p-3">
                                                 <?php echo bc_csrf_field(); ?><input type="hidden" name="vr_action" value="review_compliance"><input type="hidden" name="vr_id" value="<?php echo (int)$row['id']; ?>">
                                                 <input type="hidden" name="review_snapshot" value="<?php try{echo bc_vreg_compliance_digest($row,bc_vreg_policy());}catch(Throwable $e){echo 'unavailable';} ?>">
@@ -442,7 +518,7 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                 <label>Security PIN<input name="sec_pin" type="password" class="form-control" required autocomplete="off"></label><label>Authenticator / email code<input name="sec_factor" class="form-control" inputmode="numeric" pattern="[0-9]{6}"></label><button name="sec33_send_code" value="1" class="btn btn-link" type="submit" formnovalidate>Email me a code</button>
                                                 <button class="btn btn-outline-primary" type="submit">Record completed compliance review</button></form></details>
 
-                                                <?php if($row['payment_method'] === 'bank_deposit' && trim($row['payment_status']) !== 'paid'): ?>
+                                                <?php if($row['payment_method'] === 'bank_deposit' && trim($row['payment_status']) !== 'paid' && !$is_blocked_tab): ?>
                                                     <button type="button" class="btn btn-info btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="sec33VrAction('mark_paid', <?php echo (int)$row['id']; ?>, 'Verify payment?', 'Confirm receipt of manual payment for this vendor. This needs your PIN + authenticator code and is audited.', 'Verify Payment')">Verify Payment</button>
                                                 <?php endif; ?>
                                                 
@@ -459,20 +535,59 @@ bc_adm_head("Pending Vendor Registrations", array("area" => "spadmin"));
                                                     <button type="button" class="btn btn-primary rounded-start-pill px-3 fw-bold" <?php try{if(trim($row['payment_status'])!=='paid'||bc_vreg_approval_error($row,bc_vreg_policy())!=='')echo 'disabled aria-disabled="true"';}catch(Throwable $e){echo 'disabled aria-disabled="true"';} ?> onclick="sec33VrAction('approve', <?php echo (int)$row['id']; ?>, 'Approve new vendor?', 'Approve and activate this vendor account? This needs your PIN + authenticator code and is audited.', 'Approve Vendor')">Approve</button>
                                                     <button type="button" class="btn btn-outline-danger rounded-end-pill px-3" onclick="sec33VrAction('decline', <?php echo (int)$row['id']; ?>, 'Decline registration?', 'Decline and archive this registration? This needs your Security PIN and is audited.', 'Decline')">Decline</button>
                                                 </div>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 mt-1">Archived Evidence</span>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
-                                    <?php endwhile; else: ?>
-                                    <tr><td colspan="6" class="text-center py-5 text-muted">No pending registrations at the moment</td></tr>
+                                    <?php endforeach; else: ?>
+                                    <tr><td colspan="<?php echo $is_blocked_tab ? '8' : '7'; ?>" class="text-center py-5 text-muted"><?php echo $is_blocked_tab ? 'No blocked or declined registrations at the moment' : 'No pending registrations at the moment'; ?></td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
+                        </div>
+                        <?php }; ?>
+
+                        <div id="vrPanePending" class="vr-tab-pane<?php echo $active_vr_tab === 'pending' ? '' : ' d-none'; ?>">
+                            <?php $vr_render_table($pending_rows, false); ?>
+                        </div>
+                        <div id="vrPaneBlocked" class="vr-tab-pane<?php echo $active_vr_tab === 'blocked' ? '' : ' d-none'; ?>">
+                            <?php $vr_render_table($blocked_rows, true); ?>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
+
+    <script>
+        document.querySelectorAll('[data-vr-tab]').forEach(function (tabLink) {
+            tabLink.addEventListener('click', function (e) {
+                e.preventDefault();
+                var target = this.getAttribute('data-vr-tab');
+                var pendingPane = document.getElementById('vrPanePending');
+                var blockedPane = document.getElementById('vrPaneBlocked');
+                if (pendingPane) pendingPane.classList.toggle('d-none', target !== 'pending');
+                if (blockedPane) blockedPane.classList.toggle('d-none', target !== 'blocked');
+                document.querySelectorAll('[data-vr-tab]').forEach(function (el) {
+                    var isPendingLink = el.getAttribute('data-vr-tab') === 'pending';
+                    var active = el.getAttribute('data-vr-tab') === target;
+                    if (isPendingLink) {
+                        el.classList.toggle('active', active);
+                    } else {
+                        el.classList.toggle('active', active);
+                        el.classList.toggle('bg-danger', active);
+                        el.classList.toggle('text-white', active);
+                        el.classList.toggle('text-danger', !active);
+                    }
+                });
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', 'VendorRegistrations.php?tab=' + encodeURIComponent(target));
+                }
+            });
+        });
+    </script>
 
     
 

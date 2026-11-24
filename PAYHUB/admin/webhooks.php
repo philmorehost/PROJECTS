@@ -68,7 +68,20 @@ try {
     $retryStates = $db->query('SELECT transaction_id,state FROM webhook_retry_claims')->fetchAll(PDO::FETCH_KEY_PAIR);
     $retrySchemaReady = true;
 } catch (Throwable $e) {
-    // Read-only listing remains available before the operator applies the claim migration.
+    // Auto-heal missing 20261118 migrations idempotently outside any transaction.
+    $autohealPath = __DIR__ . '/../install/schema-autoheal.php';
+    if (is_file($autohealPath) && $db instanceof PDO && !$db->inTransaction()) {
+        try {
+            require_once $autohealPath;
+            if (function_exists('payhub_install_apply_migrations')) {
+                payhub_install_apply_migrations($db);
+                $retryStates = $db->query('SELECT transaction_id,state FROM webhook_retry_claims')->fetchAll(PDO::FETCH_KEY_PAIR);
+                $retrySchemaReady = true;
+            }
+        } catch (Throwable $healErr) {
+            error_log('[PAYHUB] webhooks schema auto-heal failed: ' . $healErr->getMessage());
+        }
+    }
 }
 
 
