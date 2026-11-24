@@ -269,7 +269,7 @@ token = member.token("/dashboard")
 code, state = member.api(p, {"action": "state"}, token)
 ok(code == 200 and state["status"] == "active", "quiz state")
 ok(all("correct_option" not in q and "explanation" not in q for q in state["questions"]), "active payload hides answer keys")
-ok(state["questions"][0]["locked"] is False and state["questions"][0]["editable"] is True, "an unanswered question is open for answering")
+ok(state["questions"][0]["editable"] is True and "locked" not in state["questions"][0], "an unanswered question is open for answering")
 ok(member.api(p, {"action": "state"}, "wrong")[0] == 419, "CSRF rejection")
 ok(member.api(p, {"action": "state"}, token, origin="https://evil.example")[0] == 403, "cross-origin rejection")
 
@@ -283,7 +283,7 @@ for q in state["questions"]:
 state = member.api(p, {"action": "state"}, token)[1]
 ok(state["questions"][0]["answer"] == 0 and state["questions"][0]["answered"] is True, "the stored answer reflects the latest choice")
 ok(all(q["answered"] for q in state["questions"]), "payload reports every question as answered")
-ok(all(q["locked"] is False for q in state["questions"]), "questions stay editable until submission")
+ok(all(q["editable"] for q in state["questions"]), "questions stay editable until submission")
 ok(member.api(p, {"action": "finish"}, token)[1]["status"] == "submitted", "server-side scoring")
 
 # Submitted means finished: no edits, no restart, and the old link shows the result.
