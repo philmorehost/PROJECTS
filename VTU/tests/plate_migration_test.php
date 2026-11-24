@@ -296,6 +296,16 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        // Fund.php deliberately replaces the inert, key-exposing legacy checkout body.
+        // Pin the guarded read-only instructions controller instead of frozen old markup.
+        if ($name === 'Fund.php') {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses shell sidebar");
+            chk(strpos($cur, 'bc_fund_actor_allowed(') !== false && strpos($cur, 'bc_fund_validate_post(') !== false, "$label validates actor and POST");
+            chk(strpos($cur, 'bc_fund_instructions(') !== false && strpos($cur, 'bc_fund_render(') !== false, "$label uses scoped bank instructions");
+            chk(strpos($cur, 'gateway-encrypt') === false && strpos($cur, 'PaymentGateway();') === false, "$label removes browser key/legacy popup wiring");
+            continue;
+        }
+
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             continue;
