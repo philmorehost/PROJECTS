@@ -10,7 +10,9 @@ on:
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/tests/webhook_recovery_policy_test.php'
       - 'PAYHUB/tests/fulfilment_inventory_test.php'
+      - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
       - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
@@ -24,6 +26,9 @@ on:
       - 'PAYHUB/api/virtual-accounts.php'
       - 'PAYHUB/merchant/reconcile.php'
       - 'PAYHUB/admin/webhooks.php'
+      - 'VTU/tests/payhub_paired_stack_mysql_test.php'
+      - 'VTU/**/func/bc-payhub-deposits.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
       - '.github/workflows/payhub-webhook-signing.yml'
   pull_request:
     paths:
@@ -35,7 +40,9 @@ on:
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/tests/webhook_recovery_policy_test.php'
       - 'PAYHUB/tests/fulfilment_inventory_test.php'
+      - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
       - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
@@ -49,6 +56,9 @@ on:
       - 'PAYHUB/api/virtual-accounts.php'
       - 'PAYHUB/merchant/reconcile.php'
       - 'PAYHUB/admin/webhooks.php'
+      - 'VTU/tests/payhub_paired_stack_mysql_test.php'
+      - 'VTU/**/func/bc-payhub-deposits.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
       - '.github/workflows/payhub-webhook-signing.yml'
 permissions:
   contents: read
@@ -92,6 +102,10 @@ jobs:
           php -l PAYHUB/includes/transaction-expiry-cron.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/api-reference.php
+          php -l PAYHUB/tests/payhub_dva_reconcile_contract_test.php
+          php -l VTU/tests/payhub_paired_stack_mysql_test.php
+          php -l VTU/DGV7.0-SAAS/func/bc-payhub-deposits.php
+          php -l VTU/DGV7.0-NON-SAAS/func/bc-payhub-deposits.php
       - name: Exact-mode signing regression matrix (no network)
         run: php PAYHUB/tests/webhook_signing_test.php
       - name: Review input policy (no database or network)
@@ -100,6 +114,8 @@ jobs:
         run: php PAYHUB/tests/webhook_alert_policy_test.php
       - name: Reviewed fulfilment producer inventory (source only)
         run: php PAYHUB/tests/fulfilment_inventory_test.php
+      - name: PayHub DVA reconciliation & verify contract (source only)
+        run: php PAYHUB/tests/payhub_dva_reconcile_contract_test.php
       - name: Recovery network and CLI policy (no DNS or HTTP)
         run: php PAYHUB/tests/webhook_recovery_policy_test.php
       - name: Additive money contract regression matrix (no network)
@@ -134,3 +150,13 @@ jobs:
         env:
           PAYHUB_LOG_SCHEMA_CI: '1'
         run: php PAYHUB/tests/webhook_retry_mysql_test.php
+      - name: Paired PayHub outbox/claims -> VTU SAAS deposits in disposable MySQL
+        env:
+          PAYHUB_PAIRED_CI: '1'
+          BC_TEST_EDITION: 'SAAS'
+        run: php VTU/tests/payhub_paired_stack_mysql_test.php
+      - name: Paired PayHub outbox/claims -> VTU NON-SAAS deposits in disposable MySQL
+        env:
+          PAYHUB_PAIRED_CI: '1'
+          BC_TEST_EDITION: 'NON-SAAS'
+        run: php VTU/tests/payhub_paired_stack_mysql_test.php
