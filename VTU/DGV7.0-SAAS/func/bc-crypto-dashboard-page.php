@@ -46,7 +46,9 @@ $tables=[
  'policies'=>['Recorded asset/network policy flags',['vendor_id'=>'Source vendor','asset_network'=>'Asset / network','scale'=>'Scale','enabled'=>'Local enable flag','withdrawals_enabled'=>'Local withdrawal flag','reconciliation_status'=>'Recorded reconciliation','valid_until_epoch'=>'Valid-until epoch']],
  'deposits'=>['Deposit review records — not settled credits',['id'=>'Local ID','asset_network'=>'Asset / network','units'=>'Exact base units','scale'=>'Scale','state'=>'Review state','reason'=>'Reason','confirmations'=>'Reported confirmations','updated_at'=>'Updated']],
  'operations'=>['Local reservation journal operations — not provider trades',['id'=>'Local ID','asset_network'=>'Asset / network','reference'=>'Reference','kind'=>'Operation','units'=>'Exact base units','created_at'=>'Recorded at']],
- 'streams'=>['Evidence collection streams — not customer funding',['stream_id'=>'Stream ID','vendor_id'=>'Source vendor','state'=>'Collection state','page_count'=>'Pages','revision'=>'Revision','valid_until_epoch'=>'Valid-until epoch']]
+ 'streams'=>['Evidence collection streams — not customer funding',['stream_id'=>'Stream ID','vendor_id'=>'Source vendor','state'=>'Collection state','page_count'=>'Pages','revision'=>'Revision','valid_until_epoch'=>'Valid-until epoch']],
+ 'buysell_orders'=>['Held Crypto Buy/Sell orders (Admin <-> User)',['id'=>'Order ID','request_id'=>'Request ID','side'=>'Side','asset'=>'Asset','network'=>'Network','crypto_units_1e8'=>'Units (1e8)','fiat_minor'=>'Fiat (minor)','state'=>'State','tx_hash'=>'Tx Hash','updated_at'=>'Updated']],
+ 'buysell_deposits'=>['Crypto Buy/Sell chain deposit finality review',['id'=>'Deposit ID','order_id'=>'Order ID','asset'=>'Asset','network'=>'Observed Net','expected_network'=>'Expected Net','observed_units_1e8'=>'Observed (1e8)','confirmations'=>'Confs','state'=>'State','updated_at'=>'Updated']]
 ];
 foreach($tables as $key=>$definition):if(!isset($model[$key]))continue;$section=$model[$key];?>
 <section class="crypto-panel"><h2><?php echo $e($definition[0]);?></h2>
