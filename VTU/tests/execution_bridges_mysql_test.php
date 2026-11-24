@@ -185,6 +185,22 @@ $conn->query("CREATE TABLE sas_site_details (
     site_title VARCHAR(120) NOT NULL DEFAULT 'Test'
 ) ENGINE=InnoDB");
 
+$conn->query("CREATE TABLE sas_provider_settlement_claims (
+    settlement_key CHAR(64) NOT NULL PRIMARY KEY,
+    payload_hash CHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB");
+
+$conn->query("CREATE TABLE sas_user_crypto_wallets (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    vendor_id INT UNSIGNED NOT NULL,
+    username VARCHAR(120) NOT NULL,
+    currency_code VARCHAR(16) NOT NULL,
+    balance DECIMAL(28,18) NOT NULL DEFAULT 0,
+    ledger_balance DECIMAL(28,18) NOT NULL DEFAULT 0,
+    UNIQUE KEY uniq_vuc (vendor_id, username, currency_code)
+) ENGINE=InnoDB");
+
 $conn->query("CREATE TABLE sas_service_control (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     vendor_id INT UNSIGNED NOT NULL,

@@ -185,7 +185,7 @@
     },
     {
       "name": "bc-checkout-execution.php",
-      "sha256": "5e3f50a5430a7681d8d1a6ba0d7f44be2003b577a904a600e9f839b458e6ca53"
+      "sha256": "999d5309ed82fa5607df2470a117a1a89009df08ea06ad8104480a28594ed728"
     },
     {
       "name": "bc-payout-execution.php",

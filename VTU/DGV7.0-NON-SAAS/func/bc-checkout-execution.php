@@ -53,20 +53,21 @@ if (!function_exists('bc_chk_settle_verified_intent')) {
         $norm_cur = strtoupper((string)$row['currency']);
         $amt = (float)$row['amount'];
         $credit_ref = 'chk_' . $reference;
-        if (function_exists('bc_fintech_credit_wallet')) {
-            $cred = bc_fintech_credit_wallet(
-                $connection_server,
-                $vendor_id,
-                (int)$row['user_id'],
-                $norm_cur,
-                $amt,
-                $credit_ref,
-                'Hosted checkout settlement (' . $provider . ' ' . $provider_reference . ')',
-                $provider_reference
-            );
-            if (empty($cred['ok']) && ($cred['code'] ?? '') !== 'duplicate') {
-                return ['ok' => false, 'code' => 'wallet_credit_failed', 'detail' => $cred];
-            }
+        $cred = bc_fintech_ledger_post(
+            $vendor_id,
+            (string)$row['username'],
+            $norm_cur,
+            'credit',
+            $amt,
+            $credit_ref,
+            [
+                'provider' => $provider,
+                'event_id' => $provider_reference,
+                'channel' => 'hosted_checkout',
+            ]
+        );
+        if (empty($cred['ok'])) {
+            return ['ok' => false, 'code' => 'wallet_credit_failed', 'detail' => $cred];
         }
         return [
             'ok' => true,
