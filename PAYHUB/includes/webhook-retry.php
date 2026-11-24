@@ -56,7 +56,7 @@ function payhub_finish_webhook_retry(PDO $db, array $claim, $httpCode, $transpor
         $update->execute([$ok?'succeeded':'unknown',$code,(int)$delivery['transaction_id'],(int)$delivery['id'],$claim['token']]);
         if ($update->rowCount()!==1) throw new RuntimeException('Retry completion no longer owns this attempt.');
         $log=$db->prepare('UPDATE webhook_logs SET status=?,response=? WHERE id=? AND transaction_id=? AND SHA2(payload,256)=?');
-        $log->execute([$ok?'success':'failed','HTTP '.$code.($ok?' | Claimed retry acknowledged.':' | Retry outcome uncertain; independent reconciliation required.'),(int)$delivery['id'],(int)$delivery['transaction_id'],hash('sha256',(string)$delivery['payload'])]);
+        $log->execute([$ok?'success':'failed','HTTP '.$code.($ok?' | Claimed delivery acknowledged.':' | Delivery outcome uncertain; independent reconciliation required.'),(int)$delivery['id'],(int)$delivery['transaction_id'],hash('sha256',(string)$delivery['payload'])]);
         if ($log->rowCount()!==1) throw new RuntimeException('Delivery record changed; retry completion requires reconciliation.');
         $db->commit();return $ok;
     } catch (Throwable $e) {if($db->inTransaction())$db->rollBack();throw $e;}

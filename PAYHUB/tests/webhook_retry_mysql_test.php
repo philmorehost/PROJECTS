@@ -6,7 +6,9 @@ set_exception_handler(function($e){
     echo '::error file=PAYHUB/tests/webhook_retry_mysql_test.php,line='.$e->getLine().'::'.$message."\n";
     exit(1);
 });
-require __DIR__.'/../includes/webhook-retry.php';
+require __DIR__.'/../includes/webhook-initial.php';
+function initialfixture($db,$id){$q=$db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=?');$q->execute([$id]);return $q->fetch(PDO::FETCH_ASSOC);}
+function initialbody($row){return json_encode(['event'=>'charge.success','data'=>['reference'=>$row['reference'],'domain'=>((int)$row['is_test']===1?'test':'live'),'amount'=>100]]);}
 function retrymigration($db,$file){
     // Multi-statement operator SQL must use direct execution, not a native prepared query.
     $native=$db->getAttribute(PDO::ATTR_EMULATE_PREPARES);$db->setAttribute(PDO::ATTR_EMULATE_PREPARES,true);
@@ -17,7 +19,7 @@ function retrydb($name='') {return new PDO('mysql:host=127.0.0.1;port=3306;dbnam
 if (($argv[1]??'')==='worker') {
     $name=$argv[2]??'';if(!preg_match('/\Apayhub_retry_ci_[a-f0-9]{12}\z/',$name))exit(2);
     $worker=retrydb($name);usleep(200000);
-    try {payhub_claim_webhook_retry($worker,(int)$argv[3],true);echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
+    try {if(($argv[4]??'')==='initial'){$row=initialfixture($worker,(int)$argv[3]);payhub_claim_initial_webhook($worker,$row,initialbody($row));}else{payhub_claim_webhook_retry($worker,(int)$argv[3],true);}echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
 }
 $n=0;function retrycheck($ok,$label){global $n;if(!$ok)throw new RuntimeException($label);$n++;}
 function retryreject($f,$label){try{$f();}catch(Throwable $e){retrycheck(true,$label);return;}throw new RuntimeException('accepted '.$label);}
@@ -89,5 +91,34 @@ try {
     retrycheck((int)$db->query('SELECT SUM(attempt_count) FROM webhook_logs WHERE transaction_id=20')->fetchColumn()===3,'only winning concurrent reservation increments count');
     $db->exec('ALTER TABLE webhook_retry_claims ENGINE=MyISAM');
     retryreject(fn()=>payhub_claim_webhook_retry($db,$ids[12],true),'nontransactional reservation schema refused');
+    $db->exec('ALTER TABLE webhook_retry_claims ENGINE=InnoDB');
+    foreach([21,22,23] as $id)$db->exec("INSERT INTO transactions VALUES($id,1,'fixture-$id','success',0)");
+    $row=initialfixture($db,21);$body=initialbody($row);
+    retryreject(fn()=>payhub_claim_initial_webhook($db,$row,$body),'missing initial migration refuses before HTTP');
+    retrycheck((int)$db->query('SELECT COUNT(*) FROM webhook_logs WHERE transaction_id=21')->fetchColumn()===0,'failed reservation rolls back payload log');
+    retrymigration($db,__DIR__.'/../install/20261118_webhook_initial_claims.sql');
+    retrymigration($db,__DIR__.'/../install/20261118_webhook_initial_claims.sql');
+    $db->beginTransaction();retryreject(fn()=>payhub_claim_initial_webhook($db,$row,$body),'initial cannot commit caller accounting');retrycheck($db->inTransaction(),'caller transaction still open');$db->rollBack();
+    $stale=$row;$stale['reference']='stale-reference';
+    retryreject(fn()=>payhub_claim_initial_webhook($db,$stale,$body),'stale initial snapshot refused');
+    $initial=payhub_claim_initial_webhook($db,$row,$body);
+    retrycheck(!$db->inTransaction(),'initial reservation committed before network');
+    $persisted=$other->query('SELECT c.state,c.delivery_kind,w.payload,w.attempt_count FROM webhook_retry_claims c JOIN webhook_logs w ON c.log_id=w.id WHERE c.transaction_id=21')->fetch(PDO::FETCH_ASSOC);
+    retrycheck($persisted['state']==='attempting' && $persisted['delivery_kind']==='initial' && $persisted['payload']===$body && (int)$persisted['attempt_count']===1,'exact initial body and reservation visible independently');
+    retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$initial['delivery']['id'],true),'initial claim blocks manual retry');
+    retryreject(fn()=>payhub_claim_initial_webhook($other,$row,$body),'repeated generic call cannot duplicate initial delivery');
+    retrycheck(payhub_finish_webhook_retry($db,$initial,200,true),'shared owner finalization acknowledges initial');
+    $row22=initialfixture($db,22);$crashed=payhub_claim_initial_webhook($db,$row22,initialbody($row22));
+    retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$crashed['delivery']['id'],true),'crashed initial blocks admin replay');
+    retryreject(fn()=>payhub_claim_initial_webhook($other,$row22,initialbody($row22)),'crashed initial has no automatic reclaim');
+    $historical=initialfixture($db,12);
+    retryreject(fn()=>payhub_claim_initial_webhook($db,$historical,initialbody($historical)),'existing historical logs never auto-replayed by generic sender');
+    $workers=[];
+    for($i=0;$i<6;$i++){
+        $proc=proc_open([PHP_BINARY,__FILE__,'worker',$name,'23','initial'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+        if(!is_resource($proc))throw new RuntimeException('initial worker launch failed');fclose($pipes[0]);$workers[]=[$proc,$pipes];
+    }
+    $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean initial worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','losing initial worker refused');}
+    retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM webhook_logs WHERE transaction_id=23')->fetchColumn()===1,'concurrent generic initial sends reserve one exact payload');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}
