@@ -121,10 +121,10 @@ try {
     fl_check((float)$db->query('SELECT balance FROM sas_users WHERE id=2')->fetch_assoc()['balance'] === 100.0, 'caller outer transaction not committed');
 
     // 6. Non-InnoDB table refused
-    $db->query('ALTER TABLE sas_fintech_ledger ENGINE=MyISAM');
+    $db->query('ALTER TABLE sas_users ENGINE=MyISAM');
     $myisam = bc_fintech_ledger_post(7, 'alice', 'NGN', 'credit', 10, 'FLW-MYISAM-1', ['provider' => 'flutterwave']);
-    fl_check(!$myisam['ok'] && $myisam['reason'] === 'transactional_schema_required', 'MyISAM ledger refused');
-    $db->query('ALTER TABLE sas_fintech_ledger ENGINE=InnoDB');
+    fl_check(!$myisam['ok'] && $myisam['reason'] === 'transactional_schema_required', 'MyISAM users table refused');
+    $db->query('ALTER TABLE sas_users ENGINE=InnoDB');
 
     // 7. Stablecoin USDC atomicity + MyISAM crypto wallet refusal
     $usdc = bc_fintech_ledger_post(7, 'alice', 'USDC', 'credit', 12.5, 'KL-MYSQL-1', ['provider' => 'klasha']);
