@@ -421,7 +421,9 @@ jobs:
           php VTU/tests/held_lifecycle_workers_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
+          php VTU/tests/schema_autoheal_test.php
           php VTU/tests/apply_migrations_test.php
+          php -n VTU/DGV7.0-SAAS/tests/bc_tables_gate_test.php
           php VTU/tests/release_readiness_test.php
           php VTU/bin/verify-release-readiness.php > /dev/null
           php VTU/bin/apply-migrations.php --dry-run > /dev/null
@@ -685,6 +687,12 @@ jobs:
         env:
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/held_lifecycle_workers_mysql_test.php
+
+      - name: Automated schema self-healing and idempotency DB tests
+        env:
+          BC_SCHEMA_AUTOHEAL_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/schema_autoheal_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest

@@ -11,20 +11,22 @@ This runbook governs host deployment, schema migration, historical reconciliatio
    ```
    Confirm `"ok": true`, `"manifest_errors": []`, `"bybit_retired": true`, and `"warnings": []`.
 
-## 2. Manifest-Verified Database Migration
-1. Preview the SHA-256 verified migration plan (dry-run default, makes zero DB changes):
-   ```bash
-   php VTU/bin/apply-migrations.php --dry-run
-   ```
-2. Apply pending `VTU/migrations/*.sql` and `PAYHUB/install/*.sql` migrations idempotently and run the live `ENGINE=InnoDB` check:
-   ```bash
-   php VTU/bin/apply-migrations.php --apply --edition=SAAS
-   ```
-   (Repeat `--edition=NON-SAAS` on a `NON-SAAS` host if it uses a separate database.)
-3. Confirm live readiness passes with `"db_checked": true` across all 29 required InnoDB tables:
-   ```bash
-   php VTU/bin/verify-release-readiness.php --db-check
-   ```
+## 2. Automated Self-Healing & Database Migration
+- **DGV7.0 (`SAAS` & `NON-SAAS`):** `func/bc-tables.php` (gated by `BC_TABLES_VERSION`, using a serialized MySQL `GET_LOCK`) and `UpdateSystem` (`execute_update.php` / `cron_update.php`) now automatically invoke `bc_schema_autoheal()` (`func/bc-schema-autoheal.php`), which idempotently applies any pending `VTU/migrations/*.sql` files outside active transactions and records them in `schema_migrations_applied`.
+- **Verification / PayHub CLI:** To preview or manually verify/apply both `VTU/migrations/*.sql` and `PAYHUB/install/*.sql` (including dry-run SHA-256 verification and `--db-check` InnoDB enforcement):
+  1. Preview the SHA-256 verified migration plan (dry-run default, makes zero DB changes):
+     ```bash
+     php VTU/bin/apply-migrations.php --dry-run
+     ```
+  2. Apply any remaining `PAYHUB/install/*.sql` or `VTU/migrations/*.sql` migrations idempotently and run the live `ENGINE=InnoDB` check:
+     ```bash
+     php VTU/bin/apply-migrations.php --apply --edition=SAAS
+     ```
+     (Repeat `--edition=NON-SAAS` on a `NON-SAAS` host if it uses a separate database.)
+  3. Confirm live readiness passes with `"db_checked": true` across all 29 required InnoDB tables:
+     ```bash
+     php VTU/bin/verify-release-readiness.php --db-check
+     ```
 
 ## 3. Historical Reconciliation & KMS Review *(Required Before Any Hold Lift)*
 1. **PayHub webhook obligations (`LEGACY_SETTLEMENT_HOLD`):**
