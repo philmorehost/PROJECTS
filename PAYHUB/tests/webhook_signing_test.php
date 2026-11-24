@@ -28,9 +28,9 @@ foreach(['includes/functions.php','webhook-paystack.php','verify.php','admin/web
 // Any accidental initialization is intercepted before networking; no cURL request is permitted.
 function wh_spy_curl_init(){throw new RuntimeException('refused signature reached network');}
 foreach([
- ['includes/functions.php',"            if (\$signature === '') {",'            @file_put_contents(', 'code','curlErr'],
- ['webhook-paystack.php',"                    if (\$signature === '') {",'                    $resText =', 'code','curlErr'],
- ['verify.php',"if (\$webhook_signature === '') {",'$whResText =', 'whCode','whErr'],
+ ['includes/functions.php',"            if (\$signature === '') {",'            payhub_debug_log(', 'code','curlErr'],
+ ['webhook-paystack.php',"                    if (\$signature === '') {",'                    payhub_debug_log(', 'code','curlErr'],
+ ['verify.php',"if (\$webhook_signature === '') {",'payhub_debug_log(', 'whCode','whErr'],
  ['admin/webhooks.php',"                \$ch = \$signature !== '' ? curl_init(",'                $deliverySucceeded =', 'httpCode','curlError']
 ] as [$file,$begin,$end,$codeVar,$errorVar]){
  $source=file_get_contents(__DIR__.'/../'.$file);$start=strpos($source,$begin);$stop=strpos($source,$end,$start);

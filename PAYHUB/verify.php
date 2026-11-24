@@ -339,13 +339,11 @@ if ($tx && $tx['status'] === 'success') {
                                 payhub_finish_webhook_retry($db, $verifyClaim, $whCode, $whRes !== false && $whErr === '');
                             }
 
-                            $whResText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$whRes), 0, 180));
-                            @file_put_contents(
-                                BASE_PATH . 'webhook_debug.log',
-                                '[' . date('Y-m-d H:i:s') . '] Verify page webhook tx=' . $tx['reference']
+                            payhub_debug_log(
+                                'webhook_debug',
+                                'Verify page webhook tx=' . $tx['reference']
                                 . ' url=' . $webhook_url . ' algo=sha256 http=' . $whCode . ' fee=' . $fee
-                                . ' settled=' . $settled . ($whErr !== '' ? ' err=' . $whErr : '') . PHP_EOL,
-                                FILE_APPEND
+                                . ' settled=' . $settled . ($whErr !== '' ? ' err=' . $whErr : '')
                             );
                             // Exact body/log and claim were committed before HTTP.
 
