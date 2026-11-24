@@ -29,31 +29,32 @@ bc_adm_head("User Transactions | Super Admin", array("area" => "spadmin"));
                 $search_parameter = "";
                 
                 if($vid > 0){
-                    $search_statement .= " AND vendor_id='$vid'";
+                    $search_statement .= " AND t.vendor_id='$vid'";
                     $search_parameter .= "vid=$vid&";
                 }
 
                 if(!empty($searchq)){
                     $search_esc = mysqli_real_escape_string($connection_server, $searchq);
-                    $search_statement .= " AND (product_unique_id LIKE '%$search_esc%' OR reference LIKE '%$search_esc%' OR description LIKE '%$search_esc%' OR username LIKE '%$search_esc%')";
+                    $search_statement .= " AND (t.product_unique_id LIKE '%$search_esc%' OR t.reference LIKE '%$search_esc%' OR t.description LIKE '%$search_esc%' OR t.username LIKE '%$search_esc%' OR v.email LIKE '%$search_esc%' OR v.firstname LIKE '%$search_esc%' OR v.lastname LIKE '%$search_esc%' OR v.website_url LIKE '%$search_esc%' OR v.business_name LIKE '%$search_esc%')";
                     $search_parameter .= "searchq=".urlencode($searchq)."&";
                 }
 
                 if (isset($_GET["category"]) && !empty($_GET["category"])) {
                     $cat = mysqli_real_escape_string($connection_server, $_GET["category"]);
-                    $search_statement .= " AND type_alternative LIKE '%$cat%'";
+                    $search_statement .= " AND t.type_alternative LIKE '%$cat%'";
                     $search_parameter .= "category=$cat&";
                 }
 
-                $get_user_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE 1=1 $search_statement ORDER BY date DESC LIMIT $limit OFFSET $offset");
+                $user_tx_sql = "SELECT t.*, p.product_name, a.api_type, TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name, v.business_name AS vendor_business_name, v.email AS vendor_email, v.website_url AS vendor_website FROM sas_transactions t LEFT JOIN sas_vendors v ON v.id = t.vendor_id LEFT JOIN sas_products p ON p.vendor_id = t.vendor_id AND p.id = t.product_id LEFT JOIN sas_apis a ON a.vendor_id = t.vendor_id AND a.id = t.api_id WHERE 1=1 $search_statement ORDER BY t.date DESC LIMIT $limit OFFSET $offset";
+                $get_user_transaction_details = mysqli_query($connection_server, $user_tx_sql);
                 
                 if (!$get_user_transaction_details) {
                     // Critical fallback: Check if vendor_id column exists
                     $check_col = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_transactions LIKE 'vendor_id'");
-                    if (mysqli_num_rows($check_col) == 0) {
+                    if ($check_col && mysqli_num_rows($check_col) == 0) {
                         mysqli_query($connection_server, "ALTER TABLE sas_transactions ADD COLUMN vendor_id INT UNSIGNED NOT NULL AFTER id");
                         // Retry query
-                        $get_user_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE 1=1 $search_statement ORDER BY date DESC LIMIT $limit OFFSET $offset");
+                        $get_user_transaction_details = mysqli_query($connection_server, $user_tx_sql);
                     }
                 }
             ?>
@@ -77,16 +78,16 @@ bc_adm_head("User Transactions | Super Admin", array("area" => "spadmin"));
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-bold">Search User / Ref</label>
-                            <input name="searchq" type="text" value="<?php echo htmlspecialchars($searchq); ?>" placeholder="e.g. smartuser1" class="form-control" />
+                            <label class="form-label small fw-bold">Search User / Vendor / Ref</label>
+                            <input name="searchq" type="text" value="<?php echo htmlspecialchars($searchq); ?>" placeholder="e.g. smartuser1 or vendor email" class="form-control" />
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">Category</label>
                             <select name="category" class="form-select">
                                 <option value="">All Services</option>
-                                <option value="airtime" <?php echo ($_GET['category'] == 'airtime') ? 'selected' : ''; ?>>Airtime</option>
-                                <option value="data" <?php echo ($_GET['category'] == 'data') ? 'selected' : ''; ?>>Data</option>
-                                <option value="funding" <?php echo ($_GET['category'] == 'funding') ? 'selected' : ''; ?>>Funding</option>
+                                <option value="airtime" <?php echo (($_GET['category'] ?? '') == 'airtime') ? 'selected' : ''; ?>>Airtime</option>
+                                <option value="data" <?php echo (($_GET['category'] ?? '') == 'data') ? 'selected' : ''; ?>>Data</option>
+                                <option value="funding" <?php echo (($_GET['category'] ?? '') == 'funding') ? 'selected' : ''; ?>>Funding</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -98,6 +99,8 @@ bc_adm_head("User Transactions | Super Admin", array("area" => "spadmin"));
                     <?php
                         $query_result = $get_user_transaction_details;
                         $is_admin = true;
+                        $show_vendor_info = true;
+                        $tx_receipt_source = 'user';
                         include("../func/history-table.php");
                     ?>
                 </div>

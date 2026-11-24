@@ -142,7 +142,7 @@ html = admin.get("/admin/settings")[2]
 ok("registration-protection" in html and "Registration protection" in html, "administrator can configure registration protection")
 ok("reCAPTCHA off" in html and "Sign-ups allowed per hour" in html, "protection settings render their state")
 ok('name="recaptcha_site_key" value=""' in html, "no reCAPTCHA key is stored before configuration")
-site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "seconds_per_question": "300", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1", "otp_register": "1", "registration_cap": "60"}
+site_settings = {"site_title": "KINGDOMBUILDERS", "site_tagline": "Grow in the Word.", "admin_email": os.environ["KB_ADMIN_EMAIL"], "registration_open": "1", "quiz_open": "1", "questions_per_attempt": "3", "duration_minutes": "20", "seconds_per_question": "24", "pass_mark": "50", "max_tab_switches": "0", "timer_enabled": "1", "randomize_questions": "1", "randomize_answers": "1", "allow_back": "1", "otp_register": "1", "registration_cap": "60"}
 
 ok(admin.post("/admin/settings", site_settings)[0] == 200, "save quiz settings")
 html = admin.get("/admin/settings")[2]
@@ -190,6 +190,13 @@ qid = re.search(r'name="id" value="(\d+)"><input type="hidden" name="action" val
 question.update(id=qid, question_text="Edited smoke question " + RUN)
 ok(admin.post("/admin/questions", question)[0] == 200, "edit question")
 ok(admin.post("/admin/questions", {"action": "delete", "id": qid})[0] == 200, "delete question")
+# The starter bank is idempotent: an installation whose bank is already full shows
+# no prompt, but the action must still succeed and change nothing.
+bank_before = int(probe("count", "questions") or 0)
+questions_html = admin.get("/admin/questions")[2]
+ok(("Load starter questions" in questions_html) or bank_before >= 50, "the bank offers the starter questions when it is short")
+ok(admin.post("/admin/questions", {"action": "seed-questions"})[0] == 200, "administrator can top up the bank")
+ok(int(probe("count", "questions") or 0) >= min(50, len(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "seed.json"))))), "the starter bank fills a 50-question paper")
 email = f"smoke-{RUN}@example.test"
 password = "Smoke-Passphrase-2026!"
 ok(admin.post("/admin/users", {"action": "save", "id": "0", "name": "Smoke Member", "email": email, "role": "member", "status": "active", "password": password})[0] == 200, "administrator creates member")
@@ -254,44 +261,55 @@ ok(member.post("/quiz/start", {})[1].startswith(BASE + "/quiz?id="), "start/resu
 bar = dock(member.get("/dashboard")[2])
 ok("Resume quiz" in bar and "dock-ping" in bar, "dock offers resume while an attempt is open")
 ok('href="/account"' in bar, "dock links to the profile")
-# The start POST already follows the redirect; read the active attempt link from the dashboard.
 html = member.get("/dashboard")[2]
 match = re.search(r'/quiz\?id=([a-f0-9-]+)', html)
-if match:
-    # Finish the active attempt through the API before starting a clean one.
-    p = "/api/quiz?id=" + match.group(1)
-    state = member.api(p, {"action": "state"})[1]
-    if state["status"] == "active": member.api(p, {"action": "finish"})
-bar = dock(member.get("/dashboard")[2])
-ok("Start quiz" in bar and "Resume quiz" not in bar, "dock returns to Start quiz after finishing")
-ok('method="post"' in bar and "/quiz/start" in bar, "dock starts the quiz over POST")
-ok("Resume quiz" not in dock(member.get("/account")[2]), "finished attempts are not resumable")
-_, url, _ = member.post("/quiz/start", {})
-attempt = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["id"][0]
+attempt = match.group(1)
 p = "/api/quiz?id=" + attempt
 token = member.token("/dashboard")
 code, state = member.api(p, {"action": "state"}, token)
 ok(code == 200 and state["status"] == "active", "quiz state")
 ok(all("correct_option" not in q and "explanation" not in q for q in state["questions"]), "active payload hides answer keys")
+ok(state["questions"][0]["editable"] is True and "locked" not in state["questions"][0], "an unanswered question is open for answering")
 ok(member.api(p, {"action": "state"}, "wrong")[0] == 419, "CSRF rejection")
 ok(member.api(p, {"action": "state"}, token, origin="https://evil.example")[0] == 403, "cross-origin rejection")
+
+# An answer can be changed while the clock runs; the last choice is the one kept.
+first = member.api(p, {"action": "answer", "position": 0, "choice": 0}, token)[1]
+ok(first["saved"] is True and first["changed"] is False, "the first choice is saved")
+second = member.api(p, {"action": "answer", "position": 0, "choice": 1}, token)[1]
+ok(second["changed"] is True, "a saved answer can be changed before submission")
 for q in state["questions"]:
-    code, saved = member.api(p, {"action": "answer", "position": q["position"], "choice": 0}, token)
-    ok(code == 200 and saved.get("locked") is True, "save and lock answer")
-ok(member.api(p, {"action": "answer", "position": 0, "choice": 0}, token)[0] == 200, "identical retry is idempotent")
-code, refused = member.api(p, {"action": "answer", "position": 0, "choice": 1}, token)
-ok(code == 409 and "cannot be changed" in refused["error"], "saved answer cannot be changed")
-code, state = member.api(p, {"action": "state"}, token)
-ok(all(q["locked"] for q in state["questions"]), "payload reports every answer as locked")
-ok([q["position"] for q in state["questions"] if q["answer"] is not None] == [q["position"] for q in state["questions"]], "stored choices survive the refused change")
+    member.api(p, {"action": "answer", "position": q["position"], "choice": 0}, token)
+state = member.api(p, {"action": "state"}, token)[1]
+ok(state["questions"][0]["answer"] == 0 and state["questions"][0]["answered"] is True, "the stored answer reflects the latest choice")
+ok(all(q["answered"] for q in state["questions"]), "payload reports every question as answered")
+ok(all(q["editable"] for q in state["questions"]), "questions stay editable until submission")
 ok(member.api(p, {"action": "finish"}, token)[1]["status"] == "submitted", "server-side scoring")
+
+# Submitted means finished: no edits, no restart, and the old link shows the result.
+ended = member.api(p, {"action": "answer", "position": 0, "choice": 2}, token)
+ok(ended[0] == 409, "a submitted answer cannot be changed")
+code, url, quiz_html = member.get_noredirect("/quiz?id=" + attempt)
+ok(code == 303 and url.endswith("/result?id=" + attempt), "the old quiz link redirects to the result")
+second_start = member.post("/quiz/start", {})
+ok("already taken" in second_start[2], "a member cannot start a second assessment")
+
+# A second start is refused, and the leave action is honest about a finished paper.
+ok("already taken" in member.post("/quiz/start", {})[2], "the refusal is explained on the page")
+code, left = member.api(p, {"action": "leave"}, token)
+ok(code == 200 and left["ended"] is True and left["status"] == "submitted", "leaving a finished attempt is a no-op")
+bar = dock(member.get("/dashboard")[2])
+ok("Completed" in bar and "Start quiz" not in bar and "Resume quiz" not in bar, "the dock shows the assessment as completed")
+dashboard = member.get("/dashboard")[2]
+ok("Assessment completed" in dashboard, "the dashboard marks the assessment as completed")
+ok("/result?id=" in dashboard and "20 min" in dashboard, "the dashboard points at the result and shows the 20-minute paper")
 code, _, result_html = member.get("/result?id=" + attempt)
 ok(code == 200 and "That is the complete result." in result_html, "member result is a score summary")
 ok("Review and reflect" not in result_html and "review-card" not in result_html, "completed members cannot see the questions")
 ok("View score" in member.get("/dashboard")[2], "dashboard offers the score, not a review")
 finished = member.api(p, {"action": "state"}, token)[1]
 ok(finished["questions"] == [] and finished["can_review"] is False, "finished attempt payload carries no questions")
-ok("review-card" not in member.get("/quiz?id=" + attempt)[2], "reopening the quiz reveals no questions")
+ok("review-card" not in quiz_html, "reopening the quiz reveals no questions")
 
 # The administrator decides whether completed members may review questions.
 ok(admin.post("/admin/settings", dict(site_settings, review_questions="1"))[0] == 200, "administrator can allow question review")
@@ -304,7 +322,7 @@ ok(admin.post("/admin/settings", site_settings)[0] == 200, "administrator can sw
 code, _, hidden_html = member.get("/result?id=" + attempt)
 ok(code == 200 and "review-card" not in hidden_html and "questions are not shown" in hidden_html.lower(), "switching off withdraws the questions again")
 ok(member.api(p, {"action": "state"}, token)[1]["questions"] == [], "API stops returning questions after the switch")
-ok(dock(member.get("/quiz?id=" + attempt)[2]) == "", "dock stays out of the quiz screen")
+ok(dock(member.get("/result?id=" + attempt)[2]) != "", "the dock follows a completed assessment to the result")
 ok(admin.api(p, {"action": "state"}, admin.token("/admin"))[0] == 404, "attempt ownership")
 ok(admin.get("/admin/results/export")[0] == 200, "CSV export")
 

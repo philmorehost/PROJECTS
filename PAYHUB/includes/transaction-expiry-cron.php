@@ -173,6 +173,7 @@ foreach ($rows as $tx) {
             log_transaction_event($tx['id'], 'recovered_by_expiry_cron',
                 "Gateway confirmed success after the grace window; credited " . number_format($net, 2) . ".");
 
+            payhub_enqueue_generic_outbox($db,(int)$tx['id'],'expiry_cron');
             $db->commit();
             $did_fulfil = true;
             $fulfilled++;

@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-vendor-commerce-2');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-autoheal-1');
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -2370,6 +2370,15 @@ $vreg_cols=mysqli_query($connection_server,"SHOW COLUMNS FROM sas_vendor_signup_
 if($vreg_cols&&mysqli_num_rows($vreg_cols)===0)mysqli_query($connection_server,"ALTER TABLE sas_vendor_signup_challenges ADD COLUMN application_used_at DATETIME NULL");
 mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_daily(identity_hash CHAR(64) PRIMARY KEY,until_at DATETIME NOT NULL) ENGINE=InnoDB");
 mysqli_query($connection_server,"CREATE TABLE IF NOT EXISTS sas_vendor_signup_receipts(reference VARCHAR(150) PRIMARY KEY,pending_id INT NOT NULL UNIQUE) ENGINE=InnoDB");
+
+if ($connection_server instanceof mysqli) {
+    require_once __DIR__ . '/bc-schema-autoheal.php';
+    $bc_autoheal_res = bc_schema_autoheal($connection_server);
+    if (empty($bc_autoheal_res['ok'])) {
+        error_log('[DGV-SCHEMA] bc_schema_autoheal failed; schema version was not advanced.');
+        return;
+    }
+}
 
 // Record the applied schema version so the next request takes the fast path at the top of this file.
 // Deliberately DELETE + INSERT rather than an upsert: not every variant of sas_super_admin_options has

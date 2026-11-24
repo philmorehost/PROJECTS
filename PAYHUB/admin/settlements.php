@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
                 ]);
                 if (!$res || empty($res['status'])) {
                     $gatewayMessage = $res['message'] ?? 'The payment provider did not return a successful transfer response.';
-                    file_put_contents(BASE_PATH . 'payout_debug.log', "[" . date('Y-m-d H:i:s') . "] Payout Approval Failed for ID $payoutId: " . json_encode($res) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    payhub_debug_log('payout_debug', "Payout Approval Failed for ID $payoutId: " . $gatewayMessage);
                     throw new RuntimeException('Transfer failed: ' . $gatewayMessage);
                 }
                 $details .= ' | Transfer: ' . ($res['data']['transfer_code'] ?? $res['data']['reference'] ?? 'initiated');

@@ -126,13 +126,19 @@ if (!function_exists('bc_fintech_webhook_claim')) {
 
         $prov_esc = mysqli_real_escape_string($connection_server, $provider);
         $evt_esc  = mysqli_real_escape_string($connection_server, $event_id);
-        $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
-            (provider, event_id, vendor_id, status, created_at)
-            VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
-        if ($q) return 'new';
-        if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
-        error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
-        return 'error';
+        try {
+            $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
+                (provider, event_id, vendor_id, status, created_at)
+                VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
+            if ($q) return 'new';
+            if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
+            return 'error';
+        } catch (Throwable $e) {
+            if ((int)$e->getCode() === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . $e->getMessage());
+            return 'error';
+        }
     }
 }
 
@@ -302,6 +308,10 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         }
 
         // 3) Durable claim. A retry is skipped, never re-applied.
+        if (function_exists('bc_fintech_schema_ready') && !bc_fintech_schema_ready()) {
+            bc_fintech_webhook_log($provider, $event_id, 'refused: schema not ready');
+            return bc_fintech_webhook_result($provider, $event_id, false, 503, 'schema_not_ready', 'Webhook storage unavailable.');
+        }
         $claim = bc_fintech_webhook_claim($provider, $event_id, $vendor_id);
         if ($claim === 'duplicate') {
             bc_fintech_webhook_log($provider, $event_id, 'duplicate delivery skipped');
@@ -378,6 +388,27 @@ if (!function_exists('bc_fintech_webhook_handle')) {
 
         bc_fintech_webhook_complete($provider, $event_id);
         if (($post['reason'] ?? '') === 'already_settled') return bc_fintech_webhook_result($provider,$event_id,true,200,'already_processed','Payment already settled.');
+
+        // If this payment belongs to a v2 hosted checkout intent, synchronize sas_checkout_intents -> settled.
+        if (getenv('BC_CHECKOUT_EXECUTION_ENABLED') === '1' && is_file(__DIR__ . '/bc-checkout-intents.php')) {
+            require_once __DIR__ . '/bc-checkout-intents.php';
+            $chkRow = bc_q_row("SELECT version, state FROM sas_checkout_intents WHERE vendor_id=? AND reference=? LIMIT 1", [(int)$vendor_id, $verified_ref]);
+            if ($chkRow && in_array((string)$chkRow['state'], ['created', 'provider_pending'], true)) {
+                $chkEvKey = hash('sha256', json_encode(['webhook_chk_settle', (int)$vendor_id, $verified_ref, $provider, $event_id], JSON_THROW_ON_ERROR));
+                $chkEvHash = hash('sha256', (string)$raw_body);
+                bc_chk_reconcile_settlement(
+                    (int)$vendor_id,
+                    $verified_ref,
+                    $chkEvKey,
+                    $provider,
+                    $currency,
+                    (string)number_format((float)($verified['gross_amount'] ?? $verified['amount']), 2, '.', ''),
+                    $event_id,
+                    $chkEvHash,
+                    (int)$chkRow['version']
+                );
+            }
+        }
         // Receipt notification. The ledger is deliberately presentation-free, so the
         // customer/vendor emails that chargeUser() used to send are re-attached here.
         bc_fintech_webhook_notify(

@@ -42,6 +42,13 @@ $dockProfileActive = $current === 'account';
           </span>
           <span class="dock-label">Resume quiz</span>
         </a>
+      <?php elseif ($dockTaken !== null): ?>
+        <a class="dock-item dock-item-quiz is-accent" href="<?= e(url('dashboard')) ?>">
+          <span class="dock-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.5 17 4 11.5"/></svg>
+          </span>
+          <span class="dock-label">Completed</span>
+        </a>
       <?php elseif (!$dockVerified): ?>
         <a class="dock-item dock-item-quiz is-accent" href="<?= e(url('dashboard')) ?>">
           <span class="dock-icon" aria-hidden="true">

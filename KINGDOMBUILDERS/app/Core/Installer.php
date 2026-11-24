@@ -13,6 +13,25 @@ final class Installer {
         return $checks;
     }
     public static function ready(): bool { foreach (self::checks() as $check) if (!$check[1]) return false; return true; }
+    /**
+     * Insert the starter bank. Idempotent: a question whose text already exists
+     * is skipped, so this can also top up a bank that was created earlier.
+     */
+    public static function seedQuestions(?\PDO $pdo = null): int {
+        $seed = json_decode((string) file_get_contents(ROOT.'/database/seed.json'), true, 512, JSON_THROW_ON_ERROR);
+        $pdo ??= DB::connection();
+        $insert = $pdo->prepare('INSERT INTO questions(category,question_text,option_a,option_b,option_c,option_d,correct_option,reference,explanation,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+        $exists = $pdo->prepare('SELECT id FROM questions WHERE question_text=? LIMIT 1');
+        $added = 0;
+        foreach ($seed as $q) {
+            $exists->execute([$q['question']]);
+            if ($exists->fetchColumn() !== false) continue;
+            $insert->execute([$q['category'],$q['question'],...$q['options'],$q['correct'],$q['reference'],'',now(),now()]);
+            $added++;
+        }
+        return $added;
+    }
+
     public static function state(): array { return $_SESSION['install'] ?? ['step'=>1]; }
     public static function saveState(array $state): void { $_SESSION['install'] = $state; }
     public static function handle(): never {
@@ -55,9 +74,7 @@ final class Installer {
                         $sql = (string)file_get_contents(ROOT.'/database/schema.sql');
                         foreach (array_filter(array_map('trim',explode(';',$sql))) as $statement) $pdo->exec($statement);
                         if ((int)$pdo->query('SELECT COUNT(*) FROM questions')->fetchColumn() === 0) {
-                        $seed = json_decode((string)file_get_contents(ROOT.'/database/seed.json'),true,512,JSON_THROW_ON_ERROR);
-                        $insert = $pdo->prepare('INSERT INTO questions(category,question_text,option_a,option_b,option_c,option_d,correct_option,reference,explanation,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
-                        foreach ($seed as $q) $insert->execute([$q['category'],$q['question'],...$q['options'],$q['correct'],$q['reference'],'',now(),now()]);
+                            self::seedQuestions($pdo);
                         }
                     }
                     $state['db'] = $db; $state['step'] = 3;

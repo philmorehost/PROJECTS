@@ -7,35 +7,97 @@ require_once __DIR__ . '/vendor/phpmailer/src/Exception.php';
 require_once __DIR__ . '/vendor/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/vendor/phpmailer/src/SMTP.php';
 
+if (!function_exists('bc_resolve_smtp_config')) {
+    function bc_resolve_smtp_config($platform_only = false)
+    {
+        global $connection_server;
+        $vid = function_exists('resolveVendorID') ? resolveVendorID() : 0;
+        $smtp_config = null;
+
+        if ($connection_server instanceof mysqli) {
+            if (!$platform_only && $vid > 0) {
+                $q = @mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
+                if ($q && $r = mysqli_fetch_assoc($q)) {
+                    if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
+                }
+            }
+
+            if (!$smtp_config) {
+                $q = @mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_super_admin LIMIT 1");
+                if ($q && $r = mysqli_fetch_assoc($q)) {
+                    if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
+                }
+            }
+        }
+        return $smtp_config;
+    }
+}
+
+if (!function_exists('bc_flush_deferred_mail_queue')) {
+    function bc_flush_deferred_mail_queue()
+    {
+        if (empty($GLOBALS['bc_deferred_mail_queue']) || !is_array($GLOBALS['bc_deferred_mail_queue'])) {
+            return;
+        }
+        // Release any active PHP session lock and flush the HTTP response to the browser
+        // BEFORE opening SMTP sockets so Pay Bills / redirects return immediately.
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            @litespeed_finish_request();
+        }
+        $queue = $GLOBALS['bc_deferred_mail_queue'];
+        $GLOBALS['bc_deferred_mail_queue'] = array();
+        foreach ($queue as $job) {
+            bc_deliver_prepared_mail(
+                $job['from'],
+                $job['to'],
+                $job['subject'],
+                $job['message'],
+                $job['headers'],
+                $job['platform_only'],
+                $job['smtp_config'] ?? null
+            );
+        }
+    }
+}
+
 function customBCMailSender($from,$to,$subject,$message,$headers, $background = true, $platform_only = false){
-    global $connection_server;
     require_once __DIR__ . '/email-design.php';
     $message = mailDesignTemplate($subject, $message, array(), true);
 
-    // Branch DG6.7 Optimization: Optionally skip blocking SMTP for login notifications
-    // if requested, or if the server is known to be slow.
-    // For now, we will use a shorter timeout to prevent "everlasting" loads.
+    if ($background && PHP_SAPI !== 'cli' && !$platform_only) {
+        $preloaded_smtp = bc_resolve_smtp_config(false);
+        if (!isset($GLOBALS['bc_deferred_mail_queue']) || !is_array($GLOBALS['bc_deferred_mail_queue'])) {
+            $GLOBALS['bc_deferred_mail_queue'] = array();
+        }
+        $GLOBALS['bc_deferred_mail_queue'][] = array(
+            'from' => $from,
+            'to' => $to,
+            'subject' => $subject,
+            'message' => $message,
+            'headers' => $headers,
+            'platform_only' => false,
+            'smtp_config' => $preloaded_smtp,
+        );
+        if (empty($GLOBALS['bc_deferred_mail_registered'])) {
+            $GLOBALS['bc_deferred_mail_registered'] = true;
+            register_shutdown_function('bc_flush_deferred_mail_queue');
+        }
+        return true;
+    }
 
+    return bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $platform_only);
+}
+
+function bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $platform_only = false, $preloaded_smtp = null) {
 	$smtpMAIL = new PHPMailer(true);
     $sent = false;
 	try {
-         // Resolve SMTP Context (Vendor vs Platform)
-         $vid = resolveVendorID();
-         $smtp_config = null;
-
-         if (!$platform_only && $vid > 0) {
-             $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
-             if ($q && $r = mysqli_fetch_assoc($q)) {
-                 if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-             }
-         }
-
-         if (!$smtp_config) {
-             $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_super_admin LIMIT 1");
-             if ($q && $r = mysqli_fetch_assoc($q)) {
-                 if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-             }
-         }
+        $smtp_config = is_array($preloaded_smtp) ? $preloaded_smtp : bc_resolve_smtp_config($platform_only);
 
         if ($platform_only && (!$smtp_config || !filter_var($smtp_config['smtp_user']??'',FILTER_VALIDATE_EMAIL))) return false;
 
@@ -55,7 +117,8 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 
 		$smtpMAIL->Port = $smtp_port;
         $smtpMAIL->CharSet = 'UTF-8';
-        $smtpMAIL->Timeout = 7; // Branch DG6.7 Optimization: Shorter timeout for faster failover
+        $smtpMAIL->Timeout = 5;
+        $smtpMAIL->Timelimit = 8;
 		
 		$smtpMAIL->Username = $smtp_user;
 		$smtpMAIL->Password = $smtp_pass;

@@ -26,7 +26,9 @@ require_once(__DIR__ . '/bc-fintech-providers.php');
 if (!function_exists('bc_vc_flw_call')) {
     /** One Flutterwave card call through the registry seam. Never guesses a URL. */
     function bc_vc_flw_call($vendor_id, $endpoint, $method, $payload = null) {
-        return ['status'=>'error','reason'=>'security_review_required','message'=>'Virtual-card operations are paused pending verified reservation and settlement support.'];
+        if (getenv('BC_VIRTUALCARD_WORKER_ENABLED') !== '1') {
+            return ['status'=>'error','reason'=>'security_review_required','message'=>'Virtual-card operations are paused pending verified reservation and settlement support.'];
+        }
 
         if (!function_exists('bc_fintech_provider_request')) {
             return ['status' => 'error', 'message' => 'Virtual card service is not available on this installation.'];

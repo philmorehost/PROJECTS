@@ -1,0 +1,205 @@
+name: PayHub merchant webhook signing
+on:
+  push:
+    paths:
+      - 'PAYHUB/**/*.php'
+      - 'PAYHUB/includes/**'
+      - 'PAYHUB/tests/webhook_signing_test.php'
+      - 'PAYHUB/tests/webhook_money_contract_test.php'
+      - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
+      - 'PAYHUB/tests/webhook_retry_mysql_test.php'
+      - 'PAYHUB/tests/webhook_recovery_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_mysql_test.php'
+      - 'PAYHUB/tests/fulfilment_inventory_test.php'
+      - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
+      - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/bin/reconcile-webhook-outbox.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
+      - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_outbox.sql'
+      - 'PAYHUB/install/20261118_webhook_reviews.sql'
+      - 'PAYHUB/install/20261118_webhook_reconciliations.sql'
+      - 'PAYHUB/install/20261118_webhook_log_compat.sql'
+      - 'PAYHUB/install/index.php'
+      - 'PAYHUB/api-reference.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/verify.php'
+      - 'PAYHUB/api/transaction/**'
+      - 'PAYHUB/api/virtual-accounts.php'
+      - 'PAYHUB/merchant/reconcile.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'VTU/tests/payhub_paired_stack_mysql_test.php'
+      - 'VTU/**/func/bc-payhub-deposits.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - '.github/workflows/payhub-webhook-signing.yml'
+  pull_request:
+    paths:
+      - 'PAYHUB/**/*.php'
+      - 'PAYHUB/includes/**'
+      - 'PAYHUB/tests/webhook_signing_test.php'
+      - 'PAYHUB/tests/webhook_money_contract_test.php'
+      - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
+      - 'PAYHUB/tests/webhook_retry_mysql_test.php'
+      - 'PAYHUB/tests/webhook_recovery_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_mysql_test.php'
+      - 'PAYHUB/tests/fulfilment_inventory_test.php'
+      - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
+      - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/bin/reconcile-webhook-outbox.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
+      - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_outbox.sql'
+      - 'PAYHUB/install/20261118_webhook_reviews.sql'
+      - 'PAYHUB/install/20261118_webhook_reconciliations.sql'
+      - 'PAYHUB/install/20261118_webhook_log_compat.sql'
+      - 'PAYHUB/install/index.php'
+      - 'PAYHUB/api-reference.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/verify.php'
+      - 'PAYHUB/api/transaction/**'
+      - 'PAYHUB/api/virtual-accounts.php'
+      - 'PAYHUB/merchant/reconcile.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'VTU/tests/payhub_paired_stack_mysql_test.php'
+      - 'VTU/**/func/bc-payhub-deposits.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - '.github/workflows/payhub-webhook-signing.yml'
+permissions:
+  contents: read
+jobs:
+  signing:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          coverage: none
+      - name: Parse changed senders
+        run: |
+          php -l PAYHUB/includes/functions.php
+          php -l PAYHUB/includes/debug-log.php
+          php -l PAYHUB/install/schema-autoheal.php
+          php -l PAYHUB/install/index.php
+          php -l PAYHUB/install/migrate.php
+          php -l PAYHUB/tests/payhub_installer_migrations_test.php
+          php -l PAYHUB/admin/settlements.php
+          php -l PAYHUB/tests/webhook_log_hardening_test.php
+          php -l PAYHUB/includes/webhook-signing.php
+          php -l PAYHUB/includes/webhook-retry.php
+          php -l PAYHUB/includes/webhook-initial.php
+          php -l PAYHUB/includes/webhook-outbox.php
+          php -l PAYHUB/includes/webhook-recovery.php
+          php -l PAYHUB/includes/webhook-money.php
+          php -l PAYHUB/includes/webhook-review.php
+          php -l PAYHUB/bin/review-webhook-outbox.php
+          php -l PAYHUB/includes/webhook-reconcile.php
+          php -l PAYHUB/bin/reconcile-webhook-outbox.php
+          php -l PAYHUB/tests/webhook_reconcile_policy_test.php
+          php -l PAYHUB/tests/webhook_reconcile_mysql_test.php
+          php -l PAYHUB/includes/webhook-alert.php
+          php -l PAYHUB/bin/check-webhook-outbox.php
+          php -l PAYHUB/tests/webhook_alert_policy_test.php
+          php -l PAYHUB/includes/webhook-alert-sink.php
+          php -l PAYHUB/bin/dispatch-webhook-alert.php
+          php -l PAYHUB/tests/webhook_alert_sink_policy_test.php
+          php -l PAYHUB/includes/webhook-monitor.php
+          php -l PAYHUB/bin/monitor-webhook-outbox.php
+          php -l PAYHUB/bin/recover-webhook-outbox.php
+          php -l PAYHUB/tests/webhook_retry_mysql_test.php
+          php -l PAYHUB/webhook-paystack.php
+          php -l PAYHUB/verify.php
+          php -l PAYHUB/api/transaction/verify.php
+          php -l PAYHUB/api/transaction/reconcile.php
+          php -l PAYHUB/api/transaction/simulate.php
+          php -l PAYHUB/api/virtual-accounts.php
+          php -l PAYHUB/merchant/reconcile.php
+          php -l PAYHUB/includes/transaction-expiry-cron.php
+          php -l PAYHUB/includes/db.php
+          php -l PAYHUB/tests/payhub_schema_autoheal_runtime_test.php
+          php -l PAYHUB/tests/payhub_schema_autoheal_mysql_test.php
+          php -l PAYHUB/admin/webhooks.php
+          php -l PAYHUB/api-reference.php
+          php -l PAYHUB/tests/payhub_dva_reconcile_contract_test.php
+          php -l VTU/tests/payhub_paired_stack_mysql_test.php
+          php -l VTU/DGV7.0-SAAS/func/bc-payhub-deposits.php
+          php -l VTU/DGV7.0-NON-SAAS/func/bc-payhub-deposits.php
+      - name: Exact-mode signing regression matrix (no network)
+        run: php PAYHUB/tests/webhook_signing_test.php
+      - name: Review input policy (no database or network)
+        run: php PAYHUB/tests/webhook_review_policy_test.php
+      - name: Multi-party reconciliation policy (no database or network)
+        run: php PAYHUB/tests/webhook_reconcile_policy_test.php
+      - name: Bounded alert severity policy (no database or network)
+        run: php PAYHUB/tests/webhook_alert_policy_test.php
+      - name: Opt-in SSRF-safe alert sink policy (no database or network)
+        run: php PAYHUB/tests/webhook_alert_sink_policy_test.php
+      - name: PayHub webroot log hardening policy (no database or network)
+        run: php PAYHUB/tests/webhook_log_hardening_test.php
+      - name: PayHub installer migration policy (no database or network)
+        run: php PAYHUB/tests/payhub_installer_migrations_test.php
+      - name: PayHub runtime schema auto-heal contract
+        run: php PAYHUB/tests/payhub_schema_autoheal_runtime_test.php
+      - name: Reviewed fulfilment producer inventory (source only)
+        run: php PAYHUB/tests/fulfilment_inventory_test.php
+      - name: PayHub DVA reconciliation & verify contract (source only)
+        run: php PAYHUB/tests/payhub_dva_reconcile_contract_test.php
+      - name: Recovery network and CLI policy (no DNS or HTTP)
+        run: php PAYHUB/tests/webhook_recovery_policy_test.php
+      - name: Additive money contract regression matrix (no network)
+        run: php PAYHUB/tests/webhook_money_contract_test.php
+  log-schema:
+    name: PayHub delivery log schema MySQL
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-ci-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pdisposable-ci-only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli, pdo_mysql
+          coverage: none
+      - name: Legacy/current/runtime/missing delivery schema preservation
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/webhook_log_schema_mysql_test.php
+      - name: PayHub live MySQL PDO auto-heal (no unconsumed rowsets or 2014 errors)
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/payhub_schema_autoheal_mysql_test.php
+      - name: Durable manual retry claims and independent-process concurrency
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/webhook_retry_mysql_test.php
+      - name: Multi-party webhook reconciliation and evidence matching in disposable MySQL
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/webhook_reconcile_mysql_test.php
+      - name: Paired PayHub outbox/claims -> VTU SAAS deposits in disposable MySQL
+        env:
+          PAYHUB_PAIRED_CI: '1'
+          BC_TEST_EDITION: 'SAAS'
+        run: php VTU/tests/payhub_paired_stack_mysql_test.php
+      - name: Paired PayHub outbox/claims -> VTU NON-SAAS deposits in disposable MySQL
+        env:
+          PAYHUB_PAIRED_CI: '1'
+          BC_TEST_EDITION: 'NON-SAAS'
+        run: php VTU/tests/payhub_paired_stack_mysql_test.php

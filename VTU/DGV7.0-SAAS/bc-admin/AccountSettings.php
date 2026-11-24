@@ -1162,6 +1162,12 @@ if (isset($_POST["update-referral-details"])) {
 }
 
 if (isset($_POST["update-site-details"])) {
+    bc_validate_csrf();
+    $personal_web_access = $_POST['personal-web-access'] ?? 'optional';
+    if (!is_string($personal_web_access) || !in_array($personal_web_access, ['optional','app_only'], true)) {
+        $_SESSION['product_purchase_response'] = 'Choose a valid App / Website access preference.';
+        header('Location: AccountSettings.php'); exit;
+    }
     bc_demo_guard_edit($connection_server);
     // §35: plain-text site fields must never carry code. strip_tags would
     // silently hide the attempt; instead the save is refused and the actor
@@ -1210,6 +1216,11 @@ if (isset($_POST["update-site-details"])) {
         exit;
     }
     
+    if ($personal_web_access === 'app_only' && $android_app_url_raw === '') {
+        $_SESSION['product_purchase_response'] = 'App-only access requires a valid Android app URL. Use App or Website while the app is in testing.';
+        header('Location: AccountSettings.php'); exit;
+    }
+
     // New SEO Fields
     $meta_keywords = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["meta-keywords"] ?? "")));
     $meta_author = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["meta-author"] ?? "")));
@@ -1241,13 +1252,15 @@ if (isset($_POST["update-site-details"])) {
     if (!empty($site_title) && !empty($site_desc)) {
         $get_site_details_check = mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
 
-        if (mysqli_num_rows($get_site_details_check) == 1) {
+        // Keep duplicate legacy tenant rows consistent so the access choice can be saved.
+        if (mysqli_num_rows($get_site_details_check) >= 1) {
             mysqli_query($connection_server, "UPDATE sas_site_details SET 
                 site_title='$site_title', 
                 site_desc='$site_desc', 
                 apk_download_url='$apk_download_url',
                 app_redirect_mode='$app_redirect_mode',
                 android_app_url='$android_app_url',
+                personal_web_access='$personal_web_access',
                 meta_keywords='$meta_keywords',
                 meta_author='$meta_author',
                 favicon_url='$favicon_url',
@@ -1274,14 +1287,14 @@ if (isset($_POST["update-site-details"])) {
         } else {
             if (mysqli_num_rows($get_site_details_check) == 0) {
                 mysqli_query($connection_server, "INSERT INTO sas_site_details (
-                    vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode, android_app_url,
+                    vendor_id, site_title, site_desc, apk_download_url, app_redirect_mode, android_app_url, personal_web_access,
                     meta_keywords, meta_author, favicon_url, og_image,
                     ga_tracking_id, gtm_id, fb_pixel_id, custom_head_code,
                     custom_footer_code, robots_txt, sitemap_enabled,
                     social_twitter, social_facebook, social_instagram, social_whatsapp,
                     schema_org_type, schema_org_phone, schema_org_address
                 ) VALUES (
-                    '" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode', '$android_app_url',
+                    '" . $get_logged_admin_details["id"] . "', '$site_title', '$site_desc', '$apk_download_url', '$app_redirect_mode', '$android_app_url', '$personal_web_access',
                     '$meta_keywords', '$meta_author', '$favicon_url', '$og_image',
                     '$ga_tracking_id', '$gtm_id', '$fb_pixel_id', '$custom_head_code',
                     '$custom_footer_code', '$robots_txt', '$sitemap_enabled',
@@ -1344,6 +1357,7 @@ $seo_defaults = [
     'site_desc' => '',
     'apk_download_url' => '',
     'android_app_url' => '',
+    'personal_web_access' => 'optional',
     'meta_keywords' => '',
     'meta_author' => '',
     'favicon_url' => '',
@@ -1579,15 +1593,21 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                             <select id="app-redirect-mode-input" name="app-redirect-mode" class="form-select rounded-3">
                                                 <option value="off" <?php echo (($get_site_details['app_redirect_mode'] ?? 'off') === 'off') ? 'selected' : ''; ?>>Off — No prompt or redirect</option>
                                                 <option value="prompt" <?php echo (($get_site_details['app_redirect_mode'] ?? '') === 'prompt') ? 'selected' : ''; ?>>Prompt — Let users choose (recommended)</option>
-                                                <option value="force" <?php echo (($get_site_details['app_redirect_mode'] ?? '') === 'force') ? 'selected' : ''; ?>>Force — Always redirect to app</option>
+                                                <option value="force" <?php echo (($get_site_details['app_redirect_mode'] ?? '') === 'force') ? 'selected' : ''; ?>>Force — Redirect only with App-only access</option>
                                             </select>
                                             <div class="form-text small text-muted">Choose how visitors are directed to your App Download URL above. "Prompt" lets users decide to install the app or keep using the website.</div>
                                         </div>
                                         <div class="mb-3">
-                                            <label class="form-label small fw-bold text-muted" for="android-app-url-input">ANDROID APP URL FOR PERSONAL ACCOUNT LOGINS</label>
+                                            <label class="form-label small fw-bold text-muted" for="personal-web-access">PERSONAL ACCOUNT ACCESS</label>
+                                            <select id="personal-web-access" name="personal-web-access" class="form-select rounded-3">
+                                                <option value="optional" <?php echo (($get_site_details['personal_web_access'] ?? 'optional') === 'optional') ? 'selected' : ''; ?>>App or Website — user choice (recommended during testing)</option>
+                                                <option value="app_only" <?php echo (($get_site_details['personal_web_access'] ?? '') === 'app_only') ? 'selected' : ''; ?>>App only — require personal accounts to use the app</option>
+                                            </select>
+                                            <div class="form-text small text-muted mb-3">Choose App or Website to keep website transactions available. Saving an app link alone never forces the app. This does not disable the app or bypass security, KYC or payment holds. Business accounts remain website-only. Optional mode also prevents a forced landing redirect.</div>
+                                            <label class="form-label small fw-bold text-muted" for="android-app-url-input">ANDROID APP URL</label>
                                             <input id="android-app-url-input" name="android-app-url" type="text" inputmode="url" value="<?php echo htmlspecialchars($get_site_details['android_app_url'] ?? ''); ?>" class="form-control rounded-3" placeholder="https://play.google.com/store/apps/details?id=... or /downloads/app.apk" />
                                             <div class="form-text small text-muted">
-                                                Independent of the download URL above. <strong>Personal</strong> accounts are sent here after signing in; leave blank and they keep using the website.
+                                                Independent of the download URL above. <strong>Personal</strong> accounts are sent here after signing in only when App only is selected. App or Website keeps website access available even when this link is saved.
                                                 <strong>Business</strong> accounts always stay on the website and are never redirected. Use https:// (http://localhost is allowed for staging) or a path beginning with <code>/</code>.
                                             </div>
                                         </div>

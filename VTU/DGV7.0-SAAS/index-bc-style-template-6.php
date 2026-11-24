@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/func/bc-public-app-brand.php';
 /**
  * DGV7 phase 2 — landing template 6 ("Plate").
  *
@@ -800,6 +801,7 @@ if (!function_exists('bc_plate_stat')) {
         </div>
     </div>
 <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
+<?php echo bc_public_app_badge_html(bc_public_saved_app_url((int)($vendor_account_details['id'] ?? 0), $site_details ?? [])); ?>
 </footer>
 
 <script>

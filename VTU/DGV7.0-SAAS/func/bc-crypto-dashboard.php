@@ -51,6 +51,16 @@ function bc_crypto_dashboard_load($identity,$env) {
     return $out;
 }
 
+function bc_crypto_buysell_dashboard_load($identity) {
+    $role=$identity['role'];$cbsWhere='1=1';$cbsParams=[];
+    if($role!=='platform'){$cbsWhere.=' AND vendor_id=?';$cbsParams[]=$identity['vendor_id'];}
+    if($role==='user'){$cbsWhere.=' AND user_id=?';$cbsParams[]=$identity['id'];}
+    return [
+        'buysell_orders'=>bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,request_id,side,asset,network,crypto_units_1e8,fiat_minor,state,tx_hash,updated_at FROM sas_crypto_trade_orders WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50),
+        'buysell_deposits'=>bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,order_id,network,expected_network,asset,observed_units_1e8,confirmations,required_confirmations,state,updated_at FROM sas_crypto_chain_deposits WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50),
+    ];
+}
+
 /** A local observation receipt, never a settlement receipt. Scope is bound before lookup. */
 function bc_crypto_dashboard_receipt($identity,$env,$depositId) {
     if(!in_array($env,['testnet','mainnet'],true))throw new RuntimeException('crypto_dashboard_environment_invalid');

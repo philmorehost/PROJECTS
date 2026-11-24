@@ -60,8 +60,14 @@ try {
     $settled = $amount - $fee;
 
     // Spend the token as part of the same statement, so it cannot be replayed.
-    $stmt = $db->prepare("UPDATE transactions SET status = 'success', fee_amount = ?, settled_amount = ?, gateway_reference = ?, checkout_token = NULL WHERE id = ?");
-    $stmt->execute([$fee, $settled, 'SIMULATED_' . strtoupper(bin2hex(random_bytes(4))), $tx['id']]);
+    $stmt = $db->prepare("UPDATE transactions SET status = 'success', fee_amount = ?, settled_amount = ?, gateway_reference = ?, checkout_token = NULL WHERE id = ? AND user_id = ? AND is_test = 1 AND status = 'pending' AND BINARY checkout_token = ?");
+    $stmt->execute([$fee, $settled, 'SIMULATED_' . strtoupper(bin2hex(random_bytes(4))), $tx['id'], $user_id, $presented_token]);
+    if ($stmt->rowCount() !== 1) {
+        $db->rollBack();
+        http_response_code(409);
+        echo json_encode(['status'=>false,'code'=>'SIMULATION_NOT_CLAIMED','message'=>'Simulation was already processed or its state changed. Check transaction status.']);
+        exit;
+    }
 
     // Sandbox simulation settles exactly what was recorded, so mirror that into
     // gateway_amount and keep the merchant-webhook integrity check consistent.
@@ -71,6 +77,7 @@ try {
     log_transaction_event($tx['id'], 'simulated', 'Sandbox payment marked successful from ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown')
         . ' (UA: ' . substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 120) . ').');
 
+    payhub_enqueue_generic_outbox($db,(int)$tx['id'],'simulation');
     $db->commit();
 
     // Fire merchant webhook so their verify endpoint gets notified
@@ -85,8 +92,8 @@ try {
             'amount'    => $tx['amount'] * 100,
         ]
     ]);
-} catch (Exception $e) {
-    $db->rollBack();
+} catch (Throwable $e) {
+    if ($db->inTransaction()) $db->rollBack();
     http_response_code(500);
-    echo json_encode(['status' => false, 'message' => 'Simulation failed: ' . $e->getMessage()]);
+    echo json_encode(['status' => false, 'message' => 'Simulation could not be confirmed. Check transaction status before retrying.']);
 }

@@ -1,5 +1,8 @@
 <?php
 // php-version/includes/functions.php
+require_once __DIR__ . "/webhook-signing.php";
+require_once __DIR__ . "/webhook-initial.php";
+require_once __DIR__ . "/debug-log.php";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -74,7 +77,7 @@ function ensure_critical_tables() {
             'tickets' => "CREATE TABLE IF NOT EXISTS tickets (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NULL, guest_email VARCHAR(255) NULL, is_registered TINYINT DEFAULT 1, subject VARCHAR(255), message TEXT, status ENUM('open', 'processing', 'resolved', 'closed') DEFAULT 'open', priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'ticket_messages' => "CREATE TABLE IF NOT EXISTS ticket_messages (id INT AUTO_INCREMENT PRIMARY KEY, ticket_id INT, user_id INT NULL, message TEXT, is_admin TINYINT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'blog_posts' => "CREATE TABLE IF NOT EXISTS blog_posts (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), content TEXT, author VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
-            'webhook_logs' => "CREATE TABLE IF NOT EXISTS webhook_logs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, event_type VARCHAR(100), payload TEXT, response_code INT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
+            'webhook_logs' => "CREATE TABLE IF NOT EXISTS webhook_logs (id INT AUTO_INCREMENT PRIMARY KEY, transaction_id INT NOT NULL, status ENUM('success', 'failed') DEFAULT 'failed', attempt_count INT DEFAULT 0, last_attempt_at TIMESTAMP NULL, payload TEXT, response TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_webhook_transaction (transaction_id)) ENGINE=InnoDB",
             'staff_roles' => "CREATE TABLE IF NOT EXISTS staff_roles (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, role VARCHAR(50), permissions TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'otp_codes' => "CREATE TABLE IF NOT EXISTS otp_codes (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) NOT NULL, otp_code VARCHAR(6) NOT NULL, purpose ENUM('registration','login') NOT NULL, expires_at DATETIME NOT NULL, used TINYINT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_email_purpose (email, purpose)) ENGINE=InnoDB"
         ];
@@ -830,9 +833,8 @@ function normalize_metadata_array($raw): array {
  * Ensures a customer has a virtual account and is registered locally.
  */
 function ensure_virtual_account($userId, $email, $customerData = [], $is_test = null, $metadata = '') {
-    $log_file = BASE_PATH . 'va_debug.log';
-    $log = function($msg) use ($log_file) {
-        file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] " . $msg . "\n", FILE_APPEND);
+    $log = function($msg) {
+        payhub_debug_log('va_debug', $msg);
     };
 
     try {
@@ -1060,7 +1062,7 @@ function paystack_payout($userId, $amount, $reason = "Merchant Payout", $customB
     ], $is_test);
 
     // Detailed Logging
-    file_put_contents(BASE_PATH . 'payout_debug.log', "[" . date('Y-m-d H:i:s') . "] Payout for user $userId: " . json_encode($transfer) . PHP_EOL, FILE_APPEND);
+    payhub_debug_log('payout_debug', "Payout for user $userId status=" . (!empty($transfer['status']) ? 'ok' : 'failed'));
 
     return $transfer;
 }
@@ -1128,9 +1130,7 @@ function calculate_payout_fee($amount) {
  * Converts a currency value to integer minor units (kobo) so comparisons are
  * exact and immune to binary floating-point representation drift.
  */
-function to_minor_units($amount) {
-    return (int)round(((float)$amount) * 100);
-}
+// to_minor_units is supplied by the bootstrap-free webhook-money module.
 
 /**
  * True when the amount settled at the gateway equals the amount we expected to
@@ -1351,6 +1351,8 @@ function ensure_table($table, $ddl) {
 function ensure_payment_schema() {
     static $statusWidened = false;
     ensure_column('transactions', 'gateway_amount', 'DECIMAL(15,2) DEFAULT NULL');
+    // Server-owned DVA evidence; never populated from checkout metadata or backfilled heuristically.
+    ensure_column('transactions', 'receiving_account_number', 'VARCHAR(10) DEFAULT NULL');
     ensure_column('transactions', 'failure_reason', 'VARCHAR(50) DEFAULT NULL');
     ensure_column('transactions', 'card_bin', 'VARCHAR(20) DEFAULT NULL');
     ensure_column('transactions', 'card_last4', 'VARCHAR(8) DEFAULT NULL');
@@ -1759,6 +1761,12 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         }
 
         $targetAccClean = ltrim((string)$va['account_number'], '0');
+        $vaCountStmt = $db->prepare("SELECT COUNT(*) FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ?");
+        $vaCountStmt->execute([(string)$va['account_number'], str_pad($targetAccClean, 10, '0', STR_PAD_LEFT), $targetAccClean]);
+        if ((int)$vaCountStmt->fetchColumn() !== 1) {
+            return null;
+        }
+        $receivingAcc = preg_match('/\A[0-9]{10}\z/', (string)$va['account_number']) ? (string)$va['account_number'] : null;
         $from = gmdate('Y-m-d\T00:00:00\Z', min($createdTs, time()) - 86400);
         $to = gmdate('Y-m-d\T23:59:59\Z', max($createdTs, time()) + 86400);
         $response = paystack_call("transaction?from=" . urlencode($from) . "&to=" . urlencode($to) . "&status=success", 'GET', [], ($isTestInt === 1));
@@ -1769,8 +1777,8 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
         $vaMeta = normalize_metadata_array($va['metadata'] ?? null);
         $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
         $insertSql = ($driver === 'sqlite')
-            ? "INSERT OR IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)"
-            : "INSERT IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?)";
+            ? "INSERT OR IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, currency, gateway_reference, metadata, receiving_account_number) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?, ?, ?)"
+            : "INSERT IGNORE INTO transactions (user_id, reference, amount, gateway_amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, currency, gateway_reference, metadata, receiving_account_number) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?, ?, ?)";
 
         foreach ($response['data'] as $rtx) {
             if (($rtx['status'] ?? '') !== 'success') continue;
@@ -1793,10 +1801,13 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                 $amount = (float)$rtx['amount'] / 100;
                 $custEmail = (string)($rtx['customer']['email'] ?? ($va['customer_email'] ?? $tx['customer_email']));
                 $channelType = (string)($rtx['channel'] ?? 'dedicated_account');
+                $txCurrency = (is_string($rtx['currency'] ?? null) && trim($rtx['currency']) !== '')
+                    ? strtoupper(substr(trim($rtx['currency']), 0, 10))
+                    : 'NGN';
                 $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
                     ? ((float)$rtx['fees'] / 100)
                     : null;
-                $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
+                $isIntl = is_international_payment($txCurrency, $rtx['authorization'] ?? [], $channelType);
                 $fee = calculate_fees($amount, $isIntl, $userId, $gatewayFee, $channelType);
                 $settled = round(max(0.0, $amount - $fee), 2);
                 $rtxMeta = array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta);
@@ -1811,7 +1822,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                 $db->beginTransaction();
                 try {
                     $insStmt = $db->prepare($insertSql);
-                    $insStmt->execute([$userId, $rtxRef, $amount, $amount, $custEmail, $channelType, $isTestInt, $rtx['id'] ?? null, $txMetaJson]);
+                    $insStmt->execute([$userId, $rtxRef, $amount, $amount, $custEmail, $channelType, $isTestInt, $txCurrency, $rtx['id'] ?? null, $txMetaJson, $receivingAcc]);
                     if ($insStmt->rowCount() === 1) {
                         $tId = $db->lastInsertId();
                         if (claim_transaction_for_fulfilment($tId)) {
@@ -1820,6 +1831,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                             record_gateway_amount($tId, $amount);
                             log_transaction_event($tId, 'reconciled', 'Payment reconciled via DVA verification check.');
                             log_ledger_entry($userId, $settled, 'credit', 'payment', "Reconciled VA Payment: $rtxRef", ($isTestInt === 1));
+                            payhub_enqueue_generic_outbox($db,(int)$tId,'dva_reconcile');
                             $db->commit();
                             trigger_merchant_webhook($tId);
                         } else {
@@ -1849,6 +1861,68 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
 /**
  * Triggers the merchant's webhook for a specific transaction.
  */
+/** Shared generic contract; preserves legacy payload values and requested fallback semantics. */
+function payhub_generic_webhook_payload(array $tx, $paid) {
+    $metaArr = normalize_metadata_array($tx['metadata'] ?? null);
+    $settledAmount = (isset($tx['settled_amount']) && is_numeric($tx['settled_amount'])) ? (float)$tx['settled_amount'] : null;
+    $feeAmount = (isset($tx['fee_amount']) && is_numeric($tx['fee_amount'])) ? (float)$tx['fee_amount'] : 0.0;
+    $grossPaid = $paid !== null ? $paid : (float)$tx['amount'];
+    $computedNet = $settledAmount !== null ? $settledAmount : max(0.0, $grossPaid - $feeAmount);
+
+    $payload = [
+        'event' => 'charge.success',
+        'data' => [
+            'id' => $tx['gateway_reference'] ?? $tx['id'],
+            'reference' => $tx['reference'],
+            'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+            'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
+            // Report what actually settled. `amount` is merchant-supplied
+            // and must never be trusted as evidence of payment.
+            // Additive contract: preserve the legacy amount value and declare its meaning.
+            'money_contract_version' => 1,
+            'amount_unit' => 'minor',
+            'amount_basis' => $paid !== null ? 'gateway' : 'requested',
+            'amount' => to_minor_units($grossPaid),
+            'requested_amount' => to_minor_units($tx['amount']),
+            'gateway_amount' => to_minor_units($grossPaid),
+            'fee_amount' => to_minor_units($feeAmount),
+            'settled_amount' => to_minor_units($computedNet),
+            'status' => 'success',
+            // Tell the merchant whether this was real money. Paystack's own
+            // webhooks carry this field; without it a sandbox payment is
+            // indistinguishable from a live one and a merchant script that
+            // credits on charge.success would fund a wallet for free.
+            'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
+            'currency' => $tx['currency'],
+            'customer' => ['email' => $tx['customer_email']],
+            'metadata' => $metaArr,
+            'channel' => $tx['payment_method'],
+            'paid_at' => $tx['created_at']
+        ]
+    ];
+
+    return $payload;
+}
+
+/** API verification: persist notification on the caller's accounting transaction. */
+function payhub_enqueue_generic_outbox(PDO $db, $transactionId, $producer) {
+    if(!in_array($producer,['api_verify','merchant_reconcile','api_reconcile','va_reconcile','dva_reconcile','expiry_cron','simulation'],true))throw new RuntimeException('Unknown generic outbox producer.');
+    if (!$db->inTransaction()) throw new RuntimeException('API outbox requires accounting transaction.');
+    $q=$db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=? FOR UPDATE');
+    $q->execute([(int)$transactionId]);$row=$q->fetch(PDO::FETCH_ASSOC);
+    if (!$row || $row['status']!=='success') throw new RuntimeException('API payment not fulfilled.');
+    if ($producer==='simulation' && !in_array($row['is_test'],[1,'1',true],true))throw new RuntimeException('Simulation outbox is test-only.');
+    if (empty($row['webhook_url'])) return;
+    $paid=trusted_paid_amount($row);
+    if ($paid===null || !amount_covers($row['amount'],$paid)) throw new RuntimeException('API outbox needs stored paid evidence.');
+    $body=json_encode(payhub_generic_webhook_payload($row,$paid),JSON_THROW_ON_ERROR);
+    payhub_enqueue_webhook_outbox($db,(int)$transactionId,$body,$producer);
+}
+
+function payhub_enqueue_api_verify_outbox(PDO $db, $transactionId) {
+    payhub_enqueue_generic_outbox($db,$transactionId,'api_verify');
+}
+
 function trigger_merchant_webhook($transactionId) {
     try {
         $db = Database::connect();
@@ -1868,94 +1942,56 @@ function trigger_merchant_webhook($transactionId) {
                 return;
             }
 
-            $metaArr = normalize_metadata_array($tx['metadata'] ?? null);
-            $settledAmount = (isset($tx['settled_amount']) && is_numeric($tx['settled_amount'])) ? (float)$tx['settled_amount'] : null;
-            $feeAmount = (isset($tx['fee_amount']) && is_numeric($tx['fee_amount'])) ? (float)$tx['fee_amount'] : 0.0;
-            $grossPaid = $paid !== null ? $paid : (float)$tx['amount'];
-            $computedNet = $settledAmount !== null ? $settledAmount : max(0.0, $grossPaid - $feeAmount);
-
-            $payload = [
-                'event' => 'charge.success',
-                'data' => [
-                    'id' => $tx['gateway_reference'] ?? $tx['id'],
-                    'reference' => $tx['reference'],
-                    // Report what actually settled. `amount` is merchant-supplied
-                    // and must never be trusted as evidence of payment.
-                    'amount' => to_minor_units($grossPaid),
-                    'requested_amount' => to_minor_units($tx['amount']),
-                    'gateway_amount' => to_minor_units($grossPaid),
-                    'fee_amount' => to_minor_units($feeAmount),
-                    'settled_amount' => to_minor_units($computedNet),
-                    'status' => 'success',
-                    // Tell the merchant whether this was real money. Paystack's own
-                    // webhooks carry this field; without it a sandbox payment is
-                    // indistinguishable from a live one and a merchant script that
-                    // credits on charge.success would fund a wallet for free.
-                    'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
-                    'currency' => $tx['currency'],
-                    'customer' => ['email' => $tx['customer_email']],
-                    'metadata' => $metaArr,
-                    'channel' => $tx['payment_method'],
-                    'paid_at' => $tx['created_at']
-                ]
-            ];
+            $payload = payhub_generic_webhook_payload($tx, $paid);
 
             $body = json_encode($payload);
             // SECURITY: sign the webhook body so the merchant can verify it genuinely
             // came from PayHub. Signature = HMAC-SHA256(raw JSON body, merchant secret key),
             // sent in the X-Payhub-Signature header. Verify with the SAME secret key.
-            $secret = (string)($tx['secret_key'] ?? '');
-            if ($secret === '' && !empty($tx['test_secret_key'])) {
-                // Test-mode merchants may not have a live key yet — sign with the test key.
-                $secret = (string)$tx['test_secret_key'];
-            }
-            $signature = $secret !== '' ? hash_hmac('sha256', $body, $secret) : '';
+            $signature = payhub_merchant_webhook_signature($body, $tx, $tx['is_test'] ?? null);
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            $headers = ['Content-Type: application/json'];
-            if ($signature !== '') {
-                $headers[] = 'X-Payhub-Signature: ' . $signature;
+            if ($signature === '') {
+                $res = false; $code = 0;
+                $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+            } else {
+                $initialClaim = payhub_claim_initial_webhook($db, $tx, $body);
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+                curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                $headers = ['Content-Type: application/json'];
+                if ($signature !== '') {
+                    $headers[] = 'X-Payhub-Signature: ' . $signature;
+                }
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $res = curl_exec($ch);
+                $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlErr = curl_error($ch);
+                curl_close($ch);
             }
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $res = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlErr = curl_error($ch);
-            curl_close($ch);
 
-            @file_put_contents(
-                BASE_PATH . 'webhook_debug.log',
-                '[' . date('Y-m-d H:i:s') . '] Outbound merchant webhook (trigger_merchant_webhook) tx='
+            if (isset($initialClaim)) payhub_finish_webhook_retry($db, $initialClaim, $code, $res !== false && $curlErr === '');
+
+            payhub_debug_log(
+                'webhook_debug',
+                'Outbound merchant webhook (trigger_merchant_webhook) tx='
                 . ($tx['reference'] ?? $tx['id']) . ' url=' . $tx['webhook_url']
                 . ' algo=sha256 http=' . $code . ($curlErr !== '' ? ' curl_err=' . $curlErr : '')
-                . ' res=' . substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200) . PHP_EOL,
-                FILE_APPEND
             );
 
-            // Record the delivery attempt in the schema admin/webhooks.php reads
-            // (transaction_id, status, attempt_count, last_attempt_at, payload, response).
-            // This previously inserted (user_id, event_type, response_code) - columns that
-            // do not exist in webhook_logs - inside a swallowed catch, so *every* outbound
-            // merchant webhook went unlogged and the admin page was permanently empty.
-            try {
-                $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 180));
-                $logResponse = 'HTTP ' . $code . ($curlErr !== '' ? ' | ' . $curlErr : ($resText !== '' ? ' | ' . $resText : ''));
-                $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
-                $stmtLog->execute([
-                    $tx['id'],
-                    (($code >= 200 && $code < 300) ? 'success' : 'failed'),
-                    $body,
-                    $logResponse
-                ]);
-            } catch (\Throwable $t) {
-                error_log('[PayHub] webhook_logs write failed: ' . $t->getMessage());
-            }
+            // Exact payload/log and exclusive claim were committed before HTTP.
+
         }
-    } catch (\Throwable $e) {}
+    } catch (\Throwable $e) {
+        error_log('[PayHub] Generic merchant delivery unavailable; check required schema and durable claim state. No automatic replay.');
+    }
 }
 
 function log_ledger_entry($userId, $amount, $type, $category, $desc, $is_test = false) {

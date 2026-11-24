@@ -1002,10 +1002,10 @@ if (!function_exists('bc_adm_foot')) {
     function card(d) {
         var color = d.status_code === 1 ? '#15803d' : (d.status_code === 2 ? '#b45309' : '#b91c1c');
         var tint = d.status_code === 1 ? '#f0fdf4' : (d.status_code === 2 ? '#fffbeb' : '#fef2f2');
-        var h = '<div id="bcReceiptCard" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;padding:22px;font-family:Arial,Helvetica,sans-serif;color:#111827;max-width:430px;margin:0 auto;">'
+        var h = '<div id="bcReceiptCard" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;padding:22px;font-family:Arial,Helvetica,sans-serif;color:#111827;max-width:460px;margin:0 auto;">'
             + '<div style="text-align:center;padding-bottom:12px;border-bottom:2px solid #111827;">'
             + '<div style="font-size:17px;font-weight:800;">' + esc(d.site) + '</div>'
-            + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.14em;margin-top:2px;">Transaction Receipt</div></div>'
+            + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.14em;margin-top:2px;">Transaction Invoice &amp; Receipt</div></div>'
             + '<div style="text-align:center;margin:14px 0;"><span style="display:inline-block;padding:5px 16px;border-radius:999px;font-size:12px;font-weight:800;color:' + color + ';background:' + tint + ';border:1px solid ' + color + ';">' + esc(String(d.status_label).toUpperCase()) + '</span></div>'
             + row('Service', d.service)
             + (d.recipient ? row('Recipient', d.recipient) : '')
@@ -1013,9 +1013,22 @@ if (!function_exists('bc_adm_foot')) {
             + (d.face_amount && d.face_amount !== d.amount ? row('Face Value', '\u20A6' + d.face_amount) : '')
             + row('Reference', d.reference)
             + row('Date', d.date)
-            + (d.balance_after != null ? row('Wallet Balance', '\u20A6' + d.balance_after) : '');
+            + (d.balance_before != null ? row('Balance Before', '\u20A6' + d.balance_before) : '')
+            + (d.balance_after != null ? row('Balance After', '\u20A6' + d.balance_after) : '');
+        if (d.utility) {
+            h += row('Customer name', d.utility.customer_name || 'Not supplied');
+            h += row('Customer address', d.utility.customer_address || 'Not supplied');
+            h += row('Meter number', d.utility.meter_number || d.recipient || 'Not supplied');
+            h += row('Meter type', d.utility.meter_type || 'Not supplied');
+            if (d.utility.token) h += row('Prepaid token', d.utility.token);
+            if (d.utility.units) h += row('Units', d.utility.units);
+        }
         if (d.admin) {
+            if (d.vendor_name) h += row('Vendor', d.vendor_name);
+            if (d.vendor_email) h += row('Vendor Email', d.vendor_email);
+            if (d.vendor_website) h += row('Vendor Site', d.vendor_website);
             if (d.username) h += row('Customer', d.username);
+            if (d.mode) h += row('Channel / Mode', d.mode);
             if (d.provider_site) h += row('Provider', d.provider_site);
             if (d.provider_reference) h += row('Provider Ref', d.provider_reference);
             if (d.description) h += '<div style="padding-top:10px;font-size:12px;color:#374151;">' + esc(d.description) + '</div>';
@@ -1046,7 +1059,7 @@ if (!function_exists('bc_adm_foot')) {
         if (receiptTrigger && receiptTrigger.isConnected) receiptTrigger.focus();
     }
     var currentRef = '';
-    window.showTransactionDetails = function (ref, isAdmin) {
+    window.showTransactionDetails = function (ref, isAdmin, source) {
         var body = document.getElementById('bcReceiptBody');
         var modal = document.getElementById('bcReceiptModal');
         if (!body || !modal || !ref) return;
@@ -1056,7 +1069,8 @@ if (!function_exists('bc_adm_foot')) {
         var requestId = ++receiptRequest;
         if (receiptController) receiptController.abort();
         receiptController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        fetch('transaction-details.php?ref=' + encodeURIComponent(ref), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: receiptController ? receiptController.signal : undefined })
+        var qUrl = 'transaction-details.php?ref=' + encodeURIComponent(ref) + (source ? '&source=' + encodeURIComponent(source) : '');
+        fetch(qUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: receiptController ? receiptController.signal : undefined })
             .then(function (r) { if (!r.ok) throw new Error('Receipt request failed'); return r.json(); })
             .then(function (d) {
                 if (requestId !== receiptRequest) return;

@@ -367,6 +367,8 @@ try {
     }
 
     bc_assert_update_edition($manifest, $staging_dir_actual, 'NON-SAAS');
+    require_once __DIR__ . '/../func/bc-update-manifest-guard.php';
+    bc_update_validate_manifest_staging($manifest, $staging_dir_actual);
 
     // Process file deletions
     if (!empty($manifest['files_to_delete'])) {
@@ -408,9 +410,22 @@ try {
         }
     }
 
+    if ($connection_server) {
+        require_once ROOT_DIR . '/func/bc-schema-autoheal.php';
+        $autoheal = bc_schema_autoheal($connection_server);
+        if (empty($autoheal['ok'])) {
+            throw new Exception('Automated schema migration failed: ' . ($autoheal['error'] ?? ($autoheal['code'] ?? 'unknown')));
+        }
+        bc_update_verify_required_innodb($connection_server, $manifest, ROOT_DIR);
+    }
     // Save version in database settings
     $new_version = trim($manifest['version']);
-    mysqli_query($connection_server, "INSERT INTO sas_settings (vendor_id, setting_name, setting_value) VALUES (1, 'system_version', '{$new_version}') ON DUPLICATE KEY UPDATE setting_value='{$new_version}'");
+    $vStmt = mysqli_prepare($connection_server, "INSERT INTO sas_settings (vendor_id, setting_name, setting_value) VALUES (1, 'system_version', ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+    if ($vStmt) {
+        mysqli_stmt_bind_param($vStmt, 'ss', $new_version, $new_version);
+        mysqli_stmt_execute($vStmt);
+        mysqli_stmt_close($vStmt);
+    }
 
     // Clean temp files
     remove_directory(TEMP_DIR);

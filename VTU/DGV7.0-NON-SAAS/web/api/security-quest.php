@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
  bc_secure_session_start();
 ob_start();
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-Requested-With, X-App-Source");
+header("Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-App-Token, X-Requested-With, X-App-Source");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Content-Type: application/json");
 header("Cache-Control: private, no-store");
@@ -45,6 +45,8 @@ $data = json_decode(file_get_contents('php://input'), true);
 if (empty($data)) $data = $_REQUEST;
 
 // This is a first-party app security endpoint, not a merchant-key bridge.
+require_once __DIR__.'/../../func/bc-app-request-compat.php';
+$data = bc_app_security_question_input($data);
 $user = bc_fintech_require_app_account((int)$vendor_id, $data);
 require_once __DIR__.'/../../func/bc-security-question-policy.php';
 $action = is_string($data['action']??null)?$data['action']:'';

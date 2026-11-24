@@ -61,16 +61,23 @@
   <section class="panel">
     <div class="section-heading"><h2>Assessment settings</h2><label class="check-label"><input type="checkbox" name="quiz_open" value="1" <?= $settings['quiz_open'] ? 'checked' : '' ?>> Open for new attempts</label></div>
     <div class="form-grid">
-      <?php foreach (['questions_per_attempt'=>['Questions per attempt',1,100],'seconds_per_question'=>['Seconds per question',5,300],'pass_mark'=>['Pass mark (%)',0,100],'max_tab_switches'=>['Focus changes before submission (0 = off)',0,100]] as $key=>[$label,$min,$max]): ?>
+      <?php foreach (['questions_per_attempt'=>['Questions per assessment',1,200],'duration_minutes'=>['Total time for the assessment (minutes)',1,300],'pass_mark'=>['Pass mark (%)',0,100],'max_tab_switches'=>['Focus changes before submission (0 = off)',0,100],'seconds_per_question'=>['Legacy: seconds per question (only used if the total time is 0)',5,300]] as $key=>[$label,$min,$max]): ?>
         <label><?= e($label) ?><input type="number" name="<?= e($key) ?>" min="<?= $min ?>" max="<?= $max ?>" required value="<?= (int)$settings[$key] ?>"></label>
       <?php endforeach; ?>
     </div>
-    <p class="muted">The server sets a single total deadline: question count × seconds per question. Reloading does not reset it.</p>
+    <div class="notice info">
+      <div>
+        <strong>One 20-minute assessment of 50 questions</strong>
+        <p>The member gets <em>total time</em> for the whole paper, not per question — <?= (int)$settings['questions_per_attempt'] ?> questions in <?= (int)$settings['duration_minutes'] ?> minutes is about <?= max(1,(int)round((int)$settings['duration_minutes']*60/max(1,(int)$settings['questions_per_attempt']))) ?> seconds each. The deadline is fixed on the server when the quiz starts: reloading or closing the browser does not reset it, and the paper is submitted automatically when it expires.</p>
+        <p>Each member may take the assessment <strong>once</strong>. A submitted attempt cannot be restarted, and question content is not reachable from the old quiz link.</p>
+      </div>
+    </div>
     <div class="settings-checks">
-      <?php foreach (['timer_enabled'=>'Enable the time limit','randomize_questions'=>'Randomize question order','randomize_answers'=>'Randomize answer order','allow_back'=>'Let members move back to review earlier questions (answers stay locked)','practice_feedback'=>'Show practice feedback after each answer','review_questions'=>'Let members review the questions after completing a quiz','one_attempt'=>'Allow only one completed attempt per member'] as $key=>$label): ?>
+      <?php foreach (['timer_enabled'=>'Enable the time limit','randomize_questions'=>'Randomize question order','randomize_answers'=>'Randomize answer order','allow_back'=>'Let members revisit questions and change a saved answer until they submit','practice_feedback'=>'Show practice feedback after each answer','review_questions'=>'Let members review the questions after completing a quiz'] as $key=>$label): ?>
         <label class="check-label"><input type="checkbox" name="<?= e($key) ?>" value="1" <?= $settings[$key] ? 'checked' : '' ?>><?= e($label) ?></label>
       <?php endforeach; ?>
     </div>
+    <?php if (!empty($settings['allow_back'])): ?><div class="notice success"><p><strong>Changing answers is allowed.</strong> A member can reopen any question from the answer sheet and pick a different option while the clock is running. Every change is saved immediately, the last choice is the one scored, and nothing can be changed once the paper is submitted.</p></div><?php endif; ?>
     <div class="notice info">
       <div>
         <strong>Question access after completion</strong>

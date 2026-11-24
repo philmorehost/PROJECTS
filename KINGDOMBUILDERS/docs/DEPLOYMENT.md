@@ -210,12 +210,29 @@ Behaviour:
   `accounts.google.com`, `oauth2.googleapis.com` and `openidconnect.googleapis.com`.
   If the host blocks those, the page explains that Google could not be reached.
 
-## 7b. Answer locking
+## 7b. The assessment: one attempt, revisable answers, 50 questions in 20 minutes
 
-Answers are final once saved, by design: the API rejects changes with HTTP 409, and the
-interface disables the options and shows a lock notice. `Settings → "Let members move back to
-review earlier questions"` (stored key `allow_back`) only controls whether the **Previous**
-button is offered; it never permits changing a saved answer. Skipped questions lock too.
+| Rule | Behaviour |
+|---|---|
+| **One attempt per member** | Once an attempt is submitted, expired, **or abandoned** the member cannot start another. Leaving the quiz page (any link, the mobile dock, closing the tab) ends the paper: the saved answers are scored and the attempt is used up, with a confirmation first. `/quiz?id=…` for a finished attempt redirects to its result, and the dashboard and mobile dock show **Assessment completed** instead of a start button. The database is the authority: `Quiz::start()` refuses a second attempt inside the same transaction that creates the first. |
+| **Answers are revisable until submission** | Choosing another option saves immediately and the **last** choice is the one scored. This is allowed while the attempt is `active` and inside the deadline. `allow_back` (default on) controls whether the member can also go back to earlier questions; with it off, only the question on screen can be changed and *Previous* is disabled. Every save is a normal `UPDATE`, so the audit trail is unchanged. |
+| **Nothing changes after submission** | The API answers `409` for any attempt that is no longer active. Question content is not returned once the paper is closed unless the administrator has enabled review. |
+| **50 questions, 20 minutes** | `questions_per_attempt` = 50 and `duration_minutes` = 20. The deadline is the *total* budget, fixed server-side when the paper starts; reloading or closing the browser does not reset it, and the worker submits an expired paper automatically. |
+| **The bank must be big enough** | A paper takes `min(active questions, 50)`. With fewer than 50 active questions the member sees a shorter paper but still gets the full 20 minutes, and the question bank warns you. **Load starter questions** adds the built-in bank (80 questions across 15 books) without creating duplicates. |
+
+`Settings → Assessment settings` exposes all of it. `seconds_per_question` is kept only as the
+per-question pace used when `duration_minutes` is 0 (an attempt created by an older build).
+
+Upgrading from 0.10 or earlier: the migration applies 50/20/revisable answers **once**, recorded
+as schema version 3, so later changes you make in Settings are kept. To change it by hand:
+
+```sql
+UPDATE settings SET setting_value='50' WHERE setting_key='questions_per_attempt';
+UPDATE settings SET setting_value='20' WHERE setting_key='duration_minutes';
+```
+
+Members with an attempt already open keep its snapshot (question count, deadline and rules are
+frozen at start), which is what makes an in-progress paper fair.
 
 ## 7c. Unexpected or automated registrations
 

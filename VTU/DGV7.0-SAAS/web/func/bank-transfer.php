@@ -1,7 +1,10 @@
 <?php
 // Provider timeouts must not become automatic refunds/retries of an unknown payout.
-$json_response_encode = json_encode(array('status'=>'failed','code'=>'PAYOUT_SECURITY_HOLD','desc'=>'Payouts remain paused pending verified provider reconciliation. No debit, payout or refund was attempted.'));
-return;
+if (getenv('BC_PAYOUT_WORKER_ENABLED') !== '1') {
+    $json_response_encode = json_encode(array('status'=>'failed','code'=>'PAYOUT_SECURITY_HOLD','desc'=>'Payouts remain paused pending verified provider reconciliation. No debit, payout or refund was attempted.'));
+    return;
+}
+require_once __DIR__ . '/../../func/bc-payout-execution.php';
 
 $purchase_method = strtoupper($purchase_method);
 $purchase_method_array = array("API", "WEB", "APP");
@@ -133,6 +136,42 @@ if (in_array($purchase_method, $purchase_method_array)) {
                         $json_response_encode = json_encode(["status" => "failed", "desc" => "You already have a pending withdrawal request. Please wait for it to be processed."]);
                         return;
                     }
+
+                    $req_key_raw = (string)($_POST['request_key'] ?? ($get_api_post_info['request_key'] ?? ''));
+                    $req_key = preg_match('/\A[a-f0-9]{64}\z/D', $req_key_raw) ? $req_key_raw : hash('sha256', json_encode([(int)$vid, (int)$get_logged_user_details['id'], $account_number, $bank_code, (string)$amount, $narration, $transfer_enquiry_id ?: date('YmdHi')]));
+                    $account_name = (string)($_SESSION["account_name"] ?? ($get_api_post_info["account_name"] ?? ''));
+                    $bank_name_db = $bank_code_name_array[$bank_code] ?? $bank_code;
+                    $narration_db = $narration;
+                    $session_id_db = $transfer_enquiry_id;
+
+                    $res_out = bc_payout_execute_user_request(
+                        (int)$vid,
+                        $get_logged_user_details,
+                        $payout_provider,
+                        $bank_code,
+                        $account_number,
+                        $amount,
+                        $transfer_fee,
+                        $narration_db,
+                        $req_key,
+                        $bank_name_db,
+                        $account_name,
+                        $session_id_db
+                    );
+
+                    if (!empty($res_out['ok'])) {
+                        $res_ref = (string)$res_out['reference'];
+                        $u_email = $get_logged_user_details["email"];
+                        $u_name = $get_logged_user_details["username"];
+                        $subject = "Withdrawal Request Received - ₦" . number_format($amount, 2);
+                        $body = "Dear $u_name,<br><br>Your withdrawal request of <b>₦" . number_format($amount, 2) . "</b> to <b>$bank_name_db ($account_number)</b> has been reserved for processing.<br><br>Transaction Reference: $res_ref";
+                        sendVendorEmail($u_email, $subject, $body, true);
+                        $json_response_encode = json_encode(["status" => "success", "desc" => "Withdrawal reservation queued (" . $res_ref . ").", "ref" => $res_ref, "state" => $res_out['state'] ?? 'held']);
+                    } else {
+                        $err_code = (string)($res_out['code'] ?? 'unavailable');
+                        $json_response_encode = json_encode(["status" => "failed", "code" => strtoupper($err_code), "desc" => "Unable to reserve payout ($err_code)."]);
+                    }
+                    return;
 
                     $initial_status = 2; // Keep as pending (2) during initiation
                     $debit_user = chargeUser("debit", $account_number, $bank_code_alternative, $reference, "", $amount, $total_debit, $withdrawal_desc, $purchase_method, strtoupper($payout_provider), $initial_status);

@@ -68,6 +68,20 @@ if (!function_exists('bc_receipt_payload')) {
             // Investigation fields — staff only, never sent to customer payloads.
             $payload['username'] = (string)($row['username'] ?? '');
             $payload['vendor_id'] = (int)($row['vendor_id'] ?? 0);
+            if (!empty($row['vendor_name'])) {
+                $payload['vendor_name'] = (string)$row['vendor_name'];
+            } elseif (!empty($row['vendor_business_name'])) {
+                $payload['vendor_name'] = (string)$row['vendor_business_name'];
+            }
+            if (!empty($row['vendor_email'])) {
+                $payload['vendor_email'] = (string)$row['vendor_email'];
+            }
+            if (!empty($row['vendor_website'])) {
+                $payload['vendor_website'] = (string)$row['vendor_website'];
+            }
+            if (!empty($row['_source'])) {
+                $payload['source'] = (string)$row['_source'];
+            }
             $payload['description'] = (string)($row['description'] ?? '');
             $payload['provider_reference'] = (string)($row['api_reference'] ?? '');
             $payload['provider_site'] = (string)($row['api_website'] ?? '');
@@ -103,6 +117,69 @@ if (!function_exists('bc_receipt_fetch')) {
             if ($utility && ($detail=mysqli_fetch_assoc($utility))) $row['utility_purchase']=$detail;
         }
         return $row ?: null;
+    }
+}
+
+if (!function_exists('bc_receipt_fetch_spadmin')) {
+    /**
+     * Fetch either a user transaction (sas_transactions) or a vendor transaction
+     * (sas_vendor_transactions) with vendor identity joined for super-admin receipts.
+     */
+    function bc_receipt_fetch_spadmin($connection_server, $reference, $source = '')
+    {
+        if (!($connection_server instanceof mysqli)) {
+            return null;
+        }
+        $ref = mysqli_real_escape_string($connection_server, (string)$reference);
+        $source = strtolower(trim((string)$source));
+
+        $fetch_user = function () use ($connection_server, $ref) {
+            $q = mysqli_query($connection_server, "SELECT t.*, p.product_name, a.api_type,
+                TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name,
+                v.business_name AS vendor_business_name,
+                v.email AS vendor_email,
+                v.website_url AS vendor_website
+                FROM sas_transactions t
+                LEFT JOIN sas_vendors v ON v.id = t.vendor_id
+                LEFT JOIN sas_products p ON p.vendor_id = t.vendor_id AND p.id = t.product_id
+                LEFT JOIN sas_apis a ON a.vendor_id = t.vendor_id AND a.id = t.api_id
+                WHERE t.reference = '$ref' LIMIT 1");
+            $row = $q ? mysqli_fetch_assoc($q) : null;
+            if ($row) {
+                $row['_source'] = 'user';
+                $vid = (int)$row['vendor_id'];
+                $uname = mysqli_real_escape_string($connection_server, (string)($row['username'] ?? ''));
+                $utility = mysqli_query($connection_server, "SELECT * FROM sas_electric_purchaseds WHERE vendor_id='$vid' AND username='$uname' AND reference='$ref' ORDER BY id DESC LIMIT 1");
+                if ($utility && ($detail = mysqli_fetch_assoc($utility))) {
+                    $row['utility_purchase'] = $detail;
+                }
+            }
+            return $row ?: null;
+        };
+
+        $fetch_vendor = function () use ($connection_server, $ref) {
+            $q = mysqli_query($connection_server, "SELECT t.*,
+                TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name,
+                v.business_name AS vendor_business_name,
+                v.email AS vendor_email,
+                v.website_url AS vendor_website
+                FROM sas_vendor_transactions t
+                LEFT JOIN sas_vendors v ON v.id = t.vendor_id
+                WHERE t.reference = '$ref' LIMIT 1");
+            $row = $q ? mysqli_fetch_assoc($q) : null;
+            if ($row) {
+                $row['_source'] = 'vendor';
+            }
+            return $row ?: null;
+        };
+
+        if ($source === 'vendor') {
+            return $fetch_vendor() ?: $fetch_user();
+        }
+        if ($source === 'user') {
+            return $fetch_user() ?: $fetch_vendor();
+        }
+        return $fetch_user() ?: $fetch_vendor();
     }
 }
 

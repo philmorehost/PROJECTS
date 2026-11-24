@@ -48,6 +48,8 @@ export function loadConfig(env = process.env) {
     apiSecret: secret(env, 'API_SECRET'),
     adminSecret: secret(env, 'ADMIN_SECRET'),
     callbackSecret: secret(env, 'CALLBACK_SECRET'),
+    cbsSignerSecret: env.CBS_SIGNER_SECRET ? secret(env, 'CBS_SIGNER_SECRET') : secret(env, 'API_SECRET'),
+    cbsWatcherSecret: env.CBS_WATCHER_SECRET ? secret(env, 'CBS_WATCHER_SECRET') : secret(env, 'CALLBACK_SECRET'),
     callbackUrl: env.CALLBACK_URL,
     fiat: (env.FIAT_CURRENCY || 'NGN').toUpperCase(),
     buySpreadBps: num(env.BUY_SPREAD_BPS, 150),

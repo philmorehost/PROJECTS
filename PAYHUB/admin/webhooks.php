@@ -9,47 +9,29 @@ $pageTitle = 'Webhook Logs - Admin Hub';
 
 $db = Database::connect();
 
-// Retry a failed merchant delivery immediately. Previously this action only incremented
-// attempt_count and displayed a success banner; it never sent an HTTP request.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'retry') {
+require_once __DIR__.'/../includes/webhook-retry.php';
+
+// Reserve and commit a single transaction-wide retry BEFORE opening HTTP.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry') {
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_msg = 'Invalid security token. Refresh the page and try again.';
+    } elseif (!function_exists('curl_init')) {
+        $error_msg = 'PHP cURL is unavailable; no retry was claimed or sent.';
     } else {
-        $logId = (int)($_POST['log_id'] ?? 0);
-        $stmt = $db->prepare("SELECT w.id, w.transaction_id, w.payload, t.reference, t.status AS transaction_status, u.webhook_url, u.secret_key, u.test_secret_key FROM webhook_logs w JOIN transactions t ON w.transaction_id = t.id JOIN users u ON t.user_id = u.id WHERE w.id = ? LIMIT 1");
-        $stmt->execute([$logId]);
-        $delivery = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$delivery) {
-            $error_msg = 'Webhook log not found.';
-        } elseif (($delivery['transaction_status'] ?? '') !== 'success') {
-            $error_msg = 'This transaction is not marked successful in PayHub; no webhook was sent.';
-        } elseif (empty($delivery['webhook_url'])) {
-            $error_msg = 'No webhook URL is configured for this merchant.';
-        } else {
-            $payload = (string)($delivery['payload'] ?? '');
-            $payloadData = json_decode($payload, true);
-            $payloadRef = $payloadData['data']['reference'] ?? '';
-            if (!is_array($payloadData) || ($payloadData['event'] ?? '') !== 'charge.success' || $payloadRef !== $delivery['reference']) {
-                $error_msg = 'The stored webhook payload is missing or does not match this transaction; it was not sent.';
-            } elseif (!function_exists('curl_init')) {
-                $error_msg = 'PHP cURL is unavailable, so the webhook could not be sent.';
-            } else {
-                $secret = (string)($delivery['secret_key'] ?? '');
-                if ($secret === '' && !empty($delivery['test_secret_key'])) {
-                    $secret = (string)$delivery['test_secret_key'];
-                }
-                $headers = ['Content-Type: application/json'];
-                if ($secret !== '') {
-                    $headers[] = 'X-Payhub-Signature: ' . hash_hmac('sha256', $payload, $secret);
-                }
-
-                $ch = curl_init($delivery['webhook_url']);
+        try {
+            $claim = payhub_claim_webhook_retry($db, (int)($_POST['log_id'] ?? 0), ($_POST['confirm_reconciled'] ?? '') === '1');
+            $delivery = $claim['delivery'];
+            $payload = (string)$delivery['payload'];
+            $signature = payhub_merchant_webhook_signature($payload, $delivery, $delivery['is_test'] ?? null);
+            $headers = ['Content-Type: application/json', 'X-Payhub-Signature: '.$signature];
+                $ch = $signature !== '' ? curl_init($delivery['webhook_url']) : false;
                 if ($ch === false) {
                     $httpCode = 0;
                     $responseBody = false;
-                    $curlError = 'Could not initialize cURL.';
+                    $curlError = $signature === '' ? 'Webhook signing refused: check mode-specific merchant key and payload domain.' : 'Could not initialize cURL.';
                 } else {
+                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+                    curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                     curl_setopt($ch, CURLOPT_POST, true);
                     curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
@@ -64,32 +46,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     curl_close($ch);
                 }
 
-                $deliverySucceeded = ($responseBody !== false && $httpCode >= 200 && $httpCode < 300);
-                $responseText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$responseBody), 0, 180));
-                $responseSummary = 'HTTP ' . $httpCode;
-                if ($curlError !== '') $responseSummary .= ' | ' . $curlError;
-                elseif ($responseText !== '') $responseSummary .= ' | ' . $responseText;
 
-                $update = $db->prepare("UPDATE webhook_logs SET status = ?, attempt_count = attempt_count + 1, last_attempt_at = CURRENT_TIMESTAMP, response = ? WHERE id = ? AND transaction_id = ?");
-                $update->execute([
-                    $deliverySucceeded ? 'success' : 'failed',
-                    substr($responseSummary, 0, 500),
-                    $logId,
-                    $delivery['transaction_id']
-                ]);
-
+                $deliverySucceeded = payhub_finish_webhook_retry($db, $claim, $httpCode, $responseBody !== false && $curlError === '');
                 if ($deliverySucceeded) {
-                    $success_msg = "Webhook delivered successfully on retry (HTTP $httpCode).";
+                    $success_msg = "Webhook retry acknowledged (HTTP $httpCode). This payment cannot be replayed again through Retry.";
                 } else {
-                    $error_msg = "Webhook retry failed (HTTP $httpCode). " . ($curlError !== '' ? $curlError : ($responseText !== '' ? $responseText : 'The merchant endpoint did not return a successful response.'));
+                    $error_msg = "Retry outcome uncertain (HTTP $httpCode). It is blocked from replay. Independently reconcile merchant receipt/credit before further action.";
                 }
-            }
+        } catch (Throwable $e) {
+            // Never expose SQL, merchant endpoints, credentials or remote response bodies.
+            $error_msg = ($e instanceof RuntimeException && !($e instanceof PDOException)) ? $e->getMessage() : 'Retry could not complete. It may already be claimed; reconcile before retrying. Check schema and restricted server diagnostics.';
         }
     }
 }
 
 $stmt = $db->query("SELECT w.*, t.reference as transaction_ref FROM webhook_logs w JOIN transactions t ON w.transaction_id = t.id WHERE 1=1" . admin_tx_lens_sql('t') . " ORDER BY w.created_at DESC");
 $logs = $stmt->fetchAll();
+$retryStates = [];
+$retrySchemaReady = false;
+try {
+    $retryStates = $db->query('SELECT transaction_id,state FROM webhook_retry_claims')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $retrySchemaReady = true;
+} catch (Throwable $e) {
+    // Auto-heal missing 20261118 migrations idempotently outside any transaction.
+    $autohealPath = __DIR__ . '/../install/schema-autoheal.php';
+    if (is_file($autohealPath) && $db instanceof PDO && !$db->inTransaction()) {
+        try {
+            require_once $autohealPath;
+            if (function_exists('payhub_install_apply_migrations')) {
+                payhub_install_apply_migrations($db);
+                $retryStates = $db->query('SELECT transaction_id,state FROM webhook_retry_claims')->fetchAll(PDO::FETCH_KEY_PAIR);
+                $retrySchemaReady = true;
+            }
+        } catch (Throwable $healErr) {
+            error_log('[PAYHUB] webhooks schema auto-heal failed: ' . $healErr->getMessage());
+        }
+    }
+}
+
 
 include '../includes/dashboard-head.php';
 ?>
@@ -111,7 +105,8 @@ include '../includes/dashboard-head.php';
 
             <div class="mb-8">
                 <h1 class="text-2xl font-bold text-slate-900 mb-2">Webhook Logs</h1>
-                <p class="text-slate-500">A detailed log of every notification sent to merchant servers</p>
+                <p class="text-slate-500">Delivery records do not prove that a merchant credited a payment. Retry requires independent reconciliation.</p>
+                <p class="mt-2 text-sm text-amber-800">One claimed retry per payment. Interrupted and non-acknowledged retries stay blocked; no automatic expiry or replay. <?php if (!$retrySchemaReady): ?>Retry is unavailable until the required claim migration is verified.<?php endif; ?></p>
             </div>
 
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -147,7 +142,9 @@ include '../includes/dashboard-head.php';
                                         ?>
                                     </td>
                                     <td class="px-4 sm:px-6 py-4">
+                                        <?php if ($retrySchemaReady && ($l['status'] ?? '') === 'failed' && !isset($retryStates[$l['transaction_id']])): ?>
                                         <form method="POST" class="inline">
+                                            <label class="block text-xs text-slate-600 mb-2"><input type="checkbox" name="confirm_reconciled" value="1" required> Independently checked: merchant has not credited this payment; authorize one retry.</label>
                                             <input type="hidden" name="action" value="retry">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="hidden" name="log_id" value="<?php echo (int)$l['id']; ?>">
@@ -155,6 +152,9 @@ include '../includes/dashboard-head.php';
                                                 <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
                                             </button>
                                         </form>
+                                        <?php else: ?>
+                                            <span class="text-xs text-slate-500"><?php echo isset($retryStates[$l['transaction_id']]) ? (($retryStates[$l['transaction_id']] === 'succeeded') ? 'Delivery acknowledged; blocked from replay' : 'Delivery claimed; reconciliation required') : 'No retry'; ?></span>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

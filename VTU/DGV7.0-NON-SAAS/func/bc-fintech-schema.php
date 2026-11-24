@@ -88,6 +88,8 @@ function bc_fintech_ensure_schema() {
     // anonymous landing-page prompt/force. This one is the authenticated post-login
     // destination requested for personal accounts, and MUST NOT inherit their values.
     if (!bc_fintech_ensure_column('sas_site_details', 'android_app_url', "VARCHAR(500) NOT NULL DEFAULT ''")) return false;
+    // Website/app choice is independent of saving a download link. Existing tenants default to choice.
+    if (!bc_fintech_ensure_column('sas_site_details', 'personal_web_access', "VARCHAR(16) NOT NULL DEFAULT 'optional'")) return false;
 
     // ── Per-tier / provider readiness switches on the existing service table ──
     // status keeps its current meaning (vendor on/off) so no existing VTU service changes.
@@ -120,7 +122,7 @@ function bc_fintech_ensure_schema() {
         UNIQUE KEY uniq_token_hash (token_hash),
         KEY idx_user (vendor_id, user_id),
         KEY idx_expiry (expires_at)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 
@@ -139,7 +141,7 @@ function bc_fintech_ensure_schema() {
         PRIMARY KEY (id),
         UNIQUE KEY uniq_provider_event (provider, event_id),
         KEY idx_webhook_status (status, created_at)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 
@@ -163,7 +165,7 @@ function bc_fintech_ensure_schema() {
         KEY idx_ledger_user (vendor_id, username, currency_code),
         KEY idx_ledger_ref (reference),
         KEY idx_ledger_provider (provider, reference)
-    )") === false) {
+    ) ENGINE=InnoDB") === false) {
         return false;
     }
 

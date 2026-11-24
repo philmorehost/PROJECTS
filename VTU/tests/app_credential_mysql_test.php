@@ -3,6 +3,7 @@ if(getenv('BC_APP_CREDENTIAL_CI')!=='1')throw new RuntimeException('Disposable C
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-fintech-policy.php';
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-app-token.php';
+require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-app-request-compat.php';
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-browser-binding.php';
 function bc_fintech_schema_ready(){return true;} // Fixture creates only required tables; no installation migrations.
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);
@@ -24,9 +25,24 @@ try{
  $a=bc_app_token_issue($row,7);$b=bc_app_token_issue($row,7);$o=bc_app_token_issue($other,8);
  cb_mysql($a&&$b&&$o,'issue isolated device sessions');
  cb_mysql(bc_app_session_user($a['token'],7)!==null,'live persisted token resolves');
+ // Reproduce login -> security question with Authorization stripped by the PHP host.
+ unset($_SERVER['HTTP_AUTHORIZATION'],$_SERVER['REDIRECT_HTTP_AUTHORIZATION'],$_SERVER['HTTP_X_APP_TOKEN']);
+ foreach(['get','verify','set','reset'] as $action){
+  $request=bc_app_security_question_input(['api_key'=>$a['token'],'action'=>$action]);
+  cb_mysql(bc_app_session_user(bc_app_token_from_request($request),7)!==null,'headerless released Android real session '.$action);
+ }
+ $request=bc_app_security_question_input(['api_key'=>'keep-key','action'=>'get']);
+ cb_mysql(bc_app_session_user(bc_app_token_from_request($request),7)===null,'developer key cannot pass app session gate');
+ $_SERVER['HTTP_AUTHORIZATION']='Bearer invalid-token';
+ $request=bc_app_security_question_input(['api_key'=>$a['token'],'action'=>'get']);
+ cb_mysql(bc_app_session_user(bc_app_token_from_request($request),7)===null,'invalid explicit bearer never falls back');
+ unset($_SERVER['HTTP_AUTHORIZATION']);
+
  cb_mysql(bc_app_session_user($a['token'],8)===null,'cross tenant rejected');
  $db->query("UPDATE sas_users SET password='reset-hash' WHERE id=11");
  cb_mysql(bc_app_session_user($a['token'],7)===null && bc_app_session_user($b['token'],7)===null,'password reset invalidates all old device tokens');
+ $request=bc_app_security_question_input(['api_key'=>$a['token'],'action'=>'get']);
+ cb_mysql(bc_app_session_user(bc_app_token_from_request($request),7)===null,'compatibility does not revive credential-revoked session');
  cb_mysql(bc_app_token_exchange($a['token'],7)===null,'stale token cannot refresh');
  cb_mysql(bc_app_session_user($o['token'],8)!==null,'other tenant remains signed in');
  $changed=$db->query('SELECT * FROM sas_users WHERE id=11')->fetch_assoc();

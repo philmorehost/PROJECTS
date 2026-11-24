@@ -134,6 +134,7 @@ if ($tx['status'] !== 'success') {
                 log_ledger_entry($user['id'], $settled, 'credit', 'payment', "Real-time Verified Payment: $ref", $is_test);
                 log_transaction_event($tx['id'], 'verified', 'Payment verified and fulfilled via real-time API check');
 
+                payhub_enqueue_api_verify_outbox($db, (int)$tx['id']);
                 $db->commit();
                 trigger_merchant_webhook($tx['id']);
             }
@@ -143,8 +144,12 @@ if ($tx['status'] !== 'success') {
             $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
             $stmt->execute([$tx['id']]);
             $tx = $stmt->fetch();
-        } catch (Exception $e) {
-            $db->rollBack();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('[PayHub] API verification accounting/outbox unavailable; no success acknowledgment.');
+            http_response_code(503);
+            echo json_encode(['status'=>false,'paid'=>false,'code'=>'VERIFICATION_COMMIT_UNCONFIRMED','message'=>'Local verification could not be confirmed. Check payment status before retrying.']);
+            exit;
         }
     } elseif ($tx['status'] !== 'success') {
         // Dedicated Virtual Account transfers receive Paystack's transfer reference rather than
@@ -171,8 +176,10 @@ echo json_encode([
         'payment_status' => $tx['status'],                  // alias for clarity
         'paid' => ($tx['status'] === 'success'),            // boolean mirror of the above
         'reference' => $tx['reference'],
+        'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+        'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
         'amount' => to_minor_units($tx['amount']),          // amount in KOBO
-        'currency' => 'NGN',
+        'currency' => (string)($tx['currency'] ?? ''), // Never label a non-NGN payment as NGN.
         // Lets an integrating script refuse to credit sandbox payments.
         'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
         /*

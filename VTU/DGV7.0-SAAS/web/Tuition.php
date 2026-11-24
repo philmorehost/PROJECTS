@@ -11,6 +11,7 @@ if (!isset($_SESSION["user_session"]) || !isset($get_logged_user_details)) {
 $vid = (int)$get_logged_user_details['vendor_id'];
 $svc_user = $get_logged_user_details;
 require_once __DIR__.'/../func/bc-service-request-idempotency.php';
+require_once __DIR__.'/../func/bc-service-intake-bridge.php';
 $svc_form_key=bc_svc_form_key($_POST['request_key']??null);
 require_once __DIR__.'/../func/bc-service-provider-routing.php';
 $route_provider = bc_service_route_provider($vid,'tuition');
@@ -47,6 +48,7 @@ if (isset($_POST['pay_tuition'])) {
     } else {
         $svc_result=bc_svc_request_once($vid,$svc_user,'tuition',$route_provider,$payload,$_POST['request_key']??null);
         $ref=$svc_result['reference'];
+        if($ref!=='' && empty($svc_result['replayed'])) { bc_svc_enqueue_held_attempt($vid, $ref); }
         $notice = $ref !== '' ? "Tuition payment request received ($ref). Student ID validation runs before settlement." : bc_svc_retry_message($svc_result);
         $notice_type = $ref !== '' ? 'success' : 'danger';
     }

@@ -135,9 +135,23 @@ function fake_mysqli_query_raw($db, $sql) {
     $sql = preg_replace('/\s+/', ' ', $sql);
 
     // Canonical provider-reference claims, separate from delivery-event claims.
+    if ($sql === 'SELECT @@session.autocommit AS auto_commit') {
+        return [['auto_commit' => $GLOBALS['db']['autocommit'] ?? 1]];
+    }
+    if ($sql === 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ') {
+        return empty($GLOBALS['db']['outer_tx']);
+    }
+    if (preg_match("/^SELECT TABLE_NAME,ENGINE FROM information_schema\.TABLES WHERE TABLE_SCHEMA=DATABASE\(\) AND TABLE_NAME IN \(([^)]+)\)$/", $sql, $m)) {
+        $rows = [];
+        foreach (explode(',', $m[1]) as $quoted) {
+            $t = trim($quoted, " '\"");
+            $rows[] = ['TABLE_NAME' => $t, 'ENGINE' => $GLOBALS['db']['table_engines'][$t] ?? 'InnoDB'];
+        }
+        return $rows;
+    }
     if (preg_match("/^INSERT INTO sas_provider_settlement_claims\\(settlement_key,payload_hash\\) VALUES\\('([a-f0-9]+)','([a-f0-9]+)'\\)$/", $sql, $m)) {
-        if (isset($GLOBALS['db']['settlement_claims'][$m[1]])) return false;
-        $GLOBALS['db']['settlement_claims'][$m[1]]=$m[2]; return true;
+        if (isset($GLOBALS['db']['settlement_claims'][$m[1]])) { $GLOBALS['db']['errno'] = 1062; return false; }
+        $GLOBALS['db']['errno'] = 0; $GLOBALS['db']['settlement_claims'][$m[1]]=$m[2]; return true;
     }
     if (preg_match("/^SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='([a-f0-9]+)' LIMIT 1$/", $sql, $m)) {
         return isset($GLOBALS['db']['settlement_claims'][$m[1]]) ? [['payload_hash'=>$GLOBALS['db']['settlement_claims'][$m[1]]]] : [];
@@ -156,9 +170,9 @@ function fake_mysqli_query_raw($db, $sql) {
     }
 
     // site details
-    if (preg_match("/SELECT android_app_url FROM sas_site_details WHERE vendor_id='(\\d+)'/", $sql, $m)) {
+    if (preg_match("/SELECT android_app_url,personal_web_access FROM sas_site_details WHERE vendor_id='(\\d+)'/", $sql, $m)) {
         return array_key_exists($m[1], $GLOBALS['db']['site'])
-            ? [['android_app_url' => $GLOBALS['db']['site'][$m[1]]]] : [];
+            ? [['android_app_url' => $GLOBALS['db']['site'][$m[1]], 'personal_web_access' => $GLOBALS['db']['web_access'][$m[1]] ?? 'optional']] : [];
     }
 
     // users
@@ -559,16 +573,34 @@ function fake_mysqli_query_raw($db, $sql) {
     }
 
     // NGN balance row (locked)
-    if (preg_match("/^SELECT id, balance, status FROM sas_users WHERE vendor_id='(\d+)' AND username='([^']*)' LIMIT 1 FOR UPDATE$/", $sql, $m)) {
+    if (preg_match("/^SELECT id, balance, status, is_blocked FROM sas_users WHERE vendor_id='(\d+)' AND username='([^']*)' LIMIT 1 FOR UPDATE$/", $sql, $m)) {
         foreach ($GLOBALS['db']['users'] as $u) {
             if ((int)$u['vendor_id'] === (int)$m[1] && (string)($u['username'] ?? '') === stripslashes($m[2])) return [$u];
         }
         return [];
     }
-    if (preg_match("/^UPDATE sas_users SET balance=balance([+-])([0-9.]+) WHERE id='(\d+)'$/", $sql, $m)) {
+    if (preg_match("/^SELECT reference FROM sas_transactions WHERE vendor_id='(\d+)' AND username='([^']*)' AND status=1 AND \(reference='([^']*)' OR \(api_reference<>'' AND api_reference='([^']*)'\)\) LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['fintech_tx'] as $tx) {
+            if ((int)$tx['vendor_id'] === (int)$m[1] && $tx['username'] === stripslashes($m[2]) && (int)$tx['status'] === 1
+                && ($tx['reference'] === stripslashes($m[3]) || ($tx['api_reference'] !== '' && $tx['api_reference'] === stripslashes($m[4])))) {
+                return [['reference' => $tx['reference']]];
+            }
+        }
+        return [];
+    }
+    if (preg_match("/^SELECT id FROM sas_fintech_ledger WHERE vendor_id='(\d+)' AND provider='([^']*)' AND direction='([^']*)' AND reference='([^']*)' LIMIT 1$/", $sql, $m)) {
+        foreach ($GLOBALS['db']['ledger'] as $l) {
+            if ((int)$l['vendor_id'] === (int)$m[1] && $l['provider'] === stripslashes($m[2]) && $l['direction'] === stripslashes($m[3]) && $l['reference'] === stripslashes($m[4])) {
+                return [['id' => $l['id']]];
+            }
+        }
+        return [];
+    }
+    if (preg_match("/^UPDATE sas_users SET balance=balance([+-])([0-9.]+) WHERE id='(\d+)'(?: AND balance >= ([0-9.]+))?$/", $sql, $m)) {
         $u = $GLOBALS['db']['users'][$m[3]] ?? null;
         if (!$u || !isset($u['balance'])) { $GLOBALS['db']['affected'] = 0; return false; }
         $delta = (float)$m[2];
+        if (isset($m[4]) && (float)$u['balance'] < (float)$m[4]) { $GLOBALS['db']['affected'] = 0; return true; }
         $u['balance'] = $m[1] === '+' ? (float)$u['balance'] + $delta : (float)$u['balance'] - $delta;
         $GLOBALS['db']['users'][$m[3]] = $u;
         $GLOBALS['db']['affected'] = 1;
@@ -613,9 +645,13 @@ function fake_mysqli_query_raw($db, $sql) {
         $key = $m[1] . ':' . stripslashes($m[2]) . ':' . stripslashes($m[3]);
         return isset($GLOBALS['db']['crypto_wallets'][$key]) ? [$GLOBALS['db']['crypto_wallets'][$key]] : [];
     }
-    if (preg_match("/^UPDATE sas_user_crypto_wallets\s+SET balance=balance([+-])([0-9.]+), ledger_balance=ledger_balance([+-])([0-9.]+)\s+WHERE id='(\d+)'$/", $sql, $m)) {
+    if (preg_match("/^UPDATE sas_user_crypto_wallets\s+SET balance=balance([+-])([0-9.]+), ledger_balance=ledger_balance([+-])([0-9.]+)\s+WHERE id='(\d+)'(?: AND balance >= ([0-9.]+) AND ledger_balance >= ([0-9.]+))?$/", $sql, $m)) {
         foreach ($GLOBALS['db']['crypto_wallets'] as $key => $w) {
             if ((int)$w['id'] !== (int)$m[5]) continue;
+            if (isset($m[6]) && ((float)$w['balance'] < (float)$m[6] || (float)$w['ledger_balance'] < (float)$m[7])) {
+                $GLOBALS['db']['affected'] = 0;
+                return true;
+            }
             $w['balance'] = $m[1] === '+' ? (float)$w['balance'] + (float)$m[2] : (float)$w['balance'] - (float)$m[2];
             $w['ledger_balance'] = $m[3] === '+' ? (float)$w['ledger_balance'] + (float)$m[4] : (float)$w['ledger_balance'] - (float)$m[4];
             $GLOBALS['db']['crypto_wallets'][$key] = $w;
@@ -1019,6 +1055,7 @@ $GLOBALS['db']['site']['7'] = '';   // blank setting
 gcheck('personal + blank setting stays on website', bc_fintech_web_login_destination($personal, 7)['action'], 'dashboard');
 gcheck('business + blank setting stays on website', bc_fintech_web_login_destination($business, 7)['action'], 'dashboard');
 
+$GLOBALS['db']['web_access']['7'] = 'app_only';
 $GLOBALS['db']['site']['7'] = 'https://play.google.com/store/apps/details?id=com.datagifting.app';
 $p_dest = bc_fintech_web_login_destination($personal, 7);
 gcheck('personal + valid setting is redirected', $p_dest['action'], 'redirect');
@@ -1057,11 +1094,26 @@ $_SESSION['admin_session'] = ['id' => 1];
 gcheck('impersonating super admin keeps the website', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php'), null);
 $_SESSION = [];
 
+$GLOBALS['db']['web_access']['7'] = 'optional';
 $GLOBALS['db']['site']['7'] = '';
 gcheck('blank setting leaves the whole website usable', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php'), null);
+$GLOBALS['db']['web_access']['7'] = 'app_only';
 $GLOBALS['db']['site']['7'] = 'javascript:alert(1)';
 gcheck('invalid saved setting blocks, never falls through', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php')['state'], 'misconfigured');
 gcheck('invalid saved setting still lets the user sign out', bc_fintech_web_access_blocked($personal, 7, '/logout.php'), null);
+
+// Tenant app/website choice must apply at login AND every signed-in page.
+foreach (['', 'https://play.google.com/store/apps/details?id=com.datagifting.app', 'javascript:alert(1)'] as $app_url) {
+    $GLOBALS['db']['site']['7']=$app_url;$GLOBALS['db']['web_access']['7']='optional';
+    gcheck('optional login stays on website regardless of download link',bc_fintech_web_login_destination($personal,7)['action'],'dashboard');
+    foreach(['/web/Dashboard.php','/web/Fund.php','/web/Airtime.php'] as $path)
+        gcheck('optional signed-in page accessible '.$path,bc_fintech_web_access_blocked($personal,7,$path),null);
+}
+$GLOBALS['db']['web_access']['7']='app_only';$GLOBALS['db']['site']['7']='';
+gcheck('explicit app-only without URL blocks safely',bc_fintech_web_login_destination($personal,7)['action'],'misconfigured');
+$GLOBALS['db']['web_access']['7']='unknown';
+gcheck('corrupt preference is not guessed',bc_fintech_web_login_destination($personal,7)['action'],'misconfigured');
+$GLOBALS['db']['web_access']['7']='optional';
 
 // ═══════════════════════ 7. new-service controls ═══════════════════════
 $GLOBALS['db']['site']['7'] = '';
@@ -2102,6 +2154,16 @@ gcheck('an unknown user is refused', bc_fintech_ledger_post(7, 'ghost', 'NGN', '
 $GLOBALS['db']['users'][30]['status'] = 0;
 gfalse('an inactive account cannot be credited', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, 'R')['ok']);
 $GLOBALS['db']['users'][30]['status'] = 1;
+$GLOBALS['db']['users'][30]['is_blocked'] = 1;
+gcheck('a blocked account cannot be credited', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, 'R-BLK')['reason'], 'account_restricted');
+$GLOBALS['db']['users'][30]['is_blocked'] = 0;
+$GLOBALS['db']['outer_tx'] = true;
+gcheck('an active outer transaction is refused', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, 'R-OTX')['reason'], 'transaction_unavailable');
+$GLOBALS['db']['outer_tx'] = false;
+$GLOBALS['db']['table_engines']['sas_fintech_ledger'] = 'MyISAM';
+gcheck('nontransactional ledger table is refused', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 1, 'R-ENG')['reason'], 'transactional_schema_required');
+unset($GLOBALS['db']['table_engines']);
+gcheck('pre-upgrade historical NGN reference is refused', bc_fintech_ledger_post(7, 'payer', 'NGN', 'credit', 10, 'FLW-REF-1', ['provider' => 'other'])['reason'], 'historical_reference_requires_reconciliation');
 gcheck('still no extra audit rows', count($GLOBALS['db']['ledger']), $before);
 
 // Stablecoin path: the wallet is created on demand and both counters move.
@@ -2860,7 +2922,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker includes additive dispatch-claim migration', $version[1] ?? null, '2026.11.18-vendor-commerce-2');
+gcheck('schema version marker includes additive dispatch-claim and autoheal migration', $version[1] ?? null, '2026.11.18-autoheal-1');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);

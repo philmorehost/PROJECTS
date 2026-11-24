@@ -393,7 +393,8 @@ if ($connection_server) {
         mysqli_query($connection_server, "UPDATE sas_user_banks SET gateway_name='paystack' WHERE bank_code='Paystack' OR (gateway_name != 'monnify' AND gateway_name != 'payvessel' AND gateway_name != 'beewave' AND gateway_name != 'payhub' AND gateway_name != 'paystack') OR gateway_name IS NULL OR gateway_name = ''");
         mysqli_query($connection_server, "UPDATE sas_vendor_banks SET gateway_name='paystack' WHERE bank_code='Paystack' OR (gateway_name != 'monnify' AND gateway_name != 'payvessel' AND gateway_name != 'beewave' AND gateway_name != 'payhub' AND gateway_name != 'paystack') OR gateway_name IS NULL OR gateway_name = ''");
 
-        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('system_migration_version', '".SYSTEM_VERSION."') ON DUPLICATE KEY UPDATE option_value='".SYSTEM_VERSION."'");
+        mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='system_migration_version'");
+        mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('system_migration_version', '".SYSTEM_VERSION."')");
         $_SESSION['migrations_completed_version'] = SYSTEM_VERSION;
     }
 

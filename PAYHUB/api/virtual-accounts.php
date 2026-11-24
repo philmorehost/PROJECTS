@@ -51,10 +51,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $response = paystack_call("transaction?" . $params, 'GET', [], $is_test);
 
         $cleanAcc = ltrim($account_number, '0');
-        $vaRowStmt = $db->prepare("SELECT metadata, customer_email FROM virtual_accounts WHERE user_id = ? AND (account_number = ? OR account_number = ? OR account_number = ?) LIMIT 1");
-        $vaRowStmt->execute([$merchant['id'], $account_number, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
-        $vaRow = $vaRowStmt->fetch();
+        $vaRowStmt = $db->prepare("SELECT user_id, account_number, metadata, customer_email FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ? LIMIT 2");
+        $vaRowStmt->execute([$account_number, str_pad($cleanAcc, 10, '0', STR_PAD_LEFT), $cleanAcc]);
+        $vaRows = $vaRowStmt->fetchAll(PDO::FETCH_ASSOC);
+        $vaRow = (count($vaRows) === 1 && (int)$vaRows[0]['user_id'] === (int)$merchant['id']) ? $vaRows[0] : null;
         $vaMeta = normalize_metadata_array($vaRow['metadata'] ?? null);
+        $receivingAcc = ($vaRow && preg_match('/\A[0-9]{10}\z/', (string)($vaRow['account_number'] ?? '')))
+            ? (string)$vaRow['account_number']
+            : null;
 
         $recentByRef = [];
         $formatRecent = static function(array $row): array {
@@ -78,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             ];
         };
 
-        if ($response && $response['status'] && is_array($response['data'] ?? null)) {
+        if ($response && $response['status'] && is_array($response['data'] ?? null) && $vaRow) {
             foreach ($response['data'] as $rtx) {
                 $ref = $rtx['reference'];
                 $remote_acc = (string)($rtx['dedicated_account']['account_number']
@@ -95,10 +99,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         $amount = $rtx['amount'] / 100;
                         $cust_email = $rtx['customer']['email'] ?? ($vaRow['customer_email'] ?? '');
                         $channelType = $rtx['channel'] ?? 'dedicated_account';
+                        $txCurrency = (is_string($rtx['currency'] ?? null) && trim($rtx['currency']) !== '')
+                            ? strtoupper(substr(trim($rtx['currency']), 0, 10))
+                            : 'NGN';
                         $gatewayFee = (isset($rtx['fees']) && is_numeric($rtx['fees']) && (float)$rtx['fees'] > 0)
                             ? ((float)$rtx['fees'] / 100)
                             : null;
-                        $isIntl = is_international_payment($rtx['currency'] ?? 'NGN', $rtx['authorization'] ?? [], $channelType);
+                        $isIntl = is_international_payment($txCurrency, $rtx['authorization'] ?? [], $channelType);
                         $fee = calculate_fees($amount, $isIntl, $merchant['id'], $gatewayFee, $channelType);
                         $settled = round(max(0.0, $amount - $fee), 2);
                         $txMetaArr = array_merge(normalize_metadata_array($rtx['metadata'] ?? null), $vaMeta);
@@ -109,8 +116,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                         $db->beginTransaction();
                         try {
-                            $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, gateway_reference, metadata) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)");
-                            $stmt->execute([$merchant['id'], $ref, $amount, $cust_email, $channelType, $is_test ? 1 : 0, $fee, $settled, $rtx['id'], $txMetaJson]);
+                            $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, fee_amount, settled_amount, currency, gateway_reference, metadata, receiving_account_number) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([$merchant['id'], $ref, $amount, $cust_email, $channelType, $is_test ? 1 : 0, $fee, $settled, $txCurrency, $rtx['id'], $txMetaJson, $receivingAcc]);
                             if ($stmt->rowCount() !== 1) {
                                 $db->rollBack();
                                 continue;
@@ -128,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             log_transaction_event($t_id, 'reconciled', "Payment reconciled via Virtual Account Query API.");
                             log_ledger_entry($merchant['id'], $settled, 'credit', 'payment', "Reconciled VA Payment: $ref", $is_test);
 
+                            payhub_enqueue_generic_outbox($db,(int)$t_id,'va_reconcile');
                             $db->commit();
                             trigger_merchant_webhook($t_id);
                             $item = [

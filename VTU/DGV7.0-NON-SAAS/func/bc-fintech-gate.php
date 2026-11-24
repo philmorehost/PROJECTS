@@ -10,9 +10,9 @@ require_once __DIR__.'/bc-compliance-policy.php';
  * The three rules implemented here:
  *   1. Mobile apps: personal accounts only. Business accounts get HTTP 403 with
  *      "Business accounts are accessible via web only" on app login, token issue and token use.
- *   2. Personal website login: when the tenant has a valid android_app_url, the user is sent to
- *      that URL. When it is empty, they keep the normal website. A malformed saved URL blocks
- *      with a configuration error instead of silently granting the dashboard.
+ *   2. Personal website login: optional (default) permits website and app choice. Only an
+ *      explicit app_only preference enforces the valid Android destination. Missing/invalid
+ *      destinations in app_only mode block with a configuration error.
  *   3. Business website login: always the website, never a mobile redirect.
  *
  * Nothing in this file runs unless a caller includes it explicitly; it does not hijack
@@ -49,21 +49,24 @@ if (!function_exists('bc_fintech_tenant_android_app_url')) {
      *   ['state' => 'unset'|'valid'|'invalid', 'url' => string, 'raw' => string]
      *
      * 'invalid' means non-empty but rejected by bc_fintech_android_app_url_valid(). Callers
-     * must block rather than fall through to the dashboard: that state is a misconfiguration,
-     * not consent to use the website.
+     * must block in explicit app_only mode. Optional mode retains website access independently
+     * of download-link validity. Database/read failures are unavailable, not optional consent.
      */
     function bc_fintech_tenant_android_app_url($vendor_id) {
         global $connection_server;
         $vendor_id = (int)$vendor_id;
-        $result = ['state' => 'unset', 'url' => '', 'raw' => ''];
+        $result = ['state' => 'unset', 'url' => '', 'raw' => '', 'web_access' => 'optional'];
         if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return $result;
 
-        $q = mysqli_query($connection_server, "SELECT android_app_url FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
-        if (!$q || mysqli_num_rows($q) !== 1) {
-            // No settings row yet: nothing configured, personal web access stays available.
-            return $result;
-        }
+        try {
+            $q = mysqli_query($connection_server, "SELECT android_app_url,personal_web_access FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+        } catch (Throwable $e) { $result['state']='unavailable'; $result['web_access']=null; return $result; }
+        if (!$q) { $result['state']='unavailable'; $result['web_access']=null; return $result; }
+        if (mysqli_num_rows($q) !== 1) return $result;
+
         $row = mysqli_fetch_assoc($q);
+        $result['web_access'] = $row['personal_web_access'] ?? 'optional';
+        if (!in_array($result['web_access'], ['optional','app_only'], true)) { $result['state']='unavailable'; return $result; }
         $raw = (string)($row['android_app_url'] ?? '');
         $result['raw'] = $raw;
 
@@ -153,7 +156,8 @@ if (!function_exists('bc_fintech_web_login_destination')) {
         }
 
         $config = bc_fintech_tenant_android_app_url($vendor_id);
-        if ($config['state'] === 'invalid') {
+        if ($config['web_access'] === 'optional') return ['action'=>'dashboard'];
+        if ($config['state'] !== 'valid') {
             return [
                 'action'  => 'misconfigured',
                 'message' => 'Mobile app access is not configured correctly for this website. Please contact support.',
@@ -364,8 +368,8 @@ if (!function_exists('bc_fintech_web_access_blocked')) {
      * use the app.
      *
      * Returns the redirect destination when the current request must be diverted, or null to
-     * allow it. Only active when the tenant has a VALID android_app_url, so a default install
-     * (empty setting) behaves exactly as before.
+     * allow it. Only explicit app_only preference enforces app use. Optional is the default;
+     * missing/invalid URLs in app_only mode return a configuration error.
      *
      * Escapes:
      *   - Business accounts are never diverted.
@@ -397,10 +401,10 @@ if (!function_exists('bc_fintech_web_access_blocked')) {
         if (in_array($path, $exempt_exact, true)) return null;
 
         $config = bc_fintech_tenant_android_app_url($vendor_id);
-        if ($config['state'] === 'invalid') {
+        if ($config['web_access'] === 'optional') return null;
+        if ($config['state'] !== 'valid') {
             return ['state' => 'misconfigured', 'location' => null];
         }
-        if ($config['state'] !== 'valid') return null;
 
         $target = bc_fintech_web_redirect_target($user, $config['url']);
         if ($target === null) return null;
