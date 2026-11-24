@@ -189,5 +189,32 @@ try {
     retryreject(fn()=>payhub_claim_initial_webhook($db,initialfixture($db,27),$noKeyRaw),'key repair requires queued binding reconciliation');
     $enqueue=strpos($verifySource,'payhub_enqueue_verify_outbox(',$flag);
     retrycheck($enqueue!==false && $flag<$enqueue && $enqueue<$commit,'actual verify source enqueues before accounting commit');
+    foreach([0,1] as $mode){
+        $id=28+$mode;$reference='paystack-outbox-'.$mode;
+        $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES($id,1,'$reference','pending',$mode)");
+        $eventPayload=$forward;$eventPayload['data']['reference']=$reference;$eventPayload['data']['domain']=$mode?'test':'live';$exact=json_encode($eventPayload);
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");
+        payhub_enqueue_paystack_outbox($db,$id,$exact);
+        retrycheck((int)$other->query("SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=$id")->fetchColumn()===0,'Paystack event not visible before commit');$db->rollBack();
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending' && (int)$other->query("SELECT COUNT(*) FROM ledger WHERE transaction_id=$id")->fetchColumn()===0,'Paystack event and accounting roll back together');
+        $db->exec("CREATE TRIGGER fail_paystack_outbox BEFORE INSERT ON webhook_outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture Paystack event fault'");
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");
+        retryreject(fn()=>payhub_enqueue_paystack_outbox($db,$id,$exact),'Paystack event insert failure propagates');$db->rollBack();$db->exec('DROP TRIGGER fail_paystack_outbox');
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending','Paystack fault cannot leave fulfilled payment');
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_paystack_outbox($db,$id,$exact);$db->commit();
+        $saved=$other->query("SELECT producer,payload FROM webhook_outbox WHERE transaction_id=$id")->fetch(PDO::FETCH_ASSOC);
+        retrycheck($saved['producer']==='paystack_forward' && $saved['payload']===$exact,'exact Paystack event survives commit-to-dispatch crash');
+        $snapshot=initialfixture($db,$id);$replacement=$eventPayload;$replacement['data']['amount']=10000;
+        retryreject(fn()=>payhub_claim_initial_webhook($db,$snapshot,json_encode($replacement)),'different producer variant cannot replace queued Paystack body');
+        $reservation=payhub_claim_initial_webhook($db,$snapshot,$exact);
+        retrycheck($reservation['signature']===hash_hmac('sha256',$exact,$mode?'test-fixture':'live-fixture'),'queued Paystack signature uses persisted mode key');
+        retrycheck(payhub_finish_webhook_retry($db,$reservation,503,true)===false,'Paystack uncertain completion remains fenced');
+        retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$reservation['delivery']['id'],true),'queued Paystack uncertainty cannot be replayed');
+    }
+    $db->beginTransaction();retryreject(fn()=>payhub_enqueue_webhook_outbox($db,28,'{}','untrusted_producer'),'unknown event producer refused');$db->rollBack();
+    $paystackSource=file_get_contents(__DIR__.'/../webhook-paystack.php');$enqueued=strpos($paystackSource,'payhub_enqueue_paystack_outbox(');$committed=strpos($paystackSource,'$db->commit();',$enqueued);$fulfilled=strpos($paystackSource,'$fulfillment_success = true;',$enqueued);$claimed=strpos($paystackSource,'$forwardClaim = payhub_claim_initial_webhook(',$enqueued);$http=strpos($paystackSource,'$ch = curl_init(',$claimed);
+    retrycheck($enqueued!==false && $enqueued<$committed && $committed<$fulfilled && $fulfilled<$claimed && $claimed<$http,'actual Paystack source enqueues before commit and protected HTTP');
+    $failure=substr($paystackSource,$fulfilled,$claimed-$fulfilled);
+    retrycheck(strpos($failure,'http_response_code(503);')!==false && strpos($failure,"exit('Accounting could not commit; retry required.');")!==false,'Paystack accounting/outbox failure cannot fall through to final HTTP 200');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}

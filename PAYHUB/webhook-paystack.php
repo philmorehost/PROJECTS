@@ -314,13 +314,50 @@ if ($event_type === 'charge_success') {
 
             log_transaction_event($tx['id'], 'payment_completed', 'Payment successfully processed and confirmed via Webhook');
 
+            // Exact notification participates in the SAME accounting transaction.
+            $body = null;
+            $outboxOwnerQuery = $db->prepare('SELECT webhook_url FROM users WHERE id=?');
+            $outboxOwnerQuery->execute([(int)$tx['user_id']]);
+            if (!empty($outboxOwnerQuery->fetchColumn())) {
+                // Recover metadata for payload - merge what we have in DB with what came in (null-safe)
+                $db_meta = normalize_metadata_array($tx['metadata'] ?? null);
+                $in_meta = normalize_metadata_array($data['metadata'] ?? null);
+                $final_metadata = array_merge($in_meta, $db_meta);
+
+                $payload = [
+                    'event' => 'charge.success',
+                    'data' => array_merge($data, [
+                        'reference' => $tx['reference'],
+                        'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+                        'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
+                        // Additive contract: preserve the legacy amount value and declare its meaning.
+                        'money_contract_version' => 1,
+                        'amount_unit' => 'minor',
+                        'amount_basis' => 'gateway',
+                        'amount' => to_minor_units($amount),
+                        'requested_amount' => to_minor_units($tx['amount']),
+                        'gateway_amount' => to_minor_units($amount),
+                        'fee_amount' => to_minor_units($fee),
+                        'settled_amount' => to_minor_units($settled),
+                        'domain' => $is_test_tx ? 'test' : 'live',
+                        'channel' => $data['channel'] ?? $tx['payment_method'],
+                        'metadata' => $final_metadata
+                    ])
+                ];
+
+                $body = json_encode($payload);
+                payhub_enqueue_paystack_outbox($db, (int)$tx['id'], $body);
+            }
+
             $db->commit();
             $fulfillment_success = true;
 
-        } catch (Exception $e) {
-            $db->rollBack();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
             $fulfillment_success = false;
-            file_put_contents('webhook_debug.log', "Transaction Error: " . $e->getMessage() . PHP_EOL, FILE_APPEND);
+            error_log('[PayHub] Webhook accounting/outbox could not commit; upstream retry required.');
+            http_response_code(503);
+            exit('Accounting could not commit; retry required.');
         }
 
         if ($fulfillment_success) {
@@ -349,34 +386,7 @@ if ($event_type === 'charge_success') {
                 sendEmail($m['email'], "New Payment Received", "<h2>Payment Confirmed</h2><p>You have received a payment of <strong>".formatCurrency($amount)."</strong>.</p><p>Reference: $ref</p>");
  
                 // Forward Webhook to Merchant Site
-                if (!empty($m['webhook_url'])) {
-                    // Recover metadata for payload - merge what we have in DB with what came in (null-safe)
-                    $db_meta = normalize_metadata_array($tx['metadata'] ?? null);
-                    $in_meta = normalize_metadata_array($data['metadata'] ?? null);
-                    $final_metadata = array_merge($in_meta, $db_meta);
-
-                    $payload = [
-                        'event' => 'charge.success',
-                        'data' => array_merge($data, [
-                            'reference' => $tx['reference'],
-                            'receiving_account_number' => $tx['receiving_account_number'] ?? null,
-                            'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
-                            // Additive contract: preserve the legacy amount value and declare its meaning.
-                            'money_contract_version' => 1,
-                            'amount_unit' => 'minor',
-                            'amount_basis' => 'gateway',
-                            'amount' => to_minor_units($amount),
-                            'requested_amount' => to_minor_units($tx['amount']),
-                            'gateway_amount' => to_minor_units($amount),
-                            'fee_amount' => to_minor_units($fee),
-                            'settled_amount' => to_minor_units($settled),
-                            'domain' => $is_test_tx ? 'test' : 'live',
-                            'channel' => $data['channel'] ?? $tx['payment_method'],
-                            'metadata' => $final_metadata
-                        ])
-                    ];
-
-                    $body = json_encode($payload);
+                if (!empty($m['webhook_url']) && $body !== null) {
                     $signature = payhub_merchant_webhook_signature($body, $m, $tx['is_test'] ?? null);
 
                     if ($signature === '') {
