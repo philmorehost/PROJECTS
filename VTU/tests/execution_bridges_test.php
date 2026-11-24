@@ -94,4 +94,15 @@ if (function_exists('openssl_encrypt')) {
 putenv('BC_GIFTCARD_WORKER_ENABLED=');
 putenv('BC_GIFTCARD_KMS_KEY=');
 
+// 6. VirtualCard UI routes cleanly through virtual-card-v2.php (zero legacy virtual-card-ajax.php or CVV reveal) & webhook syncs checkout intents
+foreach (['SAAS', 'NON-SAAS'] as $ed) {
+    $vcPage = file_get_contents("$root/DGV7.0-$ed/web/VirtualCard.php");
+    eb_chk(strpos($vcPage, 'virtual-card-ajax.php') === false, "$ed VirtualCard.php no longer calls retired virtual-card-ajax.php");
+    eb_chk(strpos($vcPage, 'api/virtual-card-v2.php') !== false && strpos($vcPage, 'X-CSRF-Token') !== false, "$ed VirtualCard.php routes mutations through CSRF-protected api/virtual-card-v2.php");
+    eb_chk(strpos($vcPage, 'revealSecurity') === false && strpos($vcPage, 'd.cvv') === false, "$ed VirtualCard.php never exposes plaintext CVV");
+
+    $whFile = file_get_contents("$root/DGV7.0-$ed/func/bc-fintech-webhook.php");
+    eb_chk(strpos($whFile, 'bc_chk_reconcile_settlement(') !== false && strpos($whFile, 'BC_CHECKOUT_EXECUTION_ENABLED') !== false, "$ed bc-fintech-webhook.php syncs hosted checkout intents when enabled");
+}
+
 echo "PASS $checks execution bridge policy checks\n";

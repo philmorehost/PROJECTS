@@ -314,5 +314,34 @@ ebm_chk($ownerNow === 10, 'giftcard P2P transferred card ownership to buyer');
 putenv('BC_GIFTCARD_WORKER_ENABLED=');
 putenv('BC_GIFTCARD_KMS_KEY=');
 
+// 6. Webhook settlement syncs sas_checkout_intents -> settled when BC_CHECKOUT_EXECUTION_ENABLED=1
+require_once "$base/func/bc-stepup.php";
+require_once "$base/func/bc-fintech-providers.php";
+require_once "$base/func/bc-fintech-webhook.php";
+$conn->query("CREATE TABLE sas_payment_gateways (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    vendor_id INT UNSIGNED NOT NULL,
+    gateway_name VARCHAR(64) NOT NULL,
+    public_key VARCHAR(255) NOT NULL DEFAULT '',
+    secret_key VARCHAR(255) NOT NULL DEFAULT '',
+    encrypt_key VARCHAR(255) NOT NULL DEFAULT '',
+    percentage DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+    status TINYINT NOT NULL DEFAULT 1
+) ENGINE=InnoDB");
+$conn->query("INSERT INTO sas_payment_gateways (vendor_id, gateway_name, secret_key, encrypt_key, status) VALUES (1, 'flutterwave', 'flw_sec_test', 'flw-wh-secret-123', 1)");
+$chkWhKey = hash('sha256', 'chk-wh-test-1');
+$whIntent = bc_chk_create_intent(1, 10, 'flutterwave', 'NGN', '1500.00', 900, $chkWhKey);
+ebm_chk(!empty($whIntent['ok']), 'second checkout intent created for webhook test');
+$whRef = $whIntent['reference'];
+putenv('BC_CHECKOUT_EXECUTION_ENABLED=1');
+$rawWh = json_encode(['event' => 'charge.completed', 'data' => ['id' => 998877, 'tx_ref' => $whRef, 'amount' => 1500, 'currency' => 'NGN', 'status' => 'successful']], JSON_THROW_ON_ERROR);
+$whRes = bc_fintech_webhook_handle('flutterwave', 1, $rawWh, ['verif-hash' => 'flw-wh-secret-123'], function ($vid, $ext) use ($whRef) {
+    return ['ok' => true, 'reason' => 'verified', 'reference' => $whRef, 'amount' => 1500.00, 'gross_amount' => 1500.00, 'currency' => 'NGN', 'status' => 'successful'];
+});
+ebm_chk(!empty($whRes['ok']) && $whRes['reason'] === 'credited', 'webhook handler credits wallet for checkout intent');
+$whState = (string)$conn->query("SELECT state FROM sas_checkout_intents WHERE vendor_id=1 AND reference='" . $conn->real_escape_string($whRef) . "'")->fetch_assoc()['state'];
+ebm_chk($whState === 'settled', 'webhook handler transitions sas_checkout_intents to settled');
+putenv('BC_CHECKOUT_EXECUTION_ENABLED=');
+
 $conn->query("DROP DATABASE IF EXISTS `$dbName`");
 echo "PASS $checks $ed execution bridge MySQL checks\n";

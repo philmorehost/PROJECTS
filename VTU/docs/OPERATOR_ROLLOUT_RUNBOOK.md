@@ -42,18 +42,19 @@ This runbook governs host deployment, schema migration, historical reconciliatio
 3. **Gift-card KMS & KYB review:** Complete key-management review for `sas_giftcard_orders` encrypted codes and manual compliance/liveness review for KYC/KYB.
 
 ## 4. Controlled Sandbox & Worker Wiring
-All 8 operational gates default to `false` (`0`). Enable each only after live TLS/sandbox acceptance passes for that subsystem:
+All 9 operational gates default to `false` (`0`). Enable each only after live TLS/sandbox acceptance passes for that subsystem:
 
-| Gate Env Flag | Companion Config / Endpoint Vars | CLI / Cron Runner |
+| Gate Env Flag | Companion Config / Endpoint Vars | CLI / Cron Runner / Route |
 | --- | --- | --- |
 | `PAYHUB_ALERT_SINK_ENABLED=1` | `PAYHUB_ALERT_SINK_URL`, `PAYHUB_ALERT_SINK_HMAC_SECRET` | `php PAYHUB/bin/dispatch-webhook-alert.php` |
 | `PAYHUB_WEBHOOK_RECONCILE_ENABLED=1` | Dual-operator CLI flags | `php PAYHUB/bin/reconcile-webhook-outbox.php` |
-| `BC_PAYOUT_WORKER_ENABLED=1` | `BC_PAYOUT_PROVIDER_ENDPOINT`, `BC_PAYOUT_PROVIDER_HMAC_SECRET` | `php cron/process_payout_reservations.php --vendor=ID` |
-| `BC_VIRTUALCARD_WORKER_ENABLED=1` | `BC_VIRTUALCARD_PROVIDER_ENDPOINT`, `BC_VIRTUALCARD_PROVIDER_HMAC_SECRET` | `php cron/process_virtualcard_orders.php --vendor=ID` |
-| `BC_GIFTCARD_WORKER_ENABLED=1` | `BC_GIFTCARD_PROVIDER_ENDPOINT`, `BC_GIFTCARD_PROVIDER_HMAC_SECRET` | `php cron/process_giftcard_orders.php --vendor=ID` |
+| `BC_PAYOUT_WORKER_ENABLED=1` | `BC_PAYOUT_PROVIDER_ENDPOINT`, `BC_PAYOUT_PROVIDER_HMAC_SECRET` | `php cron/process_payout_reservations.php --vendor=ID`, `web/func/bank-transfer.php`, `bc-admin/Withdrawals.php` |
+| `BC_VIRTUALCARD_WORKER_ENABLED=1` | `BC_VIRTUALCARD_PROVIDER_ENDPOINT`, `BC_VIRTUALCARD_PROVIDER_HMAC_SECRET` | `php cron/process_virtualcard_orders.php --vendor=ID`, `web/VirtualCard.php`, `web/api/virtual-card-v2.php` |
+| `BC_GIFTCARD_WORKER_ENABLED=1` | `BC_GIFTCARD_PROVIDER_ENDPOINT`, `BC_GIFTCARD_PROVIDER_HMAC_SECRET`, `BC_GIFTCARD_KMS_KEY` | `php cron/process_giftcard_orders.php --vendor=ID`, `web/GiftCard.php`, `web/api/gift-card.php` |
 | `BC_SERVICE_DISPATCH_WORKER_ENABLED=1` | `BC_SERVICE_DISPATCH_ENDPOINT`, `BC_SERVICE_DISPATCH_HMAC_SECRET` | `php cron/process_service_dispatch.php --vendor=ID` |
+| `BC_CHECKOUT_EXECUTION_ENABLED=1` | *(Hosted checkout intent creation + webhook settlement sync)* | `web/api/create-checkout.php`, `web/api/payhub-checkout.php`, `func/bc-fintech-webhook.php` |
 | `BC_CHECKOUT_EXPIRE_ENABLED=1` | *(DB TTL reaper only)* | `php cron/expire_checkout_intents.php --vendor=ID` |
-| `CRYPTO_BUYSELL_EXECUTION_ENABLED=1` | `CRYPTO_SIGNER_ENDPOINT`, `CRYPTO_SIGNER_HMAC_SECRET`, `CRYPTO_WATCHER_ENDPOINT`, `CRYPTO_WATCHER_HMAC_SECRET` | `php cron/process_crypto_buysell_signer.php` & `process_crypto_buysell_deposits.php` |
+| `CRYPTO_BUYSELL_EXECUTION_ENABLED=1` | `CRYPTO_SIGNER_ENDPOINT`, `CRYPTO_SIGNER_HMAC_SECRET`, `CRYPTO_WATCHER_ENDPOINT`, `CRYPTO_WATCHER_HMAC_SECRET` | `VTU/cryptocurrency-idea/service` (`/v1/cbs/{signer,watcher}`), `cron/process_crypto_buysell_{signer,deposits}.php` |
 
 > **Crash Reapers:** `cron/process_service_dispatch.php --vendor=ID --reap-expired-only` moves expired active leases to `unknown` without retrying and may run safely independently of dispatch enablement.
 
