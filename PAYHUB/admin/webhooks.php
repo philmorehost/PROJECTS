@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $error_msg = 'Invalid security token. Refresh the page and try again.';
     } else {
         $logId = (int)($_POST['log_id'] ?? 0);
-        $stmt = $db->prepare("SELECT w.id, w.transaction_id, w.payload, t.reference, t.status AS transaction_status, u.webhook_url, u.secret_key, u.test_secret_key FROM webhook_logs w JOIN transactions t ON w.transaction_id = t.id JOIN users u ON t.user_id = u.id WHERE w.id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT w.id, w.transaction_id, w.payload, t.reference, t.status AS transaction_status, t.is_test, u.webhook_url, u.secret_key, u.test_secret_key FROM webhook_logs w JOIN transactions t ON w.transaction_id = t.id JOIN users u ON t.user_id = u.id WHERE w.id = ? LIMIT 1");
         $stmt->execute([$logId]);
         $delivery = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -35,10 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             } elseif (!function_exists('curl_init')) {
                 $error_msg = 'PHP cURL is unavailable, so the webhook could not be sent.';
             } else {
-                $secret = (string)($delivery['secret_key'] ?? '');
-                if ($secret === '' && !empty($delivery['test_secret_key'])) {
-                    $secret = (string)$delivery['test_secret_key'];
-                }
+                $secret = (string)(((int)$delivery['is_test'] === 1) ? ($delivery['test_secret_key'] ?? '') : ($delivery['secret_key'] ?? ''));
                 $headers = ['Content-Type: application/json'];
                 if ($secret !== '') {
                     $headers[] = 'X-Payhub-Signature: ' . hash_hmac('sha256', $payload, $secret);

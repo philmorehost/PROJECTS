@@ -57,3 +57,7 @@ Containment is not replacement implementation. No finding above is certified clo
 - Policy: 70; gateway verdict: 117; mobile source regression: 76; retired-provider repair: 66.
 
 These use PHP-wasm and SQL doubles/source assertions, not a real MySQL server or provider sandbox. The harness now exits unsuccessfully on reported PHP fatal/parse errors instead of silently returning success. Passing these checks does not establish that all 19 findings are fully remediated.
+
+## Scoped PayHub deposit replacement (source follow-up)
+
+The PayHub dedicated-account receivers now use a POST-only, environment-gated signed/independently verified settlement workflow instead of unconditional legacy stubs. See `PAYHUB_DEPOSIT_ROLLOUT.md` for schema/provider prerequisites, exact net-credit policy, historical-payment reconciliation and rollout controls. The deprecated browser/legacy `processPayhubSuccess` writer is disabled. This is not production approval or a release of checkout, withdrawal, card or other holds. Existing incident findings and original response evidence remain in `PAYHUB_SETTLEMENT_HOLD_INVESTIGATION.md`.

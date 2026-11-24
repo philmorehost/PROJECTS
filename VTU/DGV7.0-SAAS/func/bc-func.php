@@ -3947,6 +3947,8 @@ function makePayhubRequest($req_method, $parameter_url, $req_body, $vid = null, 
 }
 
 function processPayhubSuccess($vendor_id, $transaction_ref, $data, $payhub_keys, $username = "") {
+    // Retired: browser/legacy callbacks must never bypass verified atomic DVA settlement.
+    return false;
     global $connection_server;
     $log = function($m) {
         $dir = __DIR__ . "/logs";

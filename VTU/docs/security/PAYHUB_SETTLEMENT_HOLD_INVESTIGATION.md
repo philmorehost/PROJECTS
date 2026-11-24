@@ -1,5 +1,7 @@
 # PayHub virtual-account deposits: LEGACY_SETTLEMENT_HOLD investigation
 
+> Historical incident finding: the unconditional receivers described below have since been replaced in source by the rollout-gated workflow in `PAYHUB_DEPOSIT_ROLLOUT.md`. The original response/root cause is retained as evidence. No production rollout or historical credit has been performed.
+
 ## Finding
 
 The supplied PayHub retry response is an intentional DataGifting application hold, not an IP-blocking response:
@@ -59,4 +61,4 @@ Test valid live transfers, forged signatures, test/live mismatch, wrong merchant
 node VTU/tests/harness/run-test.mjs tests/payhub_settlement_hold_test.php
 ```
 
-This executes the three held receiver files without DB/network and confirms their deliberate 503/no-settlement behavior. The PayHub sender trace above was inspected separately in source. It is a diagnosis regression, not payment-provider or production acceptance. No runtime financial code, allowlist, response status, balance, provider configuration or deployment is changed.
+The updated boundary regression checks POST-only handling and the explicit rollout gate without DB/network. The PayHub sender trace above was inspected separately in source. It is a diagnosis regression, not payment-provider or production acceptance. No runtime financial code, allowlist, response status, balance, provider configuration or deployment is changed.

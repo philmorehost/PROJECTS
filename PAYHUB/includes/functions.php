@@ -1351,6 +1351,8 @@ function ensure_table($table, $ddl) {
 function ensure_payment_schema() {
     static $statusWidened = false;
     ensure_column('transactions', 'gateway_amount', 'DECIMAL(15,2) DEFAULT NULL');
+    // Server-owned DVA evidence; never populated from checkout metadata or backfilled heuristically.
+    ensure_column('transactions', 'receiving_account_number', 'VARCHAR(10) DEFAULT NULL');
     ensure_column('transactions', 'failure_reason', 'VARCHAR(50) DEFAULT NULL');
     ensure_column('transactions', 'card_bin', 'VARCHAR(20) DEFAULT NULL');
     ensure_column('transactions', 'card_last4', 'VARCHAR(8) DEFAULT NULL');
@@ -1879,6 +1881,8 @@ function trigger_merchant_webhook($transactionId) {
                 'data' => [
                     'id' => $tx['gateway_reference'] ?? $tx['id'],
                     'reference' => $tx['reference'],
+                    'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+                    'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
                     // Report what actually settled. `amount` is merchant-supplied
                     // and must never be trusted as evidence of payment.
                     'amount' => to_minor_units($grossPaid),
@@ -1904,11 +1908,7 @@ function trigger_merchant_webhook($transactionId) {
             // SECURITY: sign the webhook body so the merchant can verify it genuinely
             // came from PayHub. Signature = HMAC-SHA256(raw JSON body, merchant secret key),
             // sent in the X-Payhub-Signature header. Verify with the SAME secret key.
-            $secret = (string)($tx['secret_key'] ?? '');
-            if ($secret === '' && !empty($tx['test_secret_key'])) {
-                // Test-mode merchants may not have a live key yet — sign with the test key.
-                $secret = (string)$tx['test_secret_key'];
-            }
+            $secret = (string)(((int)$tx['is_test'] === 1) ? ($tx['test_secret_key'] ?? '') : ($tx['secret_key'] ?? ''));
             $signature = $secret !== '' ? hash_hmac('sha256', $body, $secret) : '';
 
             $ch = curl_init();

@@ -174,9 +174,11 @@ if ($event_type === 'charge_success') {
         if ($acc_number) {
             // Clean account number (Paystack sometimes sends it with leading zeros or slightly different)
             $clean_acc = ltrim($acc_number, '0');
-            $stmt = $db->prepare("SELECT * FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ?");
+            $stmt = $db->prepare("SELECT * FROM virtual_accounts WHERE account_number = ? OR account_number = ? OR account_number = ? LIMIT 2");
             $stmt->execute([$acc_number, str_pad($clean_acc, 10, '0', STR_PAD_LEFT), $clean_acc]);
-            $va = $stmt->fetch();
+            $vaRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (count($vaRows) > 1) { http_response_code(409); exit('DVA ownership requires review'); }
+            $va = $vaRows[0] ?? null;
 
             if ($va) {
                 // Which Paystack key signed this payload is authoritative. The
@@ -194,8 +196,8 @@ if ($event_type === 'charge_success') {
 
                 // Create a pending transaction for this VA payment
                 // Using INSERT IGNORE in case webhook is retried quickly
-                $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, metadata) VALUES (?, ?, ?, 'pending', ?, 'bank_transfer', ?, ?)");
-                $stmt->execute([$va['user_id'], $ref, $amount, $va['customer_email'], $is_test_va ? 1 : 0, $recovered_metadata]);
+                $stmt = $db->prepare("INSERT IGNORE INTO transactions (user_id, reference, amount, status, customer_email, payment_method, is_test, metadata, receiving_account_number) VALUES (?, ?, ?, 'pending', ?, 'bank_transfer', ?, ?, ?)");
+                $stmt->execute([$va['user_id'], $ref, $amount, $va['customer_email'], $is_test_va ? 1 : 0, $recovered_metadata, (string)$va['account_number']]);
 
                 $stmt = $db->prepare("SELECT * FROM transactions WHERE reference = ?");
                 $stmt->execute([$ref]);
@@ -357,6 +359,8 @@ if ($event_type === 'charge_success') {
                         'event' => 'charge.success',
                         'data' => array_merge($data, [
                             'reference' => $tx['reference'],
+                            'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+                            'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
                             'amount' => to_minor_units($amount),
                             'requested_amount' => to_minor_units($tx['amount']),
                             'gateway_amount' => to_minor_units($amount),

@@ -40,6 +40,17 @@ on:
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
       - 'VTU/**/index-bc-style-template-*.php'
       - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/func/bc-payhub-deposit*.php'
+      - 'VTU/**/users-payhub.php'
+      - 'VTU/**/vendors-payhub.php'
+      - 'VTU/**/func/bc-func.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - 'VTU/tests/payhub*test.php'
+      - 'PAYHUB/includes/functions.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/api/transaction/verify.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'VTU/**/cssfile/template/bc-style-template-1.css'
       - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
@@ -155,6 +166,17 @@ on:
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
       - 'VTU/**/index-bc-style-template-*.php'
       - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/func/bc-payhub-deposit*.php'
+      - 'VTU/**/users-payhub.php'
+      - 'VTU/**/vendors-payhub.php'
+      - 'VTU/**/func/bc-func.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - 'VTU/tests/payhub*test.php'
+      - 'PAYHUB/includes/functions.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/api/transaction/verify.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'VTU/**/cssfile/template/bc-style-template-1.css'
       - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
@@ -289,6 +311,12 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/service_attempt_journal_test.php
+          php -l PAYHUB/includes/functions.php
+          php -l PAYHUB/admin/webhooks.php
+          php -l PAYHUB/webhook-paystack.php
+          php -l PAYHUB/api/transaction/verify.php
+          php VTU/tests/payhub_deposits_test.php
+          php VTU/tests/payhub_settlement_hold_test.php
           php VTU/tests/service_attempt_review_test.php
           php VTU/tests/service_attempt_review_render_test.php
           php VTU/tests/vendor_compliance_review_test.php
@@ -384,6 +412,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli
           coverage: none
+      - name: Verified PayHub deposits, rollback and concurrent replay safety
+        env:
+          BC_PAYHUB_DEPOSITS_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/payhub_deposits_mysql_test.php
+
       - name: Persist and independently read back API status in disposable MySQL
         env:
           BC_API_STATUS_CI: '1'
