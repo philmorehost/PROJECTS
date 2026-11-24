@@ -20,6 +20,13 @@ on:
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
+      - 'VTU/**/func/bc-crypto-buysell.php'
+      - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
+      - 'VTU/**/func/bc-update-manifest-guard.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/execute_update.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/cron_update.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/execute_update.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/cron_update.php'
       - 'VTU/migrations/MANIFEST.json'
       - 'VTU/bin/verify-schema-manifest.php'
       - 'VTU/**/func/bc-live-capture.php'
@@ -170,6 +177,13 @@ on:
       - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
+      - 'VTU/**/func/bc-crypto-buysell.php'
+      - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
+      - 'VTU/**/func/bc-update-manifest-guard.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/execute_update.php'
+      - 'VTU/DGV7.0-SAAS/bc-spadmin/cron_update.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/execute_update.php'
+      - 'VTU/DGV7.0-NON-SAAS/bc-admin/cron_update.php'
       - 'VTU/migrations/MANIFEST.json'
       - 'VTU/bin/verify-schema-manifest.php'
       - 'VTU/**/func/bc-live-capture.php'
@@ -365,6 +379,8 @@ jobs:
           php VTU/tests/virtualcard_settlement_foundation_test.php
           php VTU/tests/checkout_intents_foundation_test.php
           php VTU/tests/service_dispatch_lease_foundation_test.php
+          php VTU/tests/crypto_buysell_foundation_test.php
+          php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
           php -l PAYHUB/includes/functions.php
           php -l PAYHUB/admin/webhooks.php
@@ -611,6 +627,11 @@ jobs:
           BC_SVC_DISPATCH_LEASE_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/service_dispatch_lease_mysql_test.php
+
+      - name: Held replacement crypto Buy/Sell quotes, orders & finality in disposable MySQL
+        env:
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/crypto_buysell_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest

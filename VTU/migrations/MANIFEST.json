@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-1",
+  "version": "2026.11.18-remediation-manifest-2",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -32,6 +32,10 @@
     {
       "path": "VTU/migrations/20261118_checkout_intent_lifecycle.sql",
       "sha256": "7fe825cd1554c1a742040592681655a422a5400e9b177854999a6b4af400e9cd"
+    },
+    {
+      "path": "VTU/migrations/20261118_crypto_buysell_foundation.sql",
+      "sha256": "d46ab5c1a1e6a862f87c34b0fb807b484a46dae248ea60f9562d02bf433e509f"
     },
     {
       "path": "VTU/migrations/20261118_giftcard_settlement.sql",
@@ -126,6 +130,14 @@
     {
       "name": "bc-giftcard-safety.php",
       "sha256": "da4a9e4950fac307af0ca2eb293565296cb9ab968f3a03711d396da282aeb213"
+    },
+    {
+      "name": "bc-crypto-buysell.php",
+      "sha256": "8bb7070ee90100a6afdbf56769187988055156a3e3265222fea5af227456d647"
+    },
+    {
+      "name": "bc-update-manifest-guard.php",
+      "sha256": "75bc2e6f6f3370a91b09fc09a270165657d9e9caf07014fcb97df1ced62b1f21"
     }
   ],
   "required_innodb_tables": [
@@ -152,6 +164,11 @@
     "sas_service_attempts",
     "sas_service_attempt_events",
     "sas_service_capability_matrix",
-    "sas_service_dispatch_leases"
+    "sas_service_dispatch_leases",
+    "sas_crypto_quote_locks",
+    "sas_crypto_trade_orders",
+    "sas_crypto_trade_events",
+    "sas_crypto_chain_deposits",
+    "sas_crypto_signer_outbox"
   ]
 }
