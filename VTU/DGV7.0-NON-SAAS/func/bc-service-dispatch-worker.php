@@ -18,7 +18,7 @@ if (!function_exists('bc_sdl_run_reaper')) {
             return ['ok' => false, 'code' => 'invalid', 'reaped' => 0];
         }
         $rows = bc_sdl_sql(
-            "SELECT request_id, lease_token FROM sas_service_dispatch_leases WHERE vendor_id=? AND lease_state='active' AND expires_at <= NOW() ORDER BY id ASC LIMIT $limit",
+            "SELECT request_id, lease_token FROM sas_service_dispatch_leases WHERE vendor_id=? AND lease_state='active' AND expires_at <= NOW() ORDER BY request_id ASC LIMIT $limit",
             [$vendor_id]
         );
         $results = [];

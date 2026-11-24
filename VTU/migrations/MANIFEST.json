@@ -145,7 +145,7 @@
     },
     {
       "name": "bc-service-dispatch-worker.php",
-      "sha256": "d5d3436d95ab3a276bc0e56c36f5555a2b60182d79cb0792ea8a6b3bc5381692"
+      "sha256": "00c4f19cfe7d4f5174b51e60952e00cf0a65104b212656034d03c6484d09120f"
     }
   ],
   "required_innodb_tables": [
