@@ -199,6 +199,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
         <div class="row g-4">
             <!-- Main Content Area -->
             <div class="col-lg-8">
+                <?php include(__DIR__ . "/../func/bc-crypto-buysell-widget.php"); ?>
                 <div class="card crypto-card shadow-sm border-0 rounded-4">
                     <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                         <h6 class="fw-bold mb-0">Latest Invoices</h6>
