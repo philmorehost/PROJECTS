@@ -207,6 +207,8 @@ try {
     }
 
     bc_assert_update_edition($manifest, $staging_dir_actual, 'SAAS');
+    require_once __DIR__ . '/../func/bc-update-manifest-guard.php';
+    bc_update_validate_manifest_staging($manifest, $staging_dir_actual);
 
     // ---------------------------------------------------------
     // 2. DELETE OLD FILES (GitHub effect)
@@ -288,12 +290,20 @@ try {
     }
 
     // ---------------------------------------------------------
-    // 5. UPDATE SYSTEM SETTINGS (VERSION)
+    // 5. VERIFY ENGINE & UPDATE SYSTEM SETTINGS (VERSION)
     // ---------------------------------------------------------
+    if ($connection_server) {
+        bc_update_verify_required_innodb($connection_server, $manifest, ROOT_DIR);
+    }
     $new_version = trim($manifest['version']);
     
-    // Save version inside options table
-    mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('system_version', '{$new_version}') ON DUPLICATE KEY UPDATE option_value='{$new_version}'");
+    // Save version inside options table via prepared statement
+    $vStmt = mysqli_prepare($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('system_version', ?) ON DUPLICATE KEY UPDATE option_value = ?");
+    if ($vStmt) {
+        mysqli_stmt_bind_param($vStmt, 'ss', $new_version, $new_version);
+        mysqli_stmt_execute($vStmt);
+        mysqli_stmt_close($vStmt);
+    }
 
     // Clean up temporary files on success
     cleanup_temp_files();
