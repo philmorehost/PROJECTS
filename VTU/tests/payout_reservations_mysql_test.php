@@ -56,9 +56,9 @@ try {
     }
     $db->query($ddl[0]);
 
-    $mig = file_get_contents(__DIR__ . '/../migrations/20261118_payout_reservations.sql');
+    $mig = preg_replace('/^\s*--.*$/m', '', file_get_contents(__DIR__ . '/../migrations/20261118_payout_reservations.sql'));
     foreach (array_filter(array_map('trim', explode(';', $mig))) as $stmt) {
-        if ($stmt !== '' && strpos($stmt, '--') !== 0) $db->query($stmt);
+        if ($stmt !== '') $db->query($stmt);
     }
 
     // 1. Atomic reservation -> state='held', replay, conflict, insufficient balance, blocked user
