@@ -12,6 +12,9 @@ $pdo=DB::connection();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
 foreach (['one_time_codes','attempt_items','attempts','access_tokens','mail_queue','audit_events','rate_limits','questions','users','settings'] as $table) $pdo->exec('DELETE FROM '.$table);
 $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+// Same upgrade path as a normal request: an existing installation is brought to
+// the current schema before anything reads the new tables.
+Migrator::run();
 $pass=0;$fail=0;
 function test(string $name,callable $fn): void {
     global $pass,$fail;
