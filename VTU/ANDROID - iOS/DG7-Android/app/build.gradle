@@ -19,8 +19,8 @@ android {
         targetSdk 36
         // Version codes are permanent once uploaded to Play; always increment before a new release.
         // Keep this above every code already uploaded.
-        versionCode 15
-        versionName "1.0.14"
+        versionCode 16
+        versionName "1.0.15"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 

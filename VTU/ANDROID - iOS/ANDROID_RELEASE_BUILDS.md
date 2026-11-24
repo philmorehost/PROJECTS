@@ -32,9 +32,9 @@ in `app/build.gradle`. Highest codes already consumed and the current builds:
 
 | App | Current build | Next code to use |
 | --- | --- | --- |
-| DG7 | `1.0.14` / `versionCode 15` | 16 |
-| JIKABIZ | `1.0.14` / `versionCode 15` | 16 |
-| MZEEVTU | `1.0.20` / `versionCode 21` | 22 |
+| DG7 | `1.0.15` / `versionCode 16` | 17 |
+| JIKABIZ | `1.0.15` / `versionCode 16` | 17 |
+| MZEEVTU | `1.0.21` / `versionCode 22` | 23 |
 
 ## Self-updating (weekly Play in-app updates)
 
