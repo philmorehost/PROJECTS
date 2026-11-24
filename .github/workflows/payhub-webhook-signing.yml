@@ -14,6 +14,7 @@ on:
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
+      - 'PAYHUB/install/20261118_webhook_reviews.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -38,6 +39,7 @@ on:
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
+      - 'PAYHUB/install/20261118_webhook_reviews.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -71,6 +73,8 @@ jobs:
           php -l PAYHUB/includes/webhook-outbox.php
           php -l PAYHUB/includes/webhook-recovery.php
           php -l PAYHUB/includes/webhook-money.php
+          php -l PAYHUB/includes/webhook-review.php
+          php -l PAYHUB/bin/review-webhook-outbox.php
           php -l PAYHUB/includes/webhook-alert.php
           php -l PAYHUB/bin/check-webhook-outbox.php
           php -l PAYHUB/tests/webhook_alert_policy_test.php
@@ -90,6 +94,8 @@ jobs:
           php -l PAYHUB/api-reference.php
       - name: Exact-mode signing regression matrix (no network)
         run: php PAYHUB/tests/webhook_signing_test.php
+      - name: Review input policy (no database or network)
+        run: php PAYHUB/tests/webhook_review_policy_test.php
       - name: Bounded alert severity policy (no database or network)
         run: php PAYHUB/tests/webhook_alert_policy_test.php
       - name: Reviewed fulfilment producer inventory (source only)

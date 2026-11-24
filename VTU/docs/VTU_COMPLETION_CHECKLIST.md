@@ -66,3 +66,7 @@ A bounded operator CLI `PAYHUB/bin/monitor-webhook-outbox.php` now reports page-
 ### Monitoring-agent contract follow-up
 
 `PAYHUB/bin/check-webhook-outbox.php` now provides JSON plus explicit monitoring exit statuses and a bounded multi-page traversal. Page caps/unavailable observations return UNKNOWN, never green. `PAYHUB/OUTBOX_MONITORING.md` defines restricted agent integration and investigation without replay. Source-level local alert integration is implemented; installing/routing an approved alert sink, validating actual notifications, establishing capacity/SLA thresholds and monitoring stale jobs remain operator acceptance. This does not complete provider acceptance or uncertain-event reconciliation.
+
+### Investigation-journal follow-up
+
+The operator-only webhook review journal now records opaque retained-evidence references/digests and non-settlement findings against an inspected observation digest, with stale-state refusal and exact-request idempotency. It never resets claims or authorizes sending/accounting. This is the first audit-recording layer, **not completed financial reconciliation**: independently authenticated/multi-party case handling, authoritative evidence verification, secure external retention and separately reviewed accounting corrections remain. See `PAYHUB/WEBHOOK_RECONCILIATION.md`. No live schema/recording enablement was performed.

@@ -294,6 +294,28 @@ try {
     $workers=[];for($i=0;$i<6;$i++){$proc=proc_open([PHP_BINARY,__FILE__,'worker',$name,'90','sandbox'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($proc))throw new RuntimeException('sandbox worker failed');fclose($pipes[0]);$workers[]=[$proc,$pipes];}
     $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean sandbox worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','competing sandbox refused');}
     retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM sandbox_fixture_claims')->fetchColumn()===1,'one sandbox claim under independent process concurrency without webhook dependence');retrycheck($db->query('SELECT checkout_token FROM transactions WHERE id=90')->fetchColumn()===null,'sandbox consumes token atomically');retrycheck(!sandboxfixtureclaim($db,90),'consumed sandbox token cannot replay');
+    require_once __DIR__.'/../includes/webhook-review.php';
+    retrymigration($db,__DIR__.'/../install/20261118_webhook_reviews.sql');retrymigration($db,__DIR__.'/../install/20261118_webhook_reviews.sql');
+    $makeRecovery(95);$reviewSnapshot=payhub_inspect_webhook_review($db,95);
+    retrycheck($reviewSnapshot['claim_state']==='absent' && $reviewSnapshot['log_count']===0 && !$db->inTransaction(),'review inspection rolls back locks');
+    $review=['request_id'=>'review-fixture-0001','actor_ref'=>'operator-fixture','evidence_ref'=>'case-fixture-0001','evidence_sha256'=>hash('sha256','retained external fixture evidence'),'observation_sha256'=>$reviewSnapshot['observation_sha256'],'finding'=>'receipt_not_confirmed'];
+    retrycheck(payhub_record_webhook_review($db,95,$review)==='recorded','review appends exact observation');
+    retrycheck(payhub_record_webhook_review($db,95,$review)==='already_recorded','identical review retry idempotent');
+    $conflict=$review;$conflict['finding']='escalated';retryreject(fn()=>payhub_record_webhook_review($db,95,$conflict),'review request conflict');
+    retrycheck(payhub_recover_outbox($db,95,false)==='ready_dry_run','review never changes eligibility');
+    $reviewOriginalEndpoint=$db->query('SELECT webhook_url FROM users WHERE id=1')->fetchColumn();
+    $driftReview=$review;$driftReview['request_id']='review-fixture-drift';$db->exec("UPDATE users SET webhook_url='https://changed.example.test/webhook' WHERE id=1");retryreject(fn()=>payhub_record_webhook_review($db,95,$driftReview),'endpoint drift invalidates review');$restoreEndpoint=$db->prepare('UPDATE users SET webhook_url=? WHERE id=1');$restoreEndpoint->execute([$reviewOriginalEndpoint]);
+    $db->exec("UPDATE users SET secret_key='rotated-fixture' WHERE id=1");retryreject(fn()=>payhub_record_webhook_review($db,95,$driftReview),'signing key drift invalidates review');$db->exec("UPDATE users SET secret_key='live-fixture' WHERE id=1");
+
+    $stale=$review;$stale['request_id']='review-fixture-0002';$db->exec("UPDATE transactions SET status='pending' WHERE id=95");retryreject(fn()=>payhub_record_webhook_review($db,95,$stale),'changed payment observation rejected');$db->exec("UPDATE transactions SET status='success' WHERE id=95");
+    putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED=1');payhub_recover_outbox($db,95,true,static fn()=>[0,false]);putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED');retryreject(fn()=>payhub_record_webhook_review($db,95,$stale),'new claim/log evidence invalidates inspected token');
+    $stale['observation_sha256']=payhub_inspect_webhook_review($db,95)['observation_sha256'];$stale['finding']='recipient_reports_received';
+    $claimsBeforeReview=$db->query('SELECT * FROM webhook_retry_claims WHERE transaction_id=95')->fetch(PDO::FETCH_ASSOC);$logsBeforeReview=$db->query('SELECT * FROM webhook_logs WHERE transaction_id=95')->fetchAll(PDO::FETCH_ASSOC);
+    retrycheck(payhub_record_webhook_review($db,95,$stale)==='recorded','records recipient report without settlement authority');
+    retrycheck(payhub_recover_outbox($db,95,false)==='already_claimed','recipient report cannot release permanent claim');
+    retrycheck($claimsBeforeReview===$db->query('SELECT * FROM webhook_retry_claims WHERE transaction_id=95')->fetch(PDO::FETCH_ASSOC) && $logsBeforeReview===$db->query('SELECT * FROM webhook_logs WHERE transaction_id=95')->fetchAll(PDO::FETCH_ASSOC),'review preserves delivery evidence byte for byte');
+    $fault=$stale;$fault['request_id']='review-fixture-fault';$db->exec("CREATE TRIGGER fail_review BEFORE INSERT ON webhook_review_journal FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture review failure'");retryreject(fn()=>payhub_record_webhook_review($db,95,$fault),'review insert failure propagates');$db->exec('DROP TRIGGER fail_review');retrycheck(!$db->inTransaction() && (int)$db->query('SELECT COUNT(*) FROM webhook_review_journal')->fetchColumn()===2,'failed review rolls back without phantom record');
+    $db->beginTransaction();retryreject(fn()=>payhub_inspect_webhook_review($db,95),'review refuses caller transaction');$db->rollBack();retryreject(fn()=>payhub_inspect_webhook_review($db,94),'review refuses missing transaction');
     require_once __DIR__.'/../includes/webhook-monitor.php';
     $db->exec('CREATE TEMPORARY TABLE webhook_outbox(transaction_id INT PRIMARY KEY,created_at TIMESTAMP)');
     $db->exec('CREATE TEMPORARY TABLE webhook_retry_claims(transaction_id INT PRIMARY KEY,state VARCHAR(30))');
