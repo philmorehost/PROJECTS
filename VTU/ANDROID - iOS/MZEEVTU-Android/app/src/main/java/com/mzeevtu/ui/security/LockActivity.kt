@@ -61,6 +61,9 @@ class LockActivity : AppCompatActivity() {
                         setLoading(false)
                         Snackbar.make(binding.root, "Your app session expired. Please sign in again.", Snackbar.LENGTH_INDEFINITE)
                             .setAction("Sign in") {
+                                prefs.saveString(Constants.KEY_API_KEY, "")
+                                prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, false)
+                                prefs.saveLong(Constants.KEY_SECURITY_VERIFIED_AT, 0L)
                                 startActivity(Intent(this@LockActivity, com.mzeevtu.ui.auth.LoginActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                                 })

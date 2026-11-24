@@ -15,4 +15,8 @@ foreach(['SAAS','NON-SAAS'] as $ed){$base=__DIR__.'/../DGV7.0-'.$ed.'/';
  qs(strpos(file_get_contents($base.'func/bc-stepup.php'),"\$context==='security_question_policy'")!==false,'policy changes always require second factor');
  $web=file_get_contents($base.'web/SecurityQuest.php');qs(substr_count($web,'bc_csrf_field()')===substr_count($web,'<form '),'CSRF all question forms');
 }
+foreach(['DG7-Android/app/src/main/java/com/datagifting/app','JIKABIZ-Android/app/src/main/java/com/jikabiz/app','MZEEVTU-Android/app/src/main/java/com/mzeevtu'] as $package){
+ $app=file_get_contents(__DIR__.'/../ANDROID - iOS/'.$package.'/ui/security/LockActivity.kt');
+ foreach(['if (body["enabled"] == false)','resp.errorBody()?.string()','resp.code() == 401','KEY_IS_LOGGED_IN, false','KEY_SECURITY_VERIFIED_AT, 0L','questBank.isEmpty()'] as $needle)qs(strpos($app,$needle)!==false,'Android safe recovery '.$needle);
+}
 echo "$n security question policy/recovery checks passed\n";
