@@ -9,6 +9,7 @@ on:
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_outbox.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -25,6 +26,7 @@ on:
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
+      - 'PAYHUB/install/20261118_webhook_outbox.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -52,6 +54,7 @@ jobs:
           php -l PAYHUB/includes/webhook-signing.php
           php -l PAYHUB/includes/webhook-retry.php
           php -l PAYHUB/includes/webhook-initial.php
+          php -l PAYHUB/includes/webhook-outbox.php
           php -l PAYHUB/tests/webhook_retry_mysql_test.php
           php -l PAYHUB/webhook-paystack.php
           php -l PAYHUB/verify.php
