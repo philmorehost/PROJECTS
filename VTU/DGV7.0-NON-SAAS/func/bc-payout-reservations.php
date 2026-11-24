@@ -218,7 +218,11 @@ if (!function_exists('bc_payout_apply_refund')) {
 
         $debit_key = hash('sha256', json_encode([$vendor_id, $actor, 'debit', 'reference:' . $reference], JSON_THROW_ON_ERROR));
         $debit_ev = bc_payout_sql('SELECT amount FROM sas_wallet_mutation_events WHERE event_key=? LIMIT 1 FOR UPDATE', [$debit_key])[0] ?? null;
-        $debit_parsed = $debit_ev ? bc_payout_money_parse((string)$debit_ev['amount'], false) : null;
+        $debit_raw = $debit_ev ? (string)$debit_ev['amount'] : '';
+        if ($debit_raw !== '' && strpos($debit_raw, '.') !== false) {
+            $debit_raw = rtrim(rtrim($debit_raw, '0'), '.');
+        }
+        $debit_parsed = $debit_raw !== '' ? bc_payout_money_parse($debit_raw, false) : null;
         $total_parsed = bc_payout_money_parse($total_str, false);
         if (!$debit_parsed || !$total_parsed || !hash_equals($debit_parsed['decimal'], $total_parsed['decimal'])) {
             throw new RuntimeException('refund_has_no_matching_debit');
