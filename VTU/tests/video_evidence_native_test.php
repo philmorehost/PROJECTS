@@ -16,9 +16,9 @@ if(($argv[1]??'')==='missing'){
   $ok=bc_live_media_prepare($dir.'/'.$file,'liveliness_video');
   if(!$ok){
    $mime=(new finfo(FILEINFO_MIME_TYPE))->file($dir.'/'.$file);
-   $p=proc_open(['/usr/bin/ffprobe','-v','error','-show_entries','format=duration,format_name:stream=codec_type,codec_name,width,height,duration','-of','json',$dir.'/'.$file],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
-   fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);proc_close($p);
-   echo '::error::Synthetic fixture diagnostic '.json_encode([$file,$mime,$out,$err])."\n";
+   $p=proc_open(bc_video_evidence_command('/usr/bin/ffprobe',$mime,$dir.'/'.$file),[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
+   fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$exit=proc_close($p);
+   echo '::error::Synthetic fixture diagnostic '.json_encode([$file,$mime,$exit,strlen($out),bc_video_evidence_metadata_valid(json_decode($out,true)),json_decode($out,true)['format']??null,$err])."\n";
   }
   vn($ok,'valid AV accepted '.$file);
  }

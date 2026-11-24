@@ -52,7 +52,7 @@ function bc_video_evidence_inspect($tmp,$mime) {
     $process=null;$pipes=[];$output='';$errors='';$finished=false;$exit=-1;
     try {
         // Force only an expected container demuxer; disallow network protocols and playlist formats.
-        $args=[$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska','-show_packets','-show_entries','packet=pts_time,duration_time:format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic','-of','json',$path];
+        $args=bc_video_evidence_command($binary,$mime,$path);
         $process=@proc_open($args,[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes,null,null,['bypass_shell'=>true]);
         if(!is_resource($process))return false;
         fclose($pipes[0]);
@@ -79,4 +79,8 @@ function bc_video_evidence_inspect($tmp,$mime) {
             @proc_close($process);
         }
     }
+}
+
+function bc_video_evidence_command($binary,$mime,$path) {
+    return [$binary,'-v','error','-protocol_whitelist','file','-max_alloc','16777216','-probesize','3145728','-analyzeduration','3000000','-f',$mime==='video/mp4'?'mov':'matroska','-show_packets','-show_entries','packet=pts_time,duration_time:format=duration,format_name:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic','-of','json',$path];
 }
