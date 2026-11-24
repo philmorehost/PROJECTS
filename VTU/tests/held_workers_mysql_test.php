@@ -63,7 +63,7 @@ try {
 
     // 2. Service dispatch worker + crash reaper
     $db->query("CREATE TABLE sas_service_requests(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, vendor_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NOT NULL, reference VARCHAR(64) NOT NULL, type VARCHAR(64) NOT NULL, provider VARCHAR(96) NOT NULL, payload LONGTEXT NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'pending') ENGINE=InnoDB");
-    $db->query("INSERT INTO sas_service_capability_matrix(vendor_id, service_type, provider, currency, is_authorized, idempotency_verified, status_query_verified) VALUES(1, 'intl_transfer', 'klasha', 'USD', 1, 1, 1)");
+    $db->query("INSERT INTO sas_service_capability_matrix(vendor_id, service_type, provider, currency, is_authorized, idempotency_verified, status_query_verified, evidence_digest) VALUES(1, 'intl_transfer', 'klasha', 'USD', 1, 1, 1, '" . str_repeat('e', 64) . "')");
     $db->query("INSERT INTO sas_service_requests(id, vendor_id, user_id, type, provider, reference, status, payload) VALUES(501, 1, 7, 'intl_transfer', 'klasha', 'SVC-501', 'pending', '{\"currency\":\"USD\"}'), (502, 1, 7, 'intl_transfer', 'klasha', 'SVC-502', 'pending', '{\"currency\":\"USD\"}')");
     bc_saj_hold(1, 501);
     bc_saj_hold(1, 502);
