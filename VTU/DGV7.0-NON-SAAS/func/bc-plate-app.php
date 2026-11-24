@@ -507,9 +507,10 @@ if (!function_exists('bc_app_css')) {
             border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
             cursor: pointer; font-size: 1.05rem;
         }
-        .pk-app__title { font-size: 1.04rem; font-weight: 800; letter-spacing: -.01em; }
-        .pk-app__crumb { color: var(--muted); font-size: .82rem; }
-        .pk-app__actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .pk-app__top > div:not(.pk-app__actions) { min-width: 0; flex: 1 1 auto; }
+        .pk-app__title { font-size: 1.04rem; font-weight: 800; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-app__crumb { color: var(--muted); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-app__actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .pk-app__iconbtn {
             position: relative; display: inline-flex; align-items: center; gap: 7px; height: 38px;
             padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff;
@@ -525,13 +526,13 @@ if (!function_exists('bc_app_css')) {
         }
         .pk-app__profile { position: relative; }
         .pk-app__menu {
-            position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px; padding: 8px;
+            position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px; max-width: calc(100vw - 24px); padding: 8px;
             background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
             display: none; z-index: 70;
         }
         .pk-app__menu.is-open { display: block; }
         .pk-app__menuhead { padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-        .pk-app__menuhead strong { display: block; font-size: .9rem; }
+        .pk-app__menuhead strong { display: block; font-size: .9rem; overflow-wrap: anywhere; }
         .pk-app__menuhead span { display: block; font-size: .76rem; color: var(--muted); }
         .pk-app__mlink {
             display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px;
@@ -553,6 +554,14 @@ if (!function_exists('bc_app_css')) {
         }
         .pk-app__foot a { color: var(--muted); margin-left: 10px; }
         @media (max-width: 640px) { .pk-app__hide-sm { display: none; } }
+        @media (max-width: 767.98px) {
+            .pk-app__profile .pk-app__hide-sm { display: none; }
+            .pk-app__profile .pk-app__iconbtn {
+                width: 38px; height: 38px; padding: 0; gap: 0;
+                justify-content: center; border-radius: 999px;
+            }
+            .pk-app__profile .pk-app__avatar { width: 32px; height: 32px; font-size: .82rem; }
+        }
         .pk-app__scrim {
             position: fixed; inset: 0; z-index: 55; background: rgba(11, 18, 32, .42);
             opacity: 0; pointer-events: none; transition: opacity .2s ease;
@@ -1358,10 +1367,10 @@ if (!function_exists('bc_app_topbar')) {
             </div>
         <?php endif; ?>
         <div class="pk-app__profile">
-            <button class="pk-app__iconbtn" type="button" id="pkAppProfile" aria-expanded="false" aria-haspopup="true">
+            <button class="pk-app__iconbtn" type="button" id="pkAppProfile" aria-expanded="false" aria-haspopup="true" aria-label="<?php echo htmlspecialchars($username . ' profile menu', ENT_QUOTES, 'UTF-8'); ?>" title="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>">
                 <span class="pk-app__avatar"><?php echo htmlspecialchars(strtoupper(substr($username, 0, 1))); ?></span>
                 <span class="pk-app__hide-sm"><?php echo htmlspecialchars($username); ?></span>
-                <i class="bi bi-chevron-down" style="font-size:.7rem;color:var(--muted);" aria-hidden="true"></i>
+                <i class="bi bi-chevron-down pk-app__hide-sm" style="font-size:.7rem;color:var(--muted);" aria-hidden="true"></i>
             </button>
             <div class="pk-app__menu" id="pkAppProfileMenu" role="menu">
                 <div class="pk-app__menuhead"><strong><?php echo htmlspecialchars($username); ?></strong><span>Signed in</span></div>
