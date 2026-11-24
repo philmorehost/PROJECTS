@@ -310,5 +310,12 @@ try {
     foreach([[-1,10,900],[0,201,900],[0,0,900],[0,10,59],[0,10,604801]] as $args)retryreject(fn()=>payhub_outbox_monitor($db,...$args),'monitor rejects invalid bounds');
     $db->beginTransaction();retryreject(fn()=>payhub_outbox_monitor($db),'monitor refuses caller transaction');$db->rollBack();
     retrycheck($beforeMonitor===$db->query('SELECT * FROM webhook_retry_claims ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC),'monitor never alters claim evidence');
+    require_once __DIR__.'/../includes/webhook-alert.php';
+    $alert=payhub_outbox_alert($db,3,2,900);retrycheck($alert['complete'] && $alert['scanned']===6 && $alert['pages']===3 && $alert['exit_code']===2,'native alert full scan critical with uncertainty');
+    retrycheck($alert['counts']===['unattempted'=>1,'existing_evidence'=>1,'claimed_attempting'=>1,'claimed_unknown'=>1,'claimed_succeeded'=>1,'requires_review'=>1],'native alert aggregates all categories once');
+    $capped=payhub_outbox_alert($db,1,2,900);retrycheck(!$capped['complete'] && $capped['exit_code']===3 && $capped['scanned']===2,'native alert cap remains unknown');
+    retrycheck($beforeMonitor===$db->query('SELECT * FROM webhook_retry_claims ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC),'alert does not change evidence');
+    $db->exec('DELETE FROM webhook_outbox');$emptyAlert=payhub_outbox_alert($db);retrycheck($emptyAlert['complete'] && $emptyAlert['exit_code']===0 && $emptyAlert['scanned']===0,'native empty alert no signal observed');
+    foreach([['--max-pages=0'],['--page-size=201'],['--age-seconds=59'],['--send']] as $args){$proc=proc_open(array_merge([PHP_BINARY,__DIR__.'/../bin/check-webhook-outbox.php'],$args),[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($proc))throw new RuntimeException('alert CLI failed');fclose($pipes[0]);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===3 && $out==='' && strpos($err,'Invalid')!==false,'invalid alert CLI refuses before config/database');}
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}
