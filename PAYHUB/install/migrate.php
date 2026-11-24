@@ -295,6 +295,11 @@ function run_migrations() {
                 }
             } catch (Exception $eTab) { }
         }
+        require_once __DIR__ . '/schema-autoheal.php';
+        $phMig = payhub_install_apply_migrations($db, __DIR__);
+        if (empty($phMig['ok'])) {
+            echo "PayHub 20261118 migration warning: " . htmlspecialchars((string)($phMig['error'] ?? $phMig['code'])) . "<br>";
+        }
         echo "Migrations completed successfully.<br>";
 
     } catch (Exception $e) {

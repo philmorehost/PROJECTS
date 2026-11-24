@@ -361,6 +361,12 @@ if ($stage === 2 && $_SERVER['REQUEST_METHOD'] === 'POST') {
         ";
         $pdo->exec($sql);
 
+        require_once __DIR__ . '/schema-autoheal.php';
+        $phMig = payhub_install_apply_migrations($pdo, __DIR__);
+        if (empty($phMig['ok'])) {
+            throw new PDOException('PayHub schema migration failed: ' . ($phMig['error'] ?? ($phMig['code'] ?? 'unknown')));
+        }
+
         // Save Config File
         $config_content = "<?php\n";
         $config_content .= "define('DB_HOST', '$host');\n";

@@ -31,6 +31,7 @@ try {
     // Seed prerequisite legacy tables created earlier in bc-tables.php
     $db->query("CREATE TABLE sas_users (id INT AUTO_INCREMENT PRIMARY KEY, vendor_id INT NOT NULL, username VARCHAR(120) NOT NULL, balance DECIMAL(30,8) NOT NULL DEFAULT 0, is_blocked TINYINT(1) NOT NULL DEFAULT 0) ENGINE=InnoDB");
     $db->query("CREATE TABLE sas_site_details (vendor_id INT UNSIGNED PRIMARY KEY) ENGINE=InnoDB");
+    $db->query("CREATE TABLE sas_service_control (vendor_id INT UNSIGNED NOT NULL, service_name VARCHAR(64) NOT NULL, status INT DEFAULT 1) ENGINE=InnoDB");
     $db->query("CREATE TABLE sas_service_requests (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, vendor_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NOT NULL, type VARCHAR(32) NOT NULL, provider VARCHAR(64) NOT NULL, payload LONGTEXT) ENGINE=InnoDB");
 
     // 1. Refuses inside an open transaction (autocommit=0)
@@ -40,17 +41,21 @@ try {
     $db->rollback();
     $db->autocommit(true);
 
-    // 2. First run applies all VTU/migrations/*.sql idempotently
-    $r1 = bc_schema_autoheal($db);
+    // 2. First run via standalone edition migrations/ directory applies all SQL + fintech schema
+    $standaloneDir = __DIR__ . '/../DGV7.0-' . $edition . '/migrations';
+    $r1 = bc_schema_autoheal($db, $standaloneDir);
     sah_db_ok($r1['ok'] === true && $r1['code'] === 'healed' && count($r1['applied']) >= 10 && count($r1['skipped']) === 0, 'first autoheal run applies all migrations');
 
     // 3. Second run skips all applied migrations without re-running DDL
-    $r2 = bc_schema_autoheal($db);
+    $r2 = bc_schema_autoheal($db, $standaloneDir);
     sah_db_ok($r2['ok'] === true && count($r2['applied']) === 0 && count($r2['skipped']) === count($r1['applied']), 'second autoheal run skips all applied migrations');
 
-    // 4. Verify key tables exist with ENGINE=InnoDB
+    // 4. Verify key tables exist with ENGINE=InnoDB (including fintech schema tables)
     foreach ([
         'schema_migrations_applied',
+        'sas_app_tokens',
+        'sas_webhook_events',
+        'sas_fintech_ledger',
         'sas_payout_reservations',
         'sas_virtualcard_orders',
         'sas_giftcard_orders',
