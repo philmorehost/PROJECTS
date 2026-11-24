@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/webhook-retry.php';
+require_once __DIR__.'/webhook-outbox.php';
 
 /** Persist exact payload + exclusive reservation BEFORE protected initial delivery.
  * This is not an outbox worker: there is no automatic replay, including after process death.
@@ -7,8 +8,8 @@ require_once __DIR__.'/webhook-retry.php';
  */
 function payhub_claim_initial_webhook(PDO $db, array $expected, $body) {
     if ($db->inTransaction() || (int)$db->query('SELECT @@autocommit')->fetchColumn()!==1) throw new RuntimeException('Initial delivery requires committed accounting and autocommit.');
-    $engines=$db->query("SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('transactions','users','webhook_logs','webhook_retry_claims')")->fetchAll(PDO::FETCH_KEY_PAIR);
-    foreach(['transactions','users','webhook_logs','webhook_retry_claims'] as $table)if(strtolower((string)($engines[$table]??''))!=='innodb')throw new RuntimeException('Initial delivery schema unavailable.');
+    $engines=$db->query("SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('transactions','users','webhook_logs','webhook_retry_claims','webhook_outbox')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    foreach(['transactions','users','webhook_logs','webhook_retry_claims','webhook_outbox'] as $table)if(strtolower((string)($engines[$table]??''))!=='innodb')throw new RuntimeException('Initial delivery schema unavailable.');
     if (!is_string($body) || empty($expected['id'])) throw new RuntimeException('Invalid initial delivery.');
     $db->beginTransaction();
     try {
@@ -23,6 +24,7 @@ function payhub_claim_initial_webhook(PDO $db, array $expected, $body) {
         if($signature==='')throw new RuntimeException('Initial signing refused.');
         $url=(string)$row['webhook_url'];$parts=parse_url($url);
         if(!$parts || strtolower($parts['scheme']??'')!=='https' || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment']))throw new RuntimeException('Initial delivery requires canonical HTTPS.');
+        payhub_check_queued_webhook($db,$row,$body);
         $existing=$db->prepare('SELECT id FROM webhook_logs WHERE transaction_id=? LIMIT 1');$existing->execute([(int)$row['id']]);
         if($existing->fetchColumn()!==false)throw new RuntimeException('Existing delivery evidence requires reconciliation, not an automatic initial replay.');
         $log=$db->prepare("INSERT INTO webhook_logs(transaction_id,status,attempt_count,last_attempt_at,payload,response) VALUES(?,'failed',1,CURRENT_TIMESTAMP,?,'Initial delivery reserved; outcome unknown.')");
@@ -50,4 +52,23 @@ function payhub_forwarded_payload_matches($row, $payload) {
             || $data[$field]!==to_minor_units($row[$column])) return false;
     }
     return true;
+}
+
+/** Verify-page keeps its legacy requested-naira amount and requested-kobo alias.
+ * Normalize only a private validation copy; never rewrite the emitted/stored body.
+ */
+function payhub_verify_payload_matches($row, $payload) {
+    if (!is_array($row) || !is_array($payload) || !is_array($payload['data']??null)) return false;
+    $data=$payload['data'];$legacy=$data['amount']??null;
+    if ((!is_int($legacy) && !is_float($legacy) && !is_string($legacy)) || !is_numeric($legacy)
+        || !isset($row['amount']) || !is_numeric($row['amount'])
+        || to_minor_units($legacy)!==to_minor_units($row['amount'])
+        || ($data['amount_kobo']??null)!==to_minor_units($row['amount'])
+        || ($data['amount_unit']??null)!=='major' || ($data['amount_basis']??null)!=='requested'
+        || ($data['money_contract_version']??null)!==1) return false;
+    $normalized=$payload;
+    $normalized['data']['amount']=$data['gateway_amount']??null;
+    // This legacy payload does not publish receiving-account evidence. Do not add it to the body.
+    $normalized['data']['receiving_account_number']=$row['receiving_account_number']??null;
+    return payhub_forwarded_payload_matches($row,$normalized);
 }

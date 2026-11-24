@@ -89,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         log_transaction_event($t_id, 'reconciled', "Payment manually reconciled via self-service.");
                         log_ledger_entry($user['id'], $settled, 'credit', 'payment', "Reconciled Payment: $ref", $is_test);
 
+                        payhub_enqueue_generic_outbox($db,(int)$t_id,'merchant_reconcile');
                         $db->commit();
                         trigger_merchant_webhook($t_id);
                         $reconciled_count++;

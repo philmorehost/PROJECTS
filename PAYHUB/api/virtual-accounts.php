@@ -128,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             log_transaction_event($t_id, 'reconciled', "Payment reconciled via Virtual Account Query API.");
                             log_ledger_entry($merchant['id'], $settled, 'credit', 'payment', "Reconciled VA Payment: $ref", $is_test);
 
+                            payhub_enqueue_generic_outbox($db,(int)$t_id,'va_reconcile');
                             $db->commit();
                             trigger_merchant_webhook($t_id);
                             $item = [

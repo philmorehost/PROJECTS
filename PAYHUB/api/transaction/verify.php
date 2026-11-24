@@ -134,6 +134,7 @@ if ($tx['status'] !== 'success') {
                 log_ledger_entry($user['id'], $settled, 'credit', 'payment', "Real-time Verified Payment: $ref", $is_test);
                 log_transaction_event($tx['id'], 'verified', 'Payment verified and fulfilled via real-time API check');
 
+                payhub_enqueue_api_verify_outbox($db, (int)$tx['id']);
                 $db->commit();
                 trigger_merchant_webhook($tx['id']);
             }
@@ -143,8 +144,12 @@ if ($tx['status'] !== 'success') {
             $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
             $stmt->execute([$tx['id']]);
             $tx = $stmt->fetch();
-        } catch (Exception $e) {
-            $db->rollBack();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('[PayHub] API verification accounting/outbox unavailable; no success acknowledgment.');
+            http_response_code(503);
+            echo json_encode(['status'=>false,'paid'=>false,'code'=>'VERIFICATION_COMMIT_UNCONFIRMED','message'=>'Local verification could not be confirmed. Check payment status before retrying.']);
+            exit;
         }
     } elseif ($tx['status'] !== 'success') {
         // Dedicated Virtual Account transfers receive Paystack's transfer reference rather than

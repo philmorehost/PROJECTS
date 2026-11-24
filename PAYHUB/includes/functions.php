@@ -1824,6 +1824,7 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
                             record_gateway_amount($tId, $amount);
                             log_transaction_event($tId, 'reconciled', 'Payment reconciled via DVA verification check.');
                             log_ledger_entry($userId, $settled, 'credit', 'payment', "Reconciled VA Payment: $rtxRef", ($isTestInt === 1));
+                            payhub_enqueue_generic_outbox($db,(int)$tId,'dva_reconcile');
                             $db->commit();
                             trigger_merchant_webhook($tId);
                         } else {
@@ -1853,6 +1854,68 @@ function reconcile_dva_for_checkout($db, $userId, array $tx, $allowGatewayLookup
 /**
  * Triggers the merchant's webhook for a specific transaction.
  */
+/** Shared generic contract; preserves legacy payload values and requested fallback semantics. */
+function payhub_generic_webhook_payload(array $tx, $paid) {
+    $metaArr = normalize_metadata_array($tx['metadata'] ?? null);
+    $settledAmount = (isset($tx['settled_amount']) && is_numeric($tx['settled_amount'])) ? (float)$tx['settled_amount'] : null;
+    $feeAmount = (isset($tx['fee_amount']) && is_numeric($tx['fee_amount'])) ? (float)$tx['fee_amount'] : 0.0;
+    $grossPaid = $paid !== null ? $paid : (float)$tx['amount'];
+    $computedNet = $settledAmount !== null ? $settledAmount : max(0.0, $grossPaid - $feeAmount);
+
+    $payload = [
+        'event' => 'charge.success',
+        'data' => [
+            'id' => $tx['gateway_reference'] ?? $tx['id'],
+            'reference' => $tx['reference'],
+            'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+            'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
+            // Report what actually settled. `amount` is merchant-supplied
+            // and must never be trusted as evidence of payment.
+            // Additive contract: preserve the legacy amount value and declare its meaning.
+            'money_contract_version' => 1,
+            'amount_unit' => 'minor',
+            'amount_basis' => $paid !== null ? 'gateway' : 'requested',
+            'amount' => to_minor_units($grossPaid),
+            'requested_amount' => to_minor_units($tx['amount']),
+            'gateway_amount' => to_minor_units($grossPaid),
+            'fee_amount' => to_minor_units($feeAmount),
+            'settled_amount' => to_minor_units($computedNet),
+            'status' => 'success',
+            // Tell the merchant whether this was real money. Paystack's own
+            // webhooks carry this field; without it a sandbox payment is
+            // indistinguishable from a live one and a merchant script that
+            // credits on charge.success would fund a wallet for free.
+            'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
+            'currency' => $tx['currency'],
+            'customer' => ['email' => $tx['customer_email']],
+            'metadata' => $metaArr,
+            'channel' => $tx['payment_method'],
+            'paid_at' => $tx['created_at']
+        ]
+    ];
+
+    return $payload;
+}
+
+/** API verification: persist notification on the caller's accounting transaction. */
+function payhub_enqueue_generic_outbox(PDO $db, $transactionId, $producer) {
+    if(!in_array($producer,['api_verify','merchant_reconcile','api_reconcile','va_reconcile','dva_reconcile','expiry_cron','simulation'],true))throw new RuntimeException('Unknown generic outbox producer.');
+    if (!$db->inTransaction()) throw new RuntimeException('API outbox requires accounting transaction.');
+    $q=$db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=? FOR UPDATE');
+    $q->execute([(int)$transactionId]);$row=$q->fetch(PDO::FETCH_ASSOC);
+    if (!$row || $row['status']!=='success') throw new RuntimeException('API payment not fulfilled.');
+    if ($producer==='simulation' && !in_array($row['is_test'],[1,'1',true],true))throw new RuntimeException('Simulation outbox is test-only.');
+    if (empty($row['webhook_url'])) return;
+    $paid=trusted_paid_amount($row);
+    if ($paid===null || !amount_covers($row['amount'],$paid)) throw new RuntimeException('API outbox needs stored paid evidence.');
+    $body=json_encode(payhub_generic_webhook_payload($row,$paid),JSON_THROW_ON_ERROR);
+    payhub_enqueue_webhook_outbox($db,(int)$transactionId,$body,$producer);
+}
+
+function payhub_enqueue_api_verify_outbox(PDO $db, $transactionId) {
+    payhub_enqueue_generic_outbox($db,$transactionId,'api_verify');
+}
+
 function trigger_merchant_webhook($transactionId) {
     try {
         $db = Database::connect();
@@ -1872,43 +1935,7 @@ function trigger_merchant_webhook($transactionId) {
                 return;
             }
 
-            $metaArr = normalize_metadata_array($tx['metadata'] ?? null);
-            $settledAmount = (isset($tx['settled_amount']) && is_numeric($tx['settled_amount'])) ? (float)$tx['settled_amount'] : null;
-            $feeAmount = (isset($tx['fee_amount']) && is_numeric($tx['fee_amount'])) ? (float)$tx['fee_amount'] : 0.0;
-            $grossPaid = $paid !== null ? $paid : (float)$tx['amount'];
-            $computedNet = $settledAmount !== null ? $settledAmount : max(0.0, $grossPaid - $feeAmount);
-
-            $payload = [
-                'event' => 'charge.success',
-                'data' => [
-                    'id' => $tx['gateway_reference'] ?? $tx['id'],
-                    'reference' => $tx['reference'],
-                    'receiving_account_number' => $tx['receiving_account_number'] ?? null,
-                    'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
-                    // Report what actually settled. `amount` is merchant-supplied
-                    // and must never be trusted as evidence of payment.
-                    // Additive contract: preserve the legacy amount value and declare its meaning.
-                    'money_contract_version' => 1,
-                    'amount_unit' => 'minor',
-                    'amount_basis' => $paid !== null ? 'gateway' : 'requested',
-                    'amount' => to_minor_units($grossPaid),
-                    'requested_amount' => to_minor_units($tx['amount']),
-                    'gateway_amount' => to_minor_units($grossPaid),
-                    'fee_amount' => to_minor_units($feeAmount),
-                    'settled_amount' => to_minor_units($computedNet),
-                    'status' => 'success',
-                    // Tell the merchant whether this was real money. Paystack's own
-                    // webhooks carry this field; without it a sandbox payment is
-                    // indistinguishable from a live one and a merchant script that
-                    // credits on charge.success would fund a wallet for free.
-                    'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
-                    'currency' => $tx['currency'],
-                    'customer' => ['email' => $tx['customer_email']],
-                    'metadata' => $metaArr,
-                    'channel' => $tx['payment_method'],
-                    'paid_at' => $tx['created_at']
-                ]
-            ];
+            $payload = payhub_generic_webhook_payload($tx, $paid);
 
             $body = json_encode($payload);
             // SECURITY: sign the webhook body so the merchant can verify it genuinely

@@ -71,6 +71,7 @@ try {
     log_transaction_event($tx['id'], 'simulated', 'Sandbox payment marked successful from ' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown')
         . ' (UA: ' . substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 120) . ').');
 
+    payhub_enqueue_generic_outbox($db,(int)$tx['id'],'simulation');
     $db->commit();
 
     // Fire merchant webhook so their verify endpoint gets notified

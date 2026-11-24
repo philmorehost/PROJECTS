@@ -28,7 +28,9 @@ try {
     $db->exec('CREATE TABLE users(id INT PRIMARY KEY,webhook_url VARCHAR(255),secret_key VARCHAR(100),test_secret_key VARCHAR(100)) ENGINE=InnoDB');
     $db->exec("INSERT INTO users VALUES(1,'https://fixture.example.test/webhook','live-fixture','test-fixture')");
     $db->exec('CREATE TABLE transactions(id INT PRIMARY KEY,user_id INT,reference VARCHAR(100),status VARCHAR(20),is_test INT) ENGINE=InnoDB');
+    $db->exec('CREATE TABLE ledger(id INT AUTO_INCREMENT PRIMARY KEY,transaction_id INT,amount DECIMAL(15,2)) ENGINE=InnoDB');
     retrymigration($db,__DIR__.'/../install/20261118_webhook_log_compat.sql');
+    retrymigration($db,__DIR__.'/../install/20261118_webhook_outbox.sql');
     $ids=[];$siblings=[];
     for($id=1;$id<=20;$id++) {
         $db->exec("INSERT INTO transactions VALUES($id,1,'fixture-$id','success',0)");
@@ -134,5 +136,124 @@ try {
     retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$forwarded['delivery']['id'],true),'admin retry cannot duplicate forwarded claim');
     retrycheck(payhub_finish_webhook_retry($db,$forwarded,503,true)===false,'forwarding non-2xx remains uncertain');
     retrycheck($other->query('SELECT state FROM webhook_retry_claims WHERE transaction_id=24')->fetchColumn()==='unknown','forwarding uncertainty durable');
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(25,1,'verify-fixture','success',0)");
+    $snapshot=initialfixture($db,25);
+    $verify=['event'=>'charge.success','data'=>['reference'=>'verify-fixture','status'=>'success','domain'=>'live','currency'=>'NGN','amount'=>'100.00','amount_kobo'=>10000,'gateway_amount'=>10200,'requested_amount'=>10000,'fee_amount'=>200,'settled_amount'=>10000,'money_contract_version'=>1,'amount_unit'=>'major','amount_basis'=>'requested']];
+    $raw=json_encode($verify);
+    retrycheck(payhub_verify_payload_matches($snapshot,$verify),'legacy verify amount contract matches committed evidence');
+    retrycheck(json_encode($verify)===$raw,'validation does not change legacy payload');
+    foreach(['amount'=>102,'amount_kobo'=>10200,'gateway_amount'=>10000,'fee_amount'=>0,'settled_amount'=>9999,'requested_amount'=>10200,'amount_unit'=>'minor','currency'=>'USD','reference'=>'other'] as $field=>$value){$bad=$verify;$bad['data'][$field]=$value;retrycheck(!payhub_verify_payload_matches($snapshot,$bad),'verify evidence mismatch refused '.$field);}
+    $db->beginTransaction();retryreject(fn()=>payhub_claim_initial_webhook($db,$snapshot,$raw),'verify cannot send inside accounting transaction');$db->rollBack();
+    $verifyClaim=payhub_claim_initial_webhook($db,$snapshot,$raw);
+    retrycheck($other->query('SELECT payload FROM webhook_logs WHERE id='.(int)$verifyClaim['delivery']['id'])->fetchColumn()===$raw,'verify legacy body durably persisted unchanged');
+    retryreject(fn()=>payhub_claim_initial_webhook($other,$snapshot,initialbody($snapshot)),'other initial sender blocked by verify claim');
+    retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$verifyClaim['delivery']['id'],true),'admin blocked by verify claim');
+    retrycheck(payhub_finish_webhook_retry($db,$verifyClaim,200,true),'verify successful completion shares ownership rules');
+    $verifySource=file_get_contents(__DIR__.'/../verify.php');
+    $flag=strpos($verifySource,'$verifiedForDelivery = false;');$commit=strpos($verifySource,'$db->commit();',$flag);$ready=strpos($verifySource,'$verifiedForDelivery = true;',$flag);$dispatch=strpos($verifySource,'if ($verifiedForDelivery)',$flag);$claimAt=strpos($verifySource,'$verifyClaim = payhub_claim_initial_webhook(',$dispatch);$http=strpos($verifySource,'$ch = curl_init(',$dispatch);
+    retrycheck($flag!==false && $commit<$ready && $ready<$dispatch && $dispatch<$claimAt && $claimAt<$http,'actual verify source commits before gated claim and HTTP');
+    retrycheck(strpos(substr($verifySource,$dispatch,strpos($verifySource,'} else {',$http)-$dispatch),'$db->rollBack()')===false,'isolated dispatch does not roll back committed accounting');
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(26,1,'outbox-fixture','pending',0)");
+    $queued=$verify;$queued['data']['reference']='outbox-fixture';$queuedRaw=json_encode($queued);
+    retryreject(fn()=>payhub_enqueue_verify_outbox($db,26,$queuedRaw),'outbox must participate in accounting transaction');
+    $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=26");$db->exec('INSERT INTO ledger(transaction_id,amount) VALUES(26,100.00)');
+    payhub_enqueue_verify_outbox($db,26,$queuedRaw);
+    retrycheck($db->inTransaction(),'enqueue does not commit caller transaction');
+    retrycheck($other->query('SELECT status FROM transactions WHERE id=26')->fetchColumn()==='pending' && (int)$other->query('SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=26')->fetchColumn()===0,'neither accounting nor event visible before commit');
+    $db->rollBack();
+    retrycheck((int)$db->query('SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=26')->fetchColumn()===0 && $db->query('SELECT status FROM transactions WHERE id=26')->fetchColumn()==='pending','accounting and event roll back together');
+    $db->exec("CREATE TRIGGER fail_outbox BEFORE INSERT ON webhook_outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture insert fault'");
+    $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=26");$db->exec('INSERT INTO ledger(transaction_id,amount) VALUES(26,100.00)');
+    retryreject(fn()=>payhub_enqueue_verify_outbox($db,26,$queuedRaw),'event insert fault reported');$db->rollBack();$db->exec('DROP TRIGGER fail_outbox');
+    retrycheck($other->query('SELECT status FROM transactions WHERE id=26')->fetchColumn()==='pending','event failure leaves no committed accounting');
+    retrycheck((int)$other->query('SELECT COUNT(*) FROM ledger WHERE transaction_id=26')->fetchColumn()===0,'event failure also rolls back fixture ledger entry');
+    $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=26");$db->exec('INSERT INTO ledger(transaction_id,amount) VALUES(26,100.00)');payhub_enqueue_verify_outbox($db,26,$queuedRaw);$db->commit();
+    $event=$other->query('SELECT * FROM webhook_outbox WHERE transaction_id=26')->fetch(PDO::FETCH_ASSOC);
+    retrycheck($event['payload']===$queuedRaw && $other->query('SELECT status FROM transactions WHERE id=26')->fetchColumn()==='success','committed accounting carries exact queued body across dispatch gap');
+    retrycheck((int)$other->query('SELECT COUNT(*) FROM ledger WHERE transaction_id=26')->fetchColumn()===1,'one fixture ledger entry commits with event');
+    retrycheck((int)$other->query('SELECT COUNT(*) FROM webhook_retry_claims WHERE transaction_id=26')->fetchColumn()===0,'post-commit crash leaves unclaimed durable event');
+    $snapshot=initialfixture($db,26);$replacement=$queued;$replacement['data']['amount']='100';
+    retryreject(fn()=>payhub_claim_initial_webhook($db,$snapshot,json_encode($replacement)),'alternate same-value payload cannot replace exact queued bytes');
+    $db->exec("UPDATE users SET webhook_url='https://changed.example.test/hook' WHERE id=1");$changed=initialfixture($db,26);
+    retryreject(fn()=>payhub_claim_initial_webhook($db,$changed,$queuedRaw),'destination change fences queued event');
+    $db->exec("UPDATE users SET webhook_url='https://fixture.example.test/hook' WHERE id=1");
+    $reserved=payhub_claim_initial_webhook($db,initialfixture($db,26),$queuedRaw);
+    retrycheck(payhub_finish_webhook_retry($db,$reserved,200,true),'unchanged queued event uses existing exclusive delivery reservation');
+    retrycheck($other->query('SELECT payload FROM webhook_outbox WHERE transaction_id=26')->fetchColumn()===$queuedRaw,'completion never edits immutable queued evidence');
+    $db->beginTransaction();retryreject(fn()=>payhub_enqueue_verify_outbox($db,26,$queuedRaw),'duplicate immutable event refuses overwrite');$db->rollBack();
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(27,1,'outbox-no-key','success',0)");$noKey=$queued;$noKey['data']['reference']='outbox-no-key';$noKeyRaw=json_encode($noKey);
+    $db->exec("UPDATE users SET secret_key='' WHERE id=1");$db->beginTransaction();payhub_enqueue_verify_outbox($db,27,$noKeyRaw);$db->commit();
+    retrycheck((int)$db->query('SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=27')->fetchColumn()===1,'missing notifier key preserves event rather than dropping accounting');
+    retryreject(fn()=>payhub_claim_initial_webhook($db,initialfixture($db,27),$noKeyRaw),'missing key still blocks delivery');
+    $db->exec("UPDATE users SET secret_key='live-fixture' WHERE id=1");
+    retryreject(fn()=>payhub_claim_initial_webhook($db,initialfixture($db,27),$noKeyRaw),'key repair requires queued binding reconciliation');
+    $enqueue=strpos($verifySource,'payhub_enqueue_verify_outbox(',$flag);
+    retrycheck($enqueue!==false && $flag<$enqueue && $enqueue<$commit,'actual verify source enqueues before accounting commit');
+    foreach([0,1] as $mode){
+        $id=28+$mode;$reference='paystack-outbox-'.$mode;
+        $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES($id,1,'$reference','pending',$mode)");
+        $eventPayload=$forward;$eventPayload['data']['reference']=$reference;$eventPayload['data']['domain']=$mode?'test':'live';$exact=json_encode($eventPayload);
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");
+        payhub_enqueue_paystack_outbox($db,$id,$exact);
+        retrycheck((int)$other->query("SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=$id")->fetchColumn()===0,'Paystack event not visible before commit');$db->rollBack();
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending' && (int)$other->query("SELECT COUNT(*) FROM ledger WHERE transaction_id=$id")->fetchColumn()===0,'Paystack event and accounting roll back together');
+        $db->exec("CREATE TRIGGER fail_paystack_outbox BEFORE INSERT ON webhook_outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture Paystack event fault'");
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");
+        retryreject(fn()=>payhub_enqueue_paystack_outbox($db,$id,$exact),'Paystack event insert failure propagates');$db->rollBack();$db->exec('DROP TRIGGER fail_paystack_outbox');
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending','Paystack fault cannot leave fulfilled payment');
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_paystack_outbox($db,$id,$exact);$db->commit();
+        $saved=$other->query("SELECT producer,payload FROM webhook_outbox WHERE transaction_id=$id")->fetch(PDO::FETCH_ASSOC);
+        retrycheck($saved['producer']==='paystack_forward' && $saved['payload']===$exact,'exact Paystack event survives commit-to-dispatch crash');
+        $snapshot=initialfixture($db,$id);$replacement=$eventPayload;$replacement['data']['amount']=10000;
+        retryreject(fn()=>payhub_claim_initial_webhook($db,$snapshot,json_encode($replacement)),'different producer variant cannot replace queued Paystack body');
+        $reservation=payhub_claim_initial_webhook($db,$snapshot,$exact);
+        retrycheck($reservation['signature']===hash_hmac('sha256',$exact,$mode?'test-fixture':'live-fixture'),'queued Paystack signature uses persisted mode key');
+        retrycheck(payhub_finish_webhook_retry($db,$reservation,503,true)===false,'Paystack uncertain completion remains fenced');
+        retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$reservation['delivery']['id'],true),'queued Paystack uncertainty cannot be replayed');
+    }
+    $db->beginTransaction();retryreject(fn()=>payhub_enqueue_webhook_outbox($db,28,'{}','untrusted_producer'),'unknown event producer refused');$db->rollBack();
+    $paystackSource=file_get_contents(__DIR__.'/../webhook-paystack.php');$enqueued=strpos($paystackSource,'payhub_enqueue_paystack_outbox(');$committed=strpos($paystackSource,'$db->commit();',$enqueued);$fulfilled=strpos($paystackSource,'$fulfillment_success = true;',$enqueued);$claimed=strpos($paystackSource,'$forwardClaim = payhub_claim_initial_webhook(',$enqueued);$http=strpos($paystackSource,'$ch = curl_init(',$claimed);
+    retrycheck($enqueued!==false && $enqueued<$committed && $committed<$fulfilled && $fulfilled<$claimed && $claimed<$http,'actual Paystack source enqueues before commit and protected HTTP');
+    $failure=substr($paystackSource,$fulfilled,$claimed-$fulfilled);
+    retrycheck(strpos($failure,'http_response_code(503);')!==false && strpos($failure,"exit('Accounting could not commit; retry required.');")!==false,'Paystack accounting/outbox failure cannot fall through to final HTTP 200');
+    foreach(['normalize_metadata_array','trusted_paid_amount','amounts_match','amount_covers','payhub_generic_webhook_payload','payhub_enqueue_generic_outbox','payhub_enqueue_api_verify_outbox'] as $function){$begin=strpos($functions,'function '.$function.'(');$end=strpos($functions,"\n}",$begin)+2;eval(substr($functions,$begin,$end-$begin));}
+    $db->exec("ALTER TABLE transactions ADD customer_email VARCHAR(100) DEFAULT 'fixture@example.test',ADD payment_method VARCHAR(30) DEFAULT 'bank_transfer',ADD created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,ADD metadata TEXT NULL");
+    foreach([0,1] as $mode){
+        $id=30+$mode;$reference='api-outbox-'.$mode;$db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES($id,1,'$reference','pending',$mode)");
+        retryreject(fn()=>payhub_enqueue_api_verify_outbox($db,$id),'API enqueue requires caller transaction');
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_api_verify_outbox($db,$id);
+        retrycheck($db->inTransaction() && (int)$other->query("SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=$id")->fetchColumn()===0,'API enqueue invisible before caller commit');$db->rollBack();
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending' && (int)$other->query("SELECT COUNT(*) FROM ledger WHERE transaction_id=$id")->fetchColumn()===0,'API rollback includes ledger and outbox');
+        $db->exec("CREATE TRIGGER fail_api_outbox BEFORE INSERT ON webhook_outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture API event fault'");
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");retryreject(fn()=>payhub_enqueue_api_verify_outbox($db,$id),'API outbox failure propagates');$db->rollBack();$db->exec('DROP TRIGGER fail_api_outbox');
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_api_verify_outbox($db,$id);$db->commit();
+        $event=$other->query("SELECT * FROM webhook_outbox WHERE transaction_id=$id")->fetch(PDO::FETCH_ASSOC);$snapshot=initialfixture($db,$id);
+        $regenerated=json_encode(payhub_generic_webhook_payload($snapshot,trusted_paid_amount($snapshot)));
+        retrycheck($event['producer']==='api_verify' && $event['payload']===$regenerated,'API stores same bytes as shared generic sender');
+        $reservation=payhub_claim_initial_webhook($db,$snapshot,$event['payload']);retrycheck(payhub_finish_webhook_retry($db,$reservation,200,true),'API queued event uses existing exclusive claim and completion');
+    }
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test,gateway_amount) VALUES(32,1,'api-missing-evidence','success',0,NULL)");$db->beginTransaction();retryreject(fn()=>payhub_enqueue_api_verify_outbox($db,32),'API cannot fabricate paid evidence');$db->rollBack();
+    $db->exec("UPDATE users SET webhook_url='' WHERE id=1");$db->beginTransaction();payhub_enqueue_api_verify_outbox($db,32);retrycheck($db->inTransaction(),'unconfigured notification does not commit caller');$db->commit();retrycheck((int)$db->query('SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=32')->fetchColumn()===0,'no configured webhook means no API event');$db->exec("UPDATE users SET webhook_url='https://fixture.example.test/hook' WHERE id=1");
+    $apiSource=file_get_contents(__DIR__.'/../api/transaction/verify.php');$enqueue=strpos($apiSource,'payhub_enqueue_api_verify_outbox(');$commit=strpos($apiSource,'$db->commit();',$enqueue);$dispatch=strpos($apiSource,'trigger_merchant_webhook(',$enqueue);
+    retrycheck($enqueue!==false && $enqueue<$commit && $commit<$dispatch,'actual API source enqueues before accounting commit and delivery');
+    retrycheck(strpos($apiSource,'VERIFICATION_COMMIT_UNCONFIRMED')!==false && strpos($apiSource,'http_response_code(503);',$enqueue)!==false,'API cannot acknowledge local outbox failure as success');
+    $producerId=40;
+    foreach(['merchant_reconcile','api_reconcile','va_reconcile','dva_reconcile','expiry_cron','simulation'] as $producer){
+        $id=$producerId++;$mode=$producer==='simulation'?1:0;$reference='producer-'.$id;
+        $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES($id,1,'$reference','pending',$mode)");
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_generic_outbox($db,$id,$producer);
+        retrycheck($db->inTransaction() && (int)$other->query("SELECT COUNT(*) FROM webhook_outbox WHERE transaction_id=$id")->fetchColumn()===0,'producer event invisible before commit '.$producer);$db->rollBack();
+        retrycheck($other->query("SELECT status FROM transactions WHERE id=$id")->fetchColumn()==='pending' && (int)$other->query("SELECT COUNT(*) FROM ledger WHERE transaction_id=$id")->fetchColumn()===0,'producer accounting/event rollback '.$producer);
+        $db->exec("CREATE TRIGGER fail_producer_outbox BEFORE INSERT ON webhook_outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture producer failure'");$db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");retryreject(fn()=>payhub_enqueue_generic_outbox($db,$id,$producer),'producer insertion failure propagates '.$producer);$db->rollBack();$db->exec('DROP TRIGGER fail_producer_outbox');
+        $db->beginTransaction();$db->exec("UPDATE transactions SET status='success' WHERE id=$id");$db->exec("INSERT INTO ledger(transaction_id,amount) VALUES($id,100.00)");payhub_enqueue_generic_outbox($db,$id,$producer);$db->commit();
+        $event=$other->query("SELECT * FROM webhook_outbox WHERE transaction_id=$id")->fetch(PDO::FETCH_ASSOC);$snapshot=initialfixture($db,$id);
+        retrycheck($event['producer']===$producer && $event['payload']===json_encode(payhub_generic_webhook_payload($snapshot,trusted_paid_amount($snapshot))),'producer event preserves actual generic bytes '.$producer);
+        $reservation=payhub_claim_initial_webhook($db,$snapshot,$event['payload']);retrycheck(payhub_finish_webhook_retry($db,$reservation,503,true)===false,'producer uncertain completion '.$producer);retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$reservation['delivery']['id'],true),'producer uncertain claim fenced '.$producer);
+    }
+    $db->beginTransaction();retryreject(fn()=>payhub_enqueue_generic_outbox($db,30,'simulation'),'simulation cannot enqueue live transaction');$db->rollBack();
+    foreach(['merchant/reconcile.php'=>'merchant_reconcile','api/transaction/reconcile.php'=>'api_reconcile','api/virtual-accounts.php'=>'va_reconcile','includes/functions.php'=>'dva_reconcile','includes/transaction-expiry-cron.php'=>'expiry_cron','api/transaction/simulate.php'=>'simulation'] as $path=>$producer){
+        $source=file_get_contents(__DIR__.'/../'.$path);$producerAt=strpos($source,",'".$producer."');");$enqueue=strrpos(substr($source,0,$producerAt),'payhub_enqueue_generic_outbox(');$commit=strpos($source,'$db->commit();',$producerAt);$dispatch=strpos($source,'trigger_merchant_webhook(',$producerAt);
+        retrycheck($producerAt!==false && $enqueue!==false && $enqueue<$commit && $commit<$dispatch,'real route orders enqueue before accounting commit and dispatch '.$producer);
+    }
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}
