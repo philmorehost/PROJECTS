@@ -126,13 +126,19 @@ if (!function_exists('bc_fintech_webhook_claim')) {
 
         $prov_esc = mysqli_real_escape_string($connection_server, $provider);
         $evt_esc  = mysqli_real_escape_string($connection_server, $event_id);
-        $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
-            (provider, event_id, vendor_id, status, created_at)
-            VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
-        if ($q) return 'new';
-        if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
-        error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
-        return 'error';
+        try {
+            $q = mysqli_query($connection_server, "INSERT INTO sas_webhook_events
+                (provider, event_id, vendor_id, status, created_at)
+                VALUES ('$prov_esc', '$evt_esc', '$vendor_id', 'processing', NOW())");
+            if ($q) return 'new';
+            if ((int)mysqli_errno($connection_server) === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . mysqli_error($connection_server));
+            return 'error';
+        } catch (Throwable $e) {
+            if ((int)$e->getCode() === 1062) return 'duplicate';
+            error_log('[DGV-FINTECH] webhook claim failed: ' . $e->getMessage());
+            return 'error';
+        }
     }
 }
 
@@ -302,6 +308,10 @@ if (!function_exists('bc_fintech_webhook_handle')) {
         }
 
         // 3) Durable claim. A retry is skipped, never re-applied.
+        if (function_exists('bc_fintech_schema_ready') && !bc_fintech_schema_ready()) {
+            bc_fintech_webhook_log($provider, $event_id, 'refused: schema not ready');
+            return bc_fintech_webhook_result($provider, $event_id, false, 503, 'schema_not_ready', 'Webhook storage unavailable.');
+        }
         $claim = bc_fintech_webhook_claim($provider, $event_id, $vendor_id);
         if ($claim === 'duplicate') {
             bc_fintech_webhook_log($provider, $event_id, 'duplicate delivery skipped');

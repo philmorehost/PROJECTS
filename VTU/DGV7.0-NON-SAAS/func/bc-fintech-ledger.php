@@ -135,12 +135,53 @@ if (!function_exists('bc_fintech_ledger_post')) {
         $curr_esc  = mysqli_real_escape_string($connection_server, $currency);
         $is_naira  = bc_fintech_ledger_is_naira($currency);
 
+        // Fail closed on active caller transactions or missing/non-InnoDB storage.
+        try {
+            $auto_q = mysqli_query($connection_server, 'SELECT @@session.autocommit AS auto_commit');
+            $auto_r = $auto_q ? mysqli_fetch_assoc($auto_q) : null;
+            if (!$auto_r || (int)($auto_r['auto_commit'] ?? 0) !== 1 || mysqli_query($connection_server, 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ') !== true) {
+                $result['reason'] = 'transaction_unavailable';
+                return $result;
+            }
+        } catch (Throwable $e) {
+            $result['reason'] = 'transaction_unavailable';
+            return $result;
+        }
+
+        $required_tables = $is_naira
+            ? ['sas_users', 'sas_transactions', 'sas_fintech_ledger', 'sas_provider_settlement_claims']
+            : ['sas_user_crypto_wallets', 'sas_fintech_ledger', 'sas_provider_settlement_claims'];
+        $table_list = "'" . implode("','", $required_tables) . "'";
+        $eng_q = mysqli_query($connection_server, "SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ($table_list)");
+        $engines = [];
+        while ($eng_q && ($eng_r = mysqli_fetch_assoc($eng_q))) {
+            $engines[$eng_r['TABLE_NAME']] = strtoupper((string)$eng_r['ENGINE']);
+        }
+        foreach ($required_tables as $req_table) {
+            if (($engines[$req_table] ?? '') !== 'INNODB') {
+                $result['reason'] = 'transactional_schema_required';
+                return $result;
+            }
+        }
+
+        $provider = mysqli_real_escape_string($connection_server, substr((string)($context['provider'] ?? ''), 0, 40));
+        $ref_esc  = mysqli_real_escape_string($connection_server, $reference);
         $settlement_key = hash('sha256', json_encode(array($vendor_id,(string)($context['provider'] ?? ''),$direction,$reference)));
         $payload_hash = hash('sha256', json_encode(array($username,$currency,$direction,$sql_amount)));
         if (!mysqli_begin_transaction($connection_server)) { $result['reason']='transaction_failed'; return $result; }
         try {
-            $claim = mysqli_query($connection_server, "INSERT INTO sas_provider_settlement_claims(settlement_key,payload_hash) VALUES('$settlement_key','$payload_hash')");
+            $claim = false;
+            $claim_errno = 0;
+            try {
+                $claim = (bool)mysqli_query($connection_server, "INSERT INTO sas_provider_settlement_claims(settlement_key,payload_hash) VALUES('$settlement_key','$payload_hash')");
+                if (!$claim) $claim_errno = (int)mysqli_errno($connection_server);
+            } catch (Throwable $claim_ex) {
+                $claim = false;
+                $claim_errno = (int)$claim_ex->getCode();
+                if ($claim_errno !== 1062) throw $claim_ex;
+            }
             if (!$claim) {
+                if ($claim_errno !== 1062) throw new Exception('settlement_claim_insert_failed');
                 $old_q = mysqli_query($connection_server, "SELECT payload_hash FROM sas_provider_settlement_claims WHERE settlement_key='$settlement_key' LIMIT 1");
                 $old = $old_q ? mysqli_fetch_assoc($old_q) : null;
                 mysqli_rollback($connection_server);
@@ -149,12 +190,20 @@ if (!function_exists('bc_fintech_ledger_post')) {
                 return $result;
             }
             if ($is_naira) {
-                $lock = mysqli_query($connection_server, "SELECT id, balance, status FROM sas_users
+                $lock = mysqli_query($connection_server, "SELECT id, balance, status, is_blocked FROM sas_users
                     WHERE vendor_id='$vendor_id' AND username='$user_esc' LIMIT 1 FOR UPDATE");
                 if (!$lock) throw new Exception('lock_failed');
                 $row = mysqli_fetch_assoc($lock);
                 if (!is_array($row)) { mysqli_rollback($connection_server); $result['reason'] = 'user_not_found'; return $result; }
                 if ((int)($row['status'] ?? 0) !== 1) { mysqli_rollback($connection_server); $result['reason'] = 'account_inactive'; return $result; }
+                if (!empty($row['is_blocked'])) { mysqli_rollback($connection_server); $result['reason'] = 'account_restricted'; return $result; }
+
+                $hist_q = mysqli_query($connection_server, "SELECT reference FROM sas_transactions WHERE vendor_id='$vendor_id' AND username='$user_esc' AND status=1 AND (reference='$ref_esc' OR (api_reference<>'' AND api_reference='$ref_esc')) LIMIT 1");
+                if (!$hist_q || mysqli_num_rows($hist_q) > 0) {
+                    mysqli_rollback($connection_server);
+                    $result['reason'] = 'historical_reference_requires_reconciliation';
+                    return $result;
+                }
 
                 $before = (float)$row['balance'];
                 if ($direction === 'debit' && $before < $amount) {
@@ -163,8 +212,16 @@ if (!function_exists('bc_fintech_ledger_post')) {
                     return $result;
                 }
                 $id_esc = (int)$row['id'];
-                $update = mysqli_query($connection_server, "UPDATE sas_users SET balance=balance$operator$sql_amount WHERE id='$id_esc'");
-                if (!$update || mysqli_affected_rows($connection_server) !== 1) throw new Exception('update_failed');
+                $debit_guard = $direction === 'debit' ? " AND balance >= $sql_amount" : '';
+                $update = mysqli_query($connection_server, "UPDATE sas_users SET balance=balance$operator$sql_amount WHERE id='$id_esc'$debit_guard");
+                if (!$update || mysqli_affected_rows($connection_server) !== 1) {
+                    if ($direction === 'debit') {
+                        mysqli_rollback($connection_server);
+                        $result['reason'] = 'insufficient_balance';
+                        return $result;
+                    }
+                    throw new Exception('update_failed');
+                }
             } else {
                 // Make sure the wallet row exists, then lock it. INSERT IGNORE is a no-op
                 // when the UNIQUE (vendor_id, username, currency_code) row is already there.
@@ -183,10 +240,25 @@ if (!function_exists('bc_fintech_ledger_post')) {
                     return $result;
                 }
                 $id_esc = (int)$row['id'];
+                $debit_guard = $direction === 'debit' ? " AND balance >= $sql_amount AND ledger_balance >= $sql_amount" : '';
                 $update = mysqli_query($connection_server, "UPDATE sas_user_crypto_wallets
                     SET balance=balance$operator$sql_amount, ledger_balance=ledger_balance$operator$sql_amount
-                    WHERE id='$id_esc'");
-                if (!$update || mysqli_affected_rows($connection_server) !== 1) throw new Exception('update_failed');
+                    WHERE id='$id_esc'$debit_guard");
+                if (!$update || mysqli_affected_rows($connection_server) !== 1) {
+                    if ($direction === 'debit') {
+                        mysqli_rollback($connection_server);
+                        $result['reason'] = 'insufficient_balance';
+                        return $result;
+                    }
+                    throw new Exception('update_failed');
+                }
+            }
+
+            $ledger_hist_q = mysqli_query($connection_server, "SELECT id FROM sas_fintech_ledger WHERE vendor_id='$vendor_id' AND provider='$provider' AND direction='$direction' AND reference='$ref_esc' LIMIT 1");
+            if (!$ledger_hist_q || mysqli_num_rows($ledger_hist_q) > 0) {
+                mysqli_rollback($connection_server);
+                $result['reason'] = 'historical_reference_requires_reconciliation';
+                return $result;
             }
 
             // Fresh balance for the audit row.
@@ -198,14 +270,12 @@ if (!function_exists('bc_fintech_ledger_post')) {
             $after = ($re && ($r = mysqli_fetch_assoc($re))) ? (float)$r['balance'] : null;
 
             // ── audit row ────────────────────────────────────────────────
-            $provider = mysqli_real_escape_string($connection_server, substr((string)($context['provider'] ?? ''), 0, 40));
             $event_id = mysqli_real_escape_string($connection_server, substr((string)($context['event_id'] ?? ''), 0, 225));
             $audit_context = mysqli_real_escape_string($connection_server, json_encode(array_intersect_key($context, array_flip([
                 'event_id', 'fee', 'provider_status', 'channel',
             ]))));
             $before_sql = sprintf('%.18F', (float)$before);
             $after_sql  = sprintf('%.18F', (float)$after);
-            $ref_esc    = mysqli_real_escape_string($connection_server, $reference);
             $audit = mysqli_query($connection_server, "INSERT INTO sas_fintech_ledger
                 (vendor_id, username, currency_code, direction, amount, balance_before, balance_after, provider, event_id, reference, context, created_at)
                 VALUES ('$vendor_id', '$user_esc', '$curr_esc', '$direction', '$sql_amount', '$before_sql', '$after_sql', '$provider', '$event_id', '$ref_esc', '$audit_context', NOW())");
@@ -230,8 +300,8 @@ if (!function_exists('bc_fintech_ledger_post')) {
             $result['balance_before'] = (float)$before;
             $result['balance_after'] = $after;
             return $result;
-        } catch (Exception $e) {
-            mysqli_rollback($connection_server);
+        } catch (Throwable $e) {
+            try { mysqli_rollback($connection_server); } catch (Throwable $ignored) {}
             error_log('[DGV-FINTECH] ledger post failed: ' . $e->getMessage() . " vendor=$vendor_id user=$username currency=$currency direction=$direction");
             $result['reason'] = 'failed';
             return $result;
