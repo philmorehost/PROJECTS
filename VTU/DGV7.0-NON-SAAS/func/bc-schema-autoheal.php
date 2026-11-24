@@ -207,6 +207,29 @@ if (!function_exists('bc_schema_autoheal')) {
                 $applied[] = $key;
             }
 
+            // Also ensure phase-1B fintech schema (sas_app_tokens, sas_webhook_events, sas_fintech_ledger,
+            // account_type/kyb_* columns) when prerequisite legacy tables exist.
+            $fintechSchemaFile = __DIR__ . '/bc-fintech-schema.php';
+            if (is_file($fintechSchemaFile)) {
+                $scChk = @mysqli_query($db, "SHOW TABLES LIKE 'sas_service_control'");
+                $hasServiceControl = ($scChk instanceof mysqli_result && mysqli_num_rows($scChk) > 0);
+                if ($scChk instanceof mysqli_result) {
+                    mysqli_free_result($scChk);
+                }
+                if ($hasServiceControl) {
+                    $prevConn = $GLOBALS['connection_server'] ?? null;
+                    $GLOBALS['connection_server'] = $db;
+                    require_once $fintechSchemaFile;
+                    $fintechOk = bc_fintech_ensure_schema();
+                    if ($prevConn !== null) {
+                        $GLOBALS['connection_server'] = $prevConn;
+                    }
+                    if (!$fintechOk) {
+                        return ['ok' => false, 'code' => 'fintech_schema_failed', 'applied' => $applied, 'skipped' => $skipped];
+                    }
+                }
+            }
+
             return ['ok' => true, 'code' => 'healed', 'applied' => $applied, 'skipped' => $skipped];
         } catch (Throwable $e) {
             return ['ok' => false, 'code' => 'exception', 'error' => $e->getMessage(), 'applied' => [], 'skipped' => []];

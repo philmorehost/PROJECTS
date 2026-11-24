@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-10",
+  "version": "2026.11.18-remediation-manifest-11",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -177,7 +177,7 @@
     },
     {
       "name": "bc-schema-autoheal.php",
-      "sha256": "3ae0e9b9ffc0ddb07e0fc8da405e9ed3b275c97ec748acc389c5057aaeeb857b"
+      "sha256": "05c236ffa7808a78e24790772eba470805aa9e67f2648804fe916f0d8871969f"
     }
   ],
   "required_innodb_tables": [

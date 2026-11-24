@@ -16,6 +16,22 @@ sah_ok($dir !== null && is_dir($dir), 'resolves VTU/migrations directory');
 $files = bc_schema_autoheal_list_files($dir);
 sah_ok(count($files) >= 10, 'lists all VTU/migrations SQL files');
 
+// Standalone edition migrations/ mirrors must match VTU/migrations byte-for-byte
+$canonicalSqls = glob(__DIR__ . '/../migrations/20261118_*.sql');
+sort($canonicalSqls, SORT_STRING);
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $edMigDir = __DIR__ . '/../' . $ed . '/migrations';
+    sah_ok(is_dir($edMigDir), "standalone migrations directory exists in $ed");
+    sah_ok(is_file($edMigDir . '/.htaccess') && strpos((string)file_get_contents($edMigDir . '/.htaccess'), 'Require all denied') !== false, "migrations/.htaccess denies HTTP in $ed");
+    foreach ($canonicalSqls as $srcSql) {
+        $base = basename($srcSql);
+        $copy = $edMigDir . '/' . $base;
+        sah_ok(is_file($copy) && hash_file('sha256', $srcSql) === hash_file('sha256', $copy), "3-way migration parity for $ed/$base");
+    }
+    $edList = bc_schema_autoheal_list_files($edMigDir);
+    sah_ok(count($edList) === count($canonicalSqls), "standalone list matches canonical count in $ed");
+}
+
 foreach ([
     'DGV7.0-SAAS/func/bc-tables.php',
     'DGV7.0-NON-SAAS/func/bc-tables.php',
