@@ -361,6 +361,10 @@ if ($event_type === 'charge_success') {
                             'reference' => $tx['reference'],
                             'receiving_account_number' => $tx['receiving_account_number'] ?? null,
                             'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
+                            // Additive contract: preserve the legacy amount value and declare its meaning.
+                            'money_contract_version' => 1,
+                            'amount_unit' => 'minor',
+                            'amount_basis' => 'gateway',
                             'amount' => to_minor_units($amount),
                             'requested_amount' => to_minor_units($tx['amount']),
                             'gateway_amount' => to_minor_units($amount),

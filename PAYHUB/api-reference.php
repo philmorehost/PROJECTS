@@ -230,7 +230,11 @@ include 'includes/header.php';
     "payment_status": "success",
     "paid": true,
     "reference": "PH_abc123",
+    "money_contract_version": 1,
+    "amount_unit": "minor",
+    "amount_basis": "gateway",
     "amount": 10000,
+    "requested_amount": 10000,
     "currency": "NGN",
     "customer": { "email": "customer@email.com" },
     "gateway_response": "Successful",
@@ -314,6 +318,13 @@ include 'includes/header.php';
                 <h2 class="text-xl sm:text-2xl font-bold text-slate-900">Webhooks & Callback</h2>
             </div>
             <p class="text-slate-600 mb-8 leading-relaxed">Configure your server to listen for events from Payhub. Every webhook is signed so you can verify it genuinely came from Payhub before trusting it.</p>
+            <div class="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-5 text-sm text-amber-950">
+                <p class="font-bold mb-2">Money contract v1 — preserve legacy integrations</p>
+                <p class="mb-2">New deliveries declare <code>money_contract_version: 1</code>, <code>amount_unit</code> (<code>major</code> or <code>minor</code>) and <code>amount_basis</code> (<code>requested</code> or <code>gateway</code>). For NGN, major means naira and minor means kobo. These labels are descriptive, not payment evidence.</p>
+                <p class="mb-2">The Paystack-forwarded webhook keeps <code>amount</code> as gross gateway kobo. The generic sender keeps it as kobo and declares <code>amount_basis: gateway</code> when the paid amount is known, or <code>requested</code> for its existing requested-amount fallback. The legacy browser verify-page webhook keeps <code>amount</code> as requested naira and <code>amount_kobo</code> as requested kobo. Do not infer units from the size of an amount, or assume <code>amount</code> means the same thing across senders.</p>
+                <p class="mb-2"><code>requested_amount</code>, <code>gateway_amount</code>, <code>fee_amount</code> and <code>settled_amount</code> are always minor units: requested, gross paid, charged fee and net settlement respectively. An old payload may lack some fields. The generic sender retains a requested-value fallback in <code>gateway_amount</code> when no paid amount was recorded: <code>amount_basis: requested</code> warns of that case. Missing values are not zero, and a requested amount alone is not proof of payment.</p>
+                <p>Historical retries retain their original payload bytes and may have no version/unit labels. Authenticate the raw body with the corresponding test/live merchant key, refuse test events for live crediting, and independently verify status, currency, recipient/account and exact amounts through the authenticated verification API before any credit. Apply your durable reference/idempotency checks. The verification API's <code>amount</code> remains requested kobo; it is not changed by this webhook contract.</p>
+            </div>
             <div class="bg-slate-900 rounded-2xl p-6 sm:p-8 text-slate-300 font-mono text-xs sm:text-sm overflow-x-auto">
                 <pre>{
   "event": "charge.success",

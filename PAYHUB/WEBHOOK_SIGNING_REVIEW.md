@@ -21,3 +21,19 @@ This is not full endpoint/MySQL/provider integration. Existing curl/TLS behaviou
 ## Financial and evidence boundaries
 
 No live deployment/provider activation, historical replay, cleanup or credit was performed. Preserve existing webhook/payment/ledger evidence. Keep existing fintech holds and the deposit rollout gate until paired-schema, independent verification and explicit operational acceptance are complete. Bybit staging remains cancelled and is not part of this work.
+
+## Next increment: additive amount-unit contract
+
+Newly generated payloads from the generic sender, Paystack forwarding and browser verify-page now declare `money_contract_version: 1`, `amount_unit` (`major`/`minor`) and `amount_basis` (`requested`/`gateway`) inside `data`. Existing amount values and types are unchanged:
+
+| Sender | Legacy `amount` | New declaration |
+| --- | --- | --- |
+| Generic | Integer kobo; gross paid when known, otherwise its existing requested fallback | `minor`, `gateway` when known; `requested` for fallback |
+| Paystack forwarding | Gross paid integer kobo | `minor`, `gateway` |
+| Browser verify | Requested naira, preserving the stored value/type | `major`, `requested` |
+
+Browser verify now also includes the stored currency. Its `amount_kobo` requested-value alias remains. The common requested/gateway/fee/settled fields retain their existing kobo conversion and values. This does NOT repair or endorse generic historical rows whose gateway_amount is actually the existing requested fallback: the label explicitly identifies the lack of a known paid amount. Recipients must independently verify payment rather than treat the labels or the requested value as payment evidence. No currency conversion, rounding policy or wallet accounting is changed.
+
+The API reference now explains sender differences, the fallback caveat, raw-byte mode-specific verification, common minor-unit fields and independent verification/idempotency requirements. Verification API semantics are unchanged. Original stored retry bodies are not relabelled or re-encoded. Old unlabelled payloads remain signable under the previous mode/domain rules; recipients must not infer units from magnitude or blindly replay historical events.
+
+`webhook_money_contract_test.php` evaluates the actual three shipped payload-builder expressions (not hand-copied alternatives) with isolated fixtures and the shipped conversion function: tiny/fractional/large requested amounts, test/live modes, known/missing generic paid amount, upstream label override resistance, exact legacy value/type preservation, common kobo fields, currency, signature coverage and historical retry-byte preservation. 181 local PHP-wasm checks pass, with no database/network/provider. Native PHP 8.2/8.3 CI now runs both suites. This increment improves the migration contract; a breaking unification of legacy amount or replacement of delivery durability/transaction boundaries is still not implemented or authorized for activation.

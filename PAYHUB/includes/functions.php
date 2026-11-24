@@ -1886,6 +1886,10 @@ function trigger_merchant_webhook($transactionId) {
                     'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
                     // Report what actually settled. `amount` is merchant-supplied
                     // and must never be trusted as evidence of payment.
+                    // Additive contract: preserve the legacy amount value and declare its meaning.
+                    'money_contract_version' => 1,
+                    'amount_unit' => 'minor',
+                    'amount_basis' => $paid !== null ? 'gateway' : 'requested',
                     'amount' => to_minor_units($grossPaid),
                     'requested_amount' => to_minor_units($tx['amount']),
                     'gateway_amount' => to_minor_units($grossPaid),

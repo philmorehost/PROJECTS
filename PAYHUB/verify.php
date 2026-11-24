@@ -253,8 +253,13 @@ if ($tx && $tx['status'] === 'success') {
                             'data' => [
                                 'id' => $tx['id'],
                                 'reference' => $tx['reference'],
+                                // Additive contract: preserve the legacy amount value and declare its meaning.
+                                'money_contract_version' => 1,
+                                'amount_unit' => 'major',
+                                'amount_basis' => 'requested',
                                 'amount' => $tx['amount'],
                                 'amount_kobo' => to_minor_units($tx['amount']),
+                                'currency' => $tx['currency'],
                                 'requested_amount' => to_minor_units($tx['amount']),
                                 'gateway_amount' => to_minor_units($gateway_amount),
                                 'fee_amount' => to_minor_units($fee),
