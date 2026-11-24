@@ -50,6 +50,11 @@ on:
       - 'VTU/**/func/bc-wallet-funding-page.php'
       - 'VTU/**/jsfile/bc-wallet-funding.js'
       - 'VTU/tests/wallet_funding*php'
+      - 'VTU/**/func/bc-fintech-gate.php'
+      - 'VTU/**/func/bc-fintech-schema.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/migrations/20261118_personal_web_access.sql'
+      - 'VTU/tests/app_website_choice*php'
       - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
       - 'PAYHUB/includes/functions.php'
       - 'PAYHUB/admin/webhooks.php'
@@ -181,6 +186,11 @@ on:
       - 'VTU/**/func/bc-wallet-funding-page.php'
       - 'VTU/**/jsfile/bc-wallet-funding.js'
       - 'VTU/tests/wallet_funding*php'
+      - 'VTU/**/func/bc-fintech-gate.php'
+      - 'VTU/**/func/bc-fintech-schema.php'
+      - 'VTU/**/bc-admin/AccountSettings.php'
+      - 'VTU/migrations/20261118_personal_web_access.sql'
+      - 'VTU/tests/app_website_choice*php'
       - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
       - 'PAYHUB/includes/functions.php'
       - 'PAYHUB/admin/webhooks.php'
@@ -424,6 +434,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli
           coverage: none
+      - name: Tenant app or website choice and existing-session policy
+        env:
+          BC_APP_CHOICE_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/app_website_choice_mysql_test.php
+
       - name: Verified PayHub deposits, rollback and concurrent replay safety
         env:
           BC_PAYHUB_DEPOSITS_CI: '1'

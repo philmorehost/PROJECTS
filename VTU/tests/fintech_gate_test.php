@@ -156,9 +156,9 @@ function fake_mysqli_query_raw($db, $sql) {
     }
 
     // site details
-    if (preg_match("/SELECT android_app_url FROM sas_site_details WHERE vendor_id='(\\d+)'/", $sql, $m)) {
+    if (preg_match("/SELECT android_app_url,personal_web_access FROM sas_site_details WHERE vendor_id='(\\d+)'/", $sql, $m)) {
         return array_key_exists($m[1], $GLOBALS['db']['site'])
-            ? [['android_app_url' => $GLOBALS['db']['site'][$m[1]]]] : [];
+            ? [['android_app_url' => $GLOBALS['db']['site'][$m[1]], 'personal_web_access' => $GLOBALS['db']['web_access'][$m[1]] ?? 'optional']] : [];
     }
 
     // users
@@ -1019,6 +1019,7 @@ $GLOBALS['db']['site']['7'] = '';   // blank setting
 gcheck('personal + blank setting stays on website', bc_fintech_web_login_destination($personal, 7)['action'], 'dashboard');
 gcheck('business + blank setting stays on website', bc_fintech_web_login_destination($business, 7)['action'], 'dashboard');
 
+$GLOBALS['db']['web_access']['7'] = 'app_only';
 $GLOBALS['db']['site']['7'] = 'https://play.google.com/store/apps/details?id=com.datagifting.app';
 $p_dest = bc_fintech_web_login_destination($personal, 7);
 gcheck('personal + valid setting is redirected', $p_dest['action'], 'redirect');
@@ -1057,11 +1058,26 @@ $_SESSION['admin_session'] = ['id' => 1];
 gcheck('impersonating super admin keeps the website', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php'), null);
 $_SESSION = [];
 
+$GLOBALS['db']['web_access']['7'] = 'optional';
 $GLOBALS['db']['site']['7'] = '';
 gcheck('blank setting leaves the whole website usable', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php'), null);
+$GLOBALS['db']['web_access']['7'] = 'app_only';
 $GLOBALS['db']['site']['7'] = 'javascript:alert(1)';
 gcheck('invalid saved setting blocks, never falls through', bc_fintech_web_access_blocked($personal, 7, '/web/Dashboard.php')['state'], 'misconfigured');
 gcheck('invalid saved setting still lets the user sign out', bc_fintech_web_access_blocked($personal, 7, '/logout.php'), null);
+
+// Tenant app/website choice must apply at login AND every signed-in page.
+foreach (['', 'https://play.google.com/store/apps/details?id=com.datagifting.app', 'javascript:alert(1)'] as $app_url) {
+    $GLOBALS['db']['site']['7']=$app_url;$GLOBALS['db']['web_access']['7']='optional';
+    gcheck('optional login stays on website regardless of download link',bc_fintech_web_login_destination($personal,7)['action'],'dashboard');
+    foreach(['/web/Dashboard.php','/web/Fund.php','/web/Airtime.php'] as $path)
+        gcheck('optional signed-in page accessible '.$path,bc_fintech_web_access_blocked($personal,7,$path),null);
+}
+$GLOBALS['db']['web_access']['7']='app_only';$GLOBALS['db']['site']['7']='';
+gcheck('explicit app-only without URL blocks safely',bc_fintech_web_login_destination($personal,7)['action'],'misconfigured');
+$GLOBALS['db']['web_access']['7']='unknown';
+gcheck('corrupt preference is not guessed',bc_fintech_web_login_destination($personal,7)['action'],'misconfigured');
+$GLOBALS['db']['web_access']['7']='optional';
 
 // ═══════════════════════ 7. new-service controls ═══════════════════════
 $GLOBALS['db']['site']['7'] = '';

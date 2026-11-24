@@ -88,6 +88,8 @@ function bc_fintech_ensure_schema() {
     // anonymous landing-page prompt/force. This one is the authenticated post-login
     // destination requested for personal accounts, and MUST NOT inherit their values.
     if (!bc_fintech_ensure_column('sas_site_details', 'android_app_url', "VARCHAR(500) NOT NULL DEFAULT ''")) return false;
+    // Website/app choice is independent of saving a download link. Existing tenants default to choice.
+    if (!bc_fintech_ensure_column('sas_site_details', 'personal_web_access', "VARCHAR(16) NOT NULL DEFAULT 'optional'")) return false;
 
     // ── Per-tier / provider readiness switches on the existing service table ──
     // status keeps its current meaning (vendor on/off) so no existing VTU service changes.
