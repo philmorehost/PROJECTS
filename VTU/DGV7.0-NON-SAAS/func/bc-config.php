@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bc-secure-session.php';
+require_once __DIR__.'/bc-security-question-policy.php';
 
 // ─── PHP 8.3 Compatibility Shim — must be first ──────────────────────────────
 // Sets up secure session params, custom error handlers, polyfills, security headers
@@ -667,7 +668,7 @@ if ($connection_server) {
 					}
 
 					// Security Question Check
-					if (empty($sec29_confined) && (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"])) {
+					if (bc_security_question_policy((int)$get_logged_user_details["vendor_id"])["web"] && empty($sec29_confined) && (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"])) {
 						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php"))) {
 							header("Location: /web/SecurityQuest.php");
 							exit();

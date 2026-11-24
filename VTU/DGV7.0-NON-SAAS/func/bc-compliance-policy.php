@@ -9,5 +9,5 @@ function bc_kyc_approval_current($user,$now=null){
     return $until!==false&&$until>=($now??time());
 }
 function bc_kyc_app_route_allowed($path){
-    return in_array($path,['/web/api/kyc.php','/web/api/profile.php','/web/api/logout.php'],true);
+    return in_array($path,['/web/api/kyc.php','/web/api/profile.php','/web/api/logout.php','/web/api/security-quest.php'],true);
 }

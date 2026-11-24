@@ -10,6 +10,8 @@ bc_totp_setup_handle('sas_vendors', $get_logged_admin_details);
 
 require_once __DIR__.'/../func/bc-action-policy-settings.php';
 bc_action_policy_handle(false,$get_logged_admin_details);
+require_once __DIR__.'/../func/bc-security-question-settings.php';
+bc_question_policy_handle(false,$get_logged_admin_details);
 bc_enrollment_policy_save(false, $get_logged_admin_details);
 
 // Used by the Developer tab's mail-queue cron entry below.
@@ -2045,7 +2047,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                 <!-- Security Tab -->
                 <div class="tab-pane fade" id="tab-security">
                     <?php bc_enrollment_policy_form(false, (int)$get_logged_admin_details['id']); ?>
-                    <?php bc_action_policy_form(false,$get_logged_admin_details); ?>
+                    <?php bc_action_policy_form(false,$get_logged_admin_details); bc_question_policy_form($get_logged_admin_details); ?>
                     <script src="../asset/bc-admin-wallet.js"></script>
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-info-circle me-2"></i>Google Client ID Setup Guide</h5></div>

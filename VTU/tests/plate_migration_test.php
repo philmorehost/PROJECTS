@@ -229,6 +229,13 @@ foreach ($editions as $edition) {
 
         // Security remediations deliberately replaced these captured handlers.
         // Pin their current boundaries rather than restoring unsafe old snapshots.
+        if ($name === 'SecurityQuest.php') {
+            foreach (array('bc_app_sidebar(', 'bc_security_question_policy(', 'bc_validate_csrf();', 'bc_csrf_field()', 'name="set-answer"', 'name="submit-answer"', 'name="reset-answer"') as $token) {
+                chk(strpos($cur, $token) !== false, "$label keeps security question boundary $token");
+            }
+            chk(substr_count($cur,'bc_csrf_field()') === substr_count($cur,'<form '), "$label protects every question form");
+            continue;
+        }
         if ($name === 'BusinessUpgrade.php') {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             foreach (array('bc_validate_csrf();', "bc_is_rate_limited('kyb_submit'", 'bc_fintech_kyb_submit($bc_upgrade_user, $bc_upgrade_vendor, [', 'name="submit_business_kyb"', 'name="kyb_document"', 'is_uploaded_file($tmp)', 'getimagesize($tmp)', "bin2hex(random_bytes(8))") as $token) {

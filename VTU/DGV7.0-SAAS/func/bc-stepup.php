@@ -337,7 +337,7 @@ if (!function_exists('bc_stepup_actor_second_factor')) {
         $enrolled = (($actor_row['two_factor_type'] ?? 'none') === 'totp') && !empty($actor_row['totp_secret']);
         try {
             // Policy changes themselves always use an existing factor, even in PIN-only mode.
-            $p=($context==='action_channel_policy' || $context==='enrollment_policy')?['google'=>true,'email'=>true]:bc_action_channels($table,$actor_row);
+            $p=($context==='action_channel_policy' || $context==='enrollment_policy' || $context==='security_question_policy')?['google'=>true,'email'=>true]:bc_action_channels($table,$actor_row);
             $choice=bc_action_channel_choice($p,$enrolled,(string)($input['factor_method']??''));
         }catch(Throwable $e){return 'Security policy is unavailable. No action was authorized.';}
         if($choice==='invalid')return 'Choose an enabled verification method; enrol Google Authenticator if required.';

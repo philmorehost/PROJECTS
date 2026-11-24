@@ -6,6 +6,9 @@ on:
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
       - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-security-question-*.php'
+      - 'VTU/**/web/api/security-quest.php'
+      - 'VTU/**/web/SecurityQuest.php'
       - 'VTU/**/func/bc-vendor-compliance-review.php'
       - 'VTU/**/asset/bc-live-capture.js'
       - 'VTU/**/web/KYCVerification.php'
@@ -108,6 +111,9 @@ on:
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
       - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-security-question-*.php'
+      - 'VTU/**/web/api/security-quest.php'
+      - 'VTU/**/web/SecurityQuest.php'
       - 'VTU/**/func/bc-vendor-compliance-review.php'
       - 'VTU/**/asset/bc-live-capture.js'
       - 'VTU/**/web/KYCVerification.php'
@@ -262,6 +268,7 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/vendor_compliance_review_test.php
+          php VTU/tests/security_question_policy_test.php
           php VTU/tests/vendor_registration_test.php
           php VTU/tests/vendor_registration_commerce_test.php
           php VTU/tests/registration_guard_test.php
@@ -440,3 +447,9 @@ jobs:
         env:
           BC_VENDOR_COMPLIANCE_CI: '1'
         run: php VTU/tests/vendor_compliance_review_mysql_test.php
+
+      - name: Security question catalogue mutations and tenant policies in disposable MySQL
+        env:
+          BC_QUESTION_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/security_question_mysql_test.php

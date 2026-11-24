@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-config.php");
+    if(!bc_security_question_policy((int)$get_logged_user_details["vendor_id"])["web"]){header("Location: Dashboard.php");exit;}
+    if($_SERVER["REQUEST_METHOD"]==="POST")bc_validate_csrf();
         
     if(isset($_POST["set-answer"])){
         $quest = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["quest"])));
@@ -136,7 +138,7 @@ bc_app_head("Security Question | " . ($get_all_site_details["site_title"]));
                 <?php if(!isset($_COOKIE["security_answer"]) || ($_COOKIE["security_answer"] !== $get_logged_user_details["security_answer"])){ ?>
                     <?php if(!isset($_SESSION["reset-security-detail"])){ ?>
                         <?php if(empty(trim($get_logged_user_details["security_quest"])) || empty(trim($get_logged_user_details["security_answer"])) || (strlen($get_logged_user_details["security_answer"]) < 3) || (strlen($get_logged_user_details["security_answer"]) > 20)){ ?>
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <div class="mb-3">
                                 <label class="form-label small fw-bold text-uppercase text-muted">Set Security Question</label>
                                 <select name="quest" class="form-select form-control-lg" required>
@@ -167,7 +169,7 @@ bc_app_head("Security Question | " . ($get_all_site_details["site_title"]));
                             <div class="fs-5 text-dark"><?php echo $get_security_quest["quest"]; ?></div>
                         </div>
 
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <div class="mb-4">
                                 <label class="form-label small fw-bold text-uppercase text-muted text-center d-block">Enter Your Answer</label>
                                 <input name="answer" type="text" class="form-control form-control-lg text-center" placeholder="Answer here" pattern="[0-9a-zA-Z ]{3,20}" required/>
@@ -176,7 +178,7 @@ bc_app_head("Security Question | " . ($get_all_site_details["site_title"]));
                                 Verify & Proceed
                             </button>
                         </form>
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <button name="reset-detail" type="submit" class="btn btn-outline-warning w-100 border-0 btn-sm text-decoration-none">
                                 Reset Security Detail?
                             </button>
@@ -184,7 +186,7 @@ bc_app_head("Security Question | " . ($get_all_site_details["site_title"]));
                         <?php } ?>
                     <?php }else{ ?>
                         <h5 class="fw-bold mb-4 text-center">Reset Security Details</h5>
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <div class="mb-3">
                                 <label class="form-label small fw-bold text-uppercase text-muted">New Security Question</label>
                                 <select name="quest" class="form-select" required>
@@ -209,7 +211,7 @@ bc_app_head("Security Question | " . ($get_all_site_details["site_title"]));
                                 CONFIRM RESET
                             </button>
                         </form>
-                        <form method="post" action="">
+                        <form method="post" action=""><?php echo bc_csrf_field(); ?>
                             <button name="cancel-reset" type="submit" class="btn btn-link w-100 text-danger text-decoration-none small">
                                 Cancel
                             </button>

@@ -1,6 +1,7 @@
 package com.datagifting.app.ui.security
 
 import android.content.Intent
+import org.json.JSONObject
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -55,19 +56,47 @@ class LockActivity : AppCompatActivity() {
                     mapOf("api_key" to prefs.getApiKey(), "action" to "get")
                 )
                 val body = resp.body()
+                if (resp.code() == 401) {
+                    runOnUiThread {
+                        setLoading(false)
+                        Snackbar.make(binding.root, "Your app session expired. Please sign in again.", Snackbar.LENGTH_INDEFINITE)
+                            .setAction("Sign in") {
+                                prefs.saveString(Constants.KEY_API_KEY, "")
+                                prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, false)
+                                prefs.saveLong(Constants.KEY_SECURITY_VERIFIED_AT, 0L)
+                                startActivity(Intent(this@LockActivity, com.datagifting.app.ui.auth.LoginActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                })
+                                finish()
+                            }.show()
+                    }
+                    return@launch
+                }
+                val serverError = if (!resp.isSuccessful) try {
+                    val error = JSONObject(resp.errorBody()?.string() ?: "{}")
+                    error.optString("desc").ifBlank { error.optString("message") }
+                } catch (_: Exception) { "" } else ""
                 if (body == null || body["status"] as? String != "success") {
                     // Do NOT fall through to "no question set" on a failed call (e.g. invalid
                     // API key, vendor lookup failure) — that silently shows the wrong screen
                     // and hides the real problem. Surface it and let the user retry.
                     runOnUiThread {
                         setLoading(false)
-                        snackRetry(body?.get("desc") as? String ?: "Unable to load security question. Please try again.")
+                        snackRetry(body?.get("desc") as? String ?: (body?.get("message") as? String) ?: serverError.ifBlank { "Unable to load security question (HTTP ${resp.code()}). Please try again." })
                     }
+                    return@launch
+                }
+                if (body["enabled"] == false) {
+                    runOnUiThread { setLoading(false); markVerifiedAndFinish() }
                     return@launch
                 }
                 val hasQuest = body["has_quest"] as? Boolean ?: false
                 @Suppress("UNCHECKED_CAST")
                 questBank = body["quest_bank"] as? List<Map<String, Any>> ?: emptyList()
+                if ((!hasQuest && questBank.isEmpty()) || (hasQuest && (body["question"] as? String).isNullOrBlank())) {
+                    runOnUiThread { setLoading(false); snackRetry("Security questions are not configured. Please contact support.") }
+                    return@launch
+                }
                 runOnUiThread {
                     setLoading(false)
                     if (hasQuest) {
