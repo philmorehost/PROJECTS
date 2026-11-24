@@ -411,6 +411,11 @@ try {
     }
 
     if ($connection_server) {
+        require_once ROOT_DIR . '/func/bc-schema-autoheal.php';
+        $autoheal = bc_schema_autoheal($connection_server);
+        if (empty($autoheal['ok'])) {
+            throw new Exception('Automated schema migration failed: ' . ($autoheal['error'] ?? ($autoheal['code'] ?? 'unknown')));
+        }
         bc_update_verify_required_innodb($connection_server, $manifest, ROOT_DIR);
     }
     // Save version in database settings (SAAS version updates sas_super_admin_options)
