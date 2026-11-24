@@ -108,6 +108,7 @@ foreach ($remote_txs as $rtx) {
                 log_transaction_event($t_id, 'reconciled', "Payment manually reconciled via API.");
                 log_ledger_entry($user['id'], $settled, 'credit', 'payment', "Reconciled Payment: $ref", $is_test);
 
+                payhub_enqueue_generic_outbox($db,(int)$t_id,'api_reconcile');
                 $db->commit();
                 trigger_merchant_webhook($t_id);
                 $reconciled[] = [

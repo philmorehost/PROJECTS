@@ -20,7 +20,7 @@ function payhub_outbox_binding(array $row) {
  * Missing storage or invalid evidence throws so the caller can roll back payment+event together.
  */
 function payhub_enqueue_webhook_outbox(PDO $db, $transactionId, $body, $producer) {
-    if(!in_array($producer,['browser_verify','paystack_forward'],true))throw new RuntimeException('Unknown outbox producer.');
+    if(!in_array($producer,['browser_verify','paystack_forward','api_verify','merchant_reconcile','api_reconcile','va_reconcile','dva_reconcile','expiry_cron','simulation'],true))throw new RuntimeException('Unknown outbox producer.');
     if(!$db->inTransaction())throw new RuntimeException('Outbox enqueue requires the accounting transaction.');
     if(!is_int($transactionId)||$transactionId<1||!is_string($body)||strlen($body)>60000)throw new RuntimeException('Invalid or oversized outbox event.');
     $engines=$db->query("SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('transactions','users','ledger','webhook_outbox')")->fetchAll(PDO::FETCH_KEY_PAIR);

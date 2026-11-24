@@ -10,9 +10,9 @@ $start=strpos($source,'function to_minor_units(');$end=strpos($source,"\n}",$sta
 eval(substr($source,$start,$end-$start));
 foreach(['includes/functions.php','webhook-paystack.php','verify.php'] as $file){
  $source=file_get_contents(__DIR__.'/../'.$file);
- $from=$file==='includes/functions.php'?strpos($source,'function trigger_merchant_webhook'):0;
+ $from=$file==='includes/functions.php'?strpos($source,'function payhub_generic_webhook_payload'):0;
  $start=strpos($source,'$payload = [',$from);
- $end=strpos($source,$file==='verify.php'?'$webhook_body = json_encode($payload);':'$body = json_encode($payload);',$start);
+ $end=strpos($source,$file==='includes/functions.php'?'return $payload;':($file==='verify.php'?'$webhook_body = json_encode($payload);':'$body = json_encode($payload);'),$start);
  moneycheck($start!==false && $end!==false,'locate actual payload builder '.$file);
  $builder=substr($source,$start,$end-$start);
  foreach(['100.25','0.01','1000000.99'] as $requested){
