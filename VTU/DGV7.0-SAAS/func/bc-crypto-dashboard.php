@@ -48,12 +48,17 @@ function bc_crypto_dashboard_load($identity,$env) {
     if($role==='user')$out['balances']=bc_crypto_dashboard_rows('SELECT asset_network,scale,bucket,units FROM sas_crypto_v2_accounts WHERE '.$personal.' ORDER BY asset_network,bucket LIMIT 101',$personalParams,100);
     else $out['streams']=bc_crypto_dashboard_rows('SELECT stream_id,vendor_id,state,page_count,revision,valid_until_epoch FROM sas_crypto_v2_poll_streams WHERE '.$where.' ORDER BY created_at DESC,stream_id LIMIT 21',$params,20);
     if($role!=='user')$out['candidates']=bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,asset_network,scale,state,revision,valid_until_epoch FROM sas_crypto_v2_route_candidates WHERE '.$where.' ORDER BY id DESC LIMIT 51',$params,50);
-    $cbsWhere='1=1';$cbsParams=[];
+    return $out;
+}
+
+function bc_crypto_buysell_dashboard_load($identity) {
+    $role=$identity['role'];$cbsWhere='1=1';$cbsParams=[];
     if($role!=='platform'){$cbsWhere.=' AND vendor_id=?';$cbsParams[]=$identity['vendor_id'];}
     if($role==='user'){$cbsWhere.=' AND user_id=?';$cbsParams[]=$identity['id'];}
-    $out['buysell_orders']=bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,request_id,side,asset,network,crypto_units_1e8,fiat_minor,state,tx_hash,updated_at FROM sas_crypto_trade_orders WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50);
-    $out['buysell_deposits']=bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,order_id,network,expected_network,asset,observed_units_1e8,confirmations,required_confirmations,state,updated_at FROM sas_crypto_chain_deposits WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50);
-    return $out;
+    return [
+        'buysell_orders'=>bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,request_id,side,asset,network,crypto_units_1e8,fiat_minor,state,tx_hash,updated_at FROM sas_crypto_trade_orders WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50),
+        'buysell_deposits'=>bc_crypto_dashboard_rows('SELECT id,vendor_id,user_id,order_id,network,expected_network,asset,observed_units_1e8,confirmations,required_confirmations,state,updated_at FROM sas_crypto_chain_deposits WHERE '.$cbsWhere.' ORDER BY id DESC LIMIT 51',$cbsParams,50),
+    ];
 }
 
 /** A local observation receipt, never a settlement receipt. Scope is bound before lookup. */

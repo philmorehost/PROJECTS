@@ -14,7 +14,7 @@ if(isset($_GET['deposit_id'])){
     if(!$receipt['available']){http_response_code(503);exit('Receipt data unavailable. No settlement status can be inferred.');}
     if(!$receipt['rows']){http_response_code(404);exit('Receipt not found.');}
 }
-$model=bc_crypto_dashboard_load($identity,$env);$customer=$role==='user';
+$model=bc_crypto_dashboard_load($identity,$env);$cbsModel=bc_crypto_buysell_dashboard_load($identity);$customer=$role==='user';
 $e=static function($v){return htmlspecialchars((string)$v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');};
 if($customer){require_once __DIR__.'/bc-plate-app.php';bc_app_head('Crypto overview');bc_app_sidebar();bc_app_topbar(['title'=>'Crypto overview']);}
 else{$area=$role==='platform'?'spadmin':'admin';require_once __DIR__.'/bc-plate-admin.php';bc_adm_head('Crypto operations',['area'=>$area]);bc_adm_sidebar(['area'=>$area]);bc_adm_topbar(['area'=>$area,'title'=>'CRYPTO OPERATIONS','crumb'=>'Crypto / Overview']);}
@@ -50,7 +50,7 @@ $tables=[
  'buysell_orders'=>['Held Crypto Buy/Sell orders (Admin <-> User)',['id'=>'Order ID','request_id'=>'Request ID','side'=>'Side','asset'=>'Asset','network'=>'Network','crypto_units_1e8'=>'Units (1e8)','fiat_minor'=>'Fiat (minor)','state'=>'State','tx_hash'=>'Tx Hash','updated_at'=>'Updated']],
  'buysell_deposits'=>['Crypto Buy/Sell chain deposit finality review',['id'=>'Deposit ID','order_id'=>'Order ID','asset'=>'Asset','network'=>'Observed Net','expected_network'=>'Expected Net','observed_units_1e8'=>'Observed (1e8)','confirmations'=>'Confs','state'=>'State','updated_at'=>'Updated']]
 ];
-foreach($tables as $key=>$definition):if(!isset($model[$key]))continue;$section=$model[$key];?>
+foreach($tables as $key=>$definition):$section=$model[$key]??($cbsModel[$key]??null);if(!isset($section))continue;?>
 <section class="crypto-panel"><h2><?php echo $e($definition[0]);?></h2>
 <?php if($key==='candidates'):?><p>Proposed, reviewed and revoked address claims only. Even an independently reviewed candidate is not a provider-allocated customer address or an enabled funding route. Open Custody &amp; protected reviews for encrypted evidence and step-up-protected review. No address or memo is exposed here.</p><?php endif;?>
 <?php if($key==='policies'):?><p>Stored flags do not establish effective authorization or provider availability. Current approvals, expiry, custody, platform/tenant stops and independent financial gates still apply. Shown assets are local records, not a verified live supported-assets list.</p><?php endif;?>
