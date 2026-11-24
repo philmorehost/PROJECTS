@@ -4,10 +4,8 @@
  */
 require __DIR__.'/../includes/webhook-signing.php';
 $n=0;function moneycheck($ok,$label){global $n;if(!$ok)throw new RuntimeException($label);$n++;}
-$source=file_get_contents(__DIR__.'/../includes/functions.php');
-// Use the shipped conversion function rather than duplicating its implementation.
-$start=strpos($source,'function to_minor_units(');$end=strpos($source,"\n}",$start)+2;
-eval(substr($source,$start,$end-$start));
+// Use the shipped conversion policy without application/schema bootstrap.
+require_once __DIR__.'/../includes/webhook-money.php';
 foreach(['includes/functions.php','webhook-paystack.php','verify.php'] as $file){
  $source=file_get_contents(__DIR__.'/../'.$file);
  $from=$file==='includes/functions.php'?strpos($source,'function payhub_generic_webhook_payload'):0;

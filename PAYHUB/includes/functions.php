@@ -1130,9 +1130,7 @@ function calculate_payout_fee($amount) {
  * Converts a currency value to integer minor units (kobo) so comparisons are
  * exact and immune to binary floating-point representation drift.
  */
-function to_minor_units($amount) {
-    return (int)round(((float)$amount) * 100);
-}
+// to_minor_units is supplied by the bootstrap-free webhook-money module.
 
 /**
  * True when the amount settled at the gateway equals the amount we expected to
