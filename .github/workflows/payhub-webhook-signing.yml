@@ -100,6 +100,9 @@ jobs:
           php -l PAYHUB/includes/webhook-alert.php
           php -l PAYHUB/bin/check-webhook-outbox.php
           php -l PAYHUB/tests/webhook_alert_policy_test.php
+          php -l PAYHUB/includes/webhook-alert-sink.php
+          php -l PAYHUB/bin/dispatch-webhook-alert.php
+          php -l PAYHUB/tests/webhook_alert_sink_policy_test.php
           php -l PAYHUB/includes/webhook-monitor.php
           php -l PAYHUB/bin/monitor-webhook-outbox.php
           php -l PAYHUB/bin/recover-webhook-outbox.php
@@ -126,6 +129,8 @@ jobs:
         run: php PAYHUB/tests/webhook_reconcile_policy_test.php
       - name: Bounded alert severity policy (no database or network)
         run: php PAYHUB/tests/webhook_alert_policy_test.php
+      - name: Opt-in SSRF-safe alert sink policy (no database or network)
+        run: php PAYHUB/tests/webhook_alert_sink_policy_test.php
       - name: Reviewed fulfilment producer inventory (source only)
         run: php PAYHUB/tests/fulfilment_inventory_test.php
       - name: PayHub DVA reconciliation & verify contract (source only)
