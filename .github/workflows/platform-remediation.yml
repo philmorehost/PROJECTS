@@ -6,6 +6,8 @@ on:
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
       - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-video-evidence.php'
+      - 'VTU/tests/run_video_evidence_native.sh'
       - 'VTU/**/func/bc-security-question-*.php'
       - 'VTU/**/web/api/security-quest.php'
       - 'VTU/**/web/SecurityQuest.php'
@@ -111,6 +113,8 @@ on:
       - 'VTU/**/func/bc-service-provider-routing.php'
       - 'VTU/**/func/bc-service-request-idempotency.php'
       - 'VTU/**/func/bc-live-capture.php'
+      - 'VTU/**/func/bc-video-evidence.php'
+      - 'VTU/tests/run_video_evidence_native.sh'
       - 'VTU/**/func/bc-security-question-*.php'
       - 'VTU/**/web/api/security-quest.php'
       - 'VTU/**/web/SecurityQuest.php'
@@ -268,6 +272,7 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/vendor_compliance_review_test.php
+          php VTU/tests/video_evidence_test.php
           php VTU/tests/security_question_policy_test.php
           php VTU/tests/vendor_registration_test.php
           php VTU/tests/vendor_registration_commerce_test.php
@@ -453,3 +458,24 @@ jobs:
           BC_QUESTION_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/security_question_mysql_test.php
+
+  video-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: fileinfo
+          coverage: none
+      - name: Install media inspection dependency
+        run: |
+          if ! test -x /usr/bin/ffprobe || ! command -v ffmpeg >/dev/null; then
+            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update -qq
+            sudo timeout 180 apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y ffmpeg
+          fi
+          /usr/bin/ffprobe -version
+          ffmpeg -version
+      - name: Inspect generated MP4 and browser-style WebM fixtures
+        run: bash VTU/tests/run_video_evidence_native.sh

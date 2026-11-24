@@ -489,13 +489,16 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         'liveliness_video' => [['mp4', 'webm'], 3],
     ];
     $saved = [];
+    if (!empty($_FILES['liveliness_video']['name']) && (($_FILES['liveliness_video']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file($_FILES['liveliness_video']['tmp_name']??'') || !bc_live_media_prepare($_FILES['liveliness_video']['tmp_name'], 'liveliness_video'))) {
+        $_SESSION['product_purchase_response']='Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';header('Location: AccountSettings.php#tab-kyc');exit;
+    }
     foreach ($kinds as $input_name => $spec) {
         list($exts, $max_mb) = $spec;
         if (empty($_FILES[$input_name]['name'])) continue;
         if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
         $tmp = $_FILES[$input_name]['tmp_name'];
         if (!is_uploaded_file($tmp)) continue;
-        if (in_array($input_name, ['selfie','liveliness_video'], true) && !bc_live_media_prepare($tmp, $input_name)) continue;
+        if ($input_name === 'selfie' && !bc_live_media_prepare($tmp, $input_name)) continue;
         if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
         $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $exts, true)) continue;
