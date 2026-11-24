@@ -210,18 +210,15 @@ $conn->query("CREATE TABLE sas_service_control (
     status TINYINT NOT NULL DEFAULT 1
 ) ENGINE=InnoDB");
 
-// Apply all bundled VTU migrations in order (stripping SQL comments before splitting)
+// Apply all bundled VTU migrations + fintech schema via bc_schema_autoheal + bc_fintech_ensure_schema
+require_once "$base/func/bc-schema-autoheal.php";
 require_once "$base/func/bc-fintech-schema.php";
-bc_fintech_ensure_schema();
-$sqlFiles = glob("$base/migrations/20261118_*.sql");
-sort($sqlFiles);
-foreach ($sqlFiles as $sf) {
-    $sql = preg_replace('/^\s*--.*$/m', '', file_get_contents($sf));
-    foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
-        if ($stmt !== '') {
-            $conn->query($stmt);
-        }
-    }
+$heal = bc_schema_autoheal($conn, "$base/migrations");
+if (empty($heal['ok'])) {
+    throw new RuntimeException('bc_schema_autoheal failed: ' . json_encode($heal));
+}
+if (bc_fintech_ensure_schema() !== true) {
+    throw new RuntimeException('bc_fintech_ensure_schema failed');
 }
 
 $conn->query("INSERT INTO sas_vendors (id, website_url, email, balance, giftcard_fee_percent, print_hub_secret) VALUES (1, 'tenant.test', 'owner@tenant.test', 500000.00, 2.00, 'vendor-kms-secret-value-123456')");
