@@ -21,6 +21,9 @@ on:
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
       - 'VTU/**/func/bc-crypto-buysell.php'
+      - 'VTU/**/func/bc-crypto-buysell-worker.php'
+      - 'VTU/**/func/bc-crypto-buysell-bridge.php'
+      - 'VTU/**/cron/process_crypto_buysell_signer.php'
       - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
       - 'VTU/**/func/bc-payout-worker.php'
       - 'VTU/**/func/bc-service-dispatch-worker.php'
@@ -182,6 +185,9 @@ on:
       - 'VTU/**/func/bc-service-dispatch-lease.php'
       - 'VTU/migrations/20261118_service_dispatch_leases.sql'
       - 'VTU/**/func/bc-crypto-buysell.php'
+      - 'VTU/**/func/bc-crypto-buysell-worker.php'
+      - 'VTU/**/func/bc-crypto-buysell-bridge.php'
+      - 'VTU/**/cron/process_crypto_buysell_signer.php'
       - 'VTU/migrations/20261118_crypto_buysell_foundation.sql'
       - 'VTU/**/func/bc-payout-worker.php'
       - 'VTU/**/func/bc-service-dispatch-worker.php'
@@ -388,6 +394,7 @@ jobs:
           php VTU/tests/checkout_intents_foundation_test.php
           php VTU/tests/service_dispatch_lease_foundation_test.php
           php VTU/tests/crypto_buysell_foundation_test.php
+          php VTU/tests/crypto_buysell_worker_test.php
           php VTU/tests/held_workers_foundation_test.php
           php VTU/tests/update_manifest_guard_test.php
           php VTU/tests/schema_manifest_test.php
