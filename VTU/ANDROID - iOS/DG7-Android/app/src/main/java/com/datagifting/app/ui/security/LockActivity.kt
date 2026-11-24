@@ -53,13 +53,23 @@ class LockActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val resp = RetrofitClient.getService().securityQuest(
-                    mapOf("api_key" to prefs.getApiKey(), "action" to "get")
+                    mapOf("app_token" to prefs.getApiKey(), "action" to "get")
                 )
                 val body = resp.body()
+                val failure = if (!resp.isSuccessful) try {
+                    JSONObject(resp.errorBody()?.string() ?: "{}")
+                } catch (_: Exception) { JSONObject() } else JSONObject()
+                if (resp.code() == 401 && failure.optString("code") == "APP_TOKEN_REQUIRED") {
+                    runOnUiThread {
+                        setLoading(false)
+                        snackRetry("The server did not receive your app session. Update the app or contact support if retrying does not help.")
+                    }
+                    return@launch
+                }
                 if (resp.code() == 401) {
                     runOnUiThread {
                         setLoading(false)
-                        Snackbar.make(binding.root, "Your app session expired. Please sign in again.", Snackbar.LENGTH_INDEFINITE)
+                        Snackbar.make(binding.root, if (failure.optString("code") == "APP_SESSION_INVALID") "Your app session is invalid or expired. Please sign in again." else "Sign-in verification was rejected. Please sign in again or contact support.", Snackbar.LENGTH_INDEFINITE)
                             .setAction("Sign in") {
                                 prefs.saveString(Constants.KEY_API_KEY, "")
                                 prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, false)
@@ -72,10 +82,7 @@ class LockActivity : AppCompatActivity() {
                     }
                     return@launch
                 }
-                val serverError = if (!resp.isSuccessful) try {
-                    val error = JSONObject(resp.errorBody()?.string() ?: "{}")
-                    error.optString("desc").ifBlank { error.optString("message") }
-                } catch (_: Exception) { "" } else ""
+                val serverError = failure.optString("desc").ifBlank { failure.optString("message") }
                 if (body == null || body["status"] as? String != "success") {
                     // Do NOT fall through to "no question set" on a failed call (e.g. invalid
                     // API key, vendor lookup failure) — that silently shows the wrong screen
@@ -189,7 +196,7 @@ class LockActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val resp = RetrofitClient.getService().securityQuest(
-                    mapOf("api_key" to prefs.getApiKey(), "action" to "verify", "answer" to answer)
+                    mapOf("app_token" to prefs.getApiKey(), "action" to "verify", "answer" to answer)
                 )
                 val status = resp.body()?.get("status") as? String ?: "failed"
                 runOnUiThread {
@@ -211,7 +218,7 @@ class LockActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val resp = RetrofitClient.getService().securityQuest(
-                    mapOf("api_key" to prefs.getApiKey(), "action" to "set", "quest_id" to questId, "answer" to answer)
+                    mapOf("app_token" to prefs.getApiKey(), "action" to "set", "quest_id" to questId, "answer" to answer)
                 )
                 val status = resp.body()?.get("status") as? String ?: "failed"
                 runOnUiThread {
@@ -235,7 +242,7 @@ class LockActivity : AppCompatActivity() {
             try {
                 val resp = RetrofitClient.getService().securityQuest(
                     mapOf(
-                        "api_key" to prefs.getApiKey(),
+                        "app_token" to prefs.getApiKey(),
                         "action" to "reset",
                         "quest_id" to questId,
                         "answer" to answer,

@@ -69,6 +69,8 @@ on:
       - 'VTU/tests/harness/public-navigation-browser.test.mjs'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
+      - 'VTU/**/func/bc-app-request-compat.php'
+      - 'VTU/tests/app_session_transport_test.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
@@ -205,6 +207,8 @@ on:
       - 'VTU/tests/harness/public-navigation-browser.test.mjs'
       - 'VTU/**/func/bc-enrollment-policy.php'
       - 'VTU/**/func/bc-app-token.php'
+      - 'VTU/**/func/bc-app-request-compat.php'
+      - 'VTU/tests/app_session_transport_test.php'
       - 'VTU/**/func/bc-app-credential-binding.php'
       - 'VTU/**/func/bc-app-update-*.php'
       - 'VTU/**/cron/process_app_updates.php'
@@ -336,6 +340,7 @@ jobs:
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php
           php -l PAYHUB/api/transaction/verify.php
+          php VTU/tests/app_session_transport_test.php
           php VTU/tests/wallet_funding_page_test.php
           php VTU/tests/payhub_deposits_test.php
           php VTU/tests/payhub_settlement_hold_test.php

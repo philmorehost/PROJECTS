@@ -50,6 +50,9 @@ object RetrofitClient {
         }
 
         val client = OkHttpClient.Builder()
+            // Custom session headers must never follow redirects to another origin.
+            .followRedirects(false)
+            .followSslRedirects(false)
             // System trust store + hostname verification. The previous trust-all
             // TrustManager/hostnameVerifier accepted ANY certificate, so anyone on the
             // same network could transparently MITM the app and read the api_key.
@@ -65,7 +68,11 @@ object RetrofitClient {
                 // Resolve the current secure session for EVERY call (login/logout can rotate it).
                 val token = sessionContext?.let { com.jikabiz.app.util.PreferenceManager(it).getApiKey() }
                 val publicAuth = original.url.encodedPath.substringAfterLast('/') in setOf("login.php", "login-otp.php", "register.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php")
-                if (!publicAuth && !token.isNullOrBlank()) builder.header("Authorization", "Bearer $token")
+                if (!publicAuth && !token.isNullOrBlank()) {
+                    builder.header("Authorization", "Bearer $token")
+                    // PHP hosts may strip Authorization before FastCGI; same verified session, not an API-key fallback.
+                    builder.header("X-App-Token", token)
+                }
 
                 val pin = TransactionPin.current
                 val body = original.body
