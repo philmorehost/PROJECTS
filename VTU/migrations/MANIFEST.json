@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-7",
+  "version": "2026.11.18-remediation-manifest-8",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -149,7 +149,7 @@
     },
     {
       "name": "bc-crypto-buysell-worker.php",
-      "sha256": "441d8ae6ae357d8367cbc0a12961b0fef1d78ad21c8249fa2c2b725a05280ee4"
+      "sha256": "9aae6181753e3596bc5cd638e022092bab4f7f83ad5d284ebd2bd054ce85c877"
     },
     {
       "name": "bc-crypto-buysell-bridge.php",

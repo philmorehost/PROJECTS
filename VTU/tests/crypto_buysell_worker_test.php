@@ -5,13 +5,27 @@ require_once __DIR__ . '/../DGV7.0-SAAS/func/bc-crypto-buysell-bridge.php';
 $n = 0;
 function cbw_ok($ok, $msg) { global $n; if (!$ok) throw new RuntimeException($msg); $n++; }
 
-foreach (['bc-crypto-buysell-worker.php', 'bc-crypto-buysell-bridge.php'] as $f) {
+foreach (['bc-crypto-buysell-worker.php', 'bc-crypto-buysell-bridge.php', 'bc-crypto-dashboard.php', 'bc-crypto-dashboard-page.php'] as $f) {
     $a = file_get_contents(__DIR__ . '/../DGV7.0-SAAS/func/' . $f);
     $b = file_get_contents(__DIR__ . '/../DGV7.0-NON-SAAS/func/' . $f);
     cbw_ok($a === $b, "edition parity for $f");
-    cbw_ok(stripos($a, 'bybit') === false, "no Bybit reference in $f");
+    if (strpos($f, 'buysell') !== false) {
+        cbw_ok(stripos($a, 'bybit') === false, "no Bybit reference in $f");
+    }
     cbw_ok(!preg_match('/\b(CREATE|ALTER|DROP|TRUNCATE)\s+TABLE\b/i', $a), "no runtime DDL in $f");
 }
+
+foreach ([
+    'http://signer.example.com/sign',
+    'https://10.0.0.5/sign',
+    'https://169.254.169.254/latest/meta-data',
+    'https://user:pass@signer.example.com/sign',
+    'https://signer.internal/sign',
+] as $badEp) {
+    cbw_ok(bc_cbs_validate_signer_endpoint($badEp) === null, "reject unsafe signer endpoint $badEp");
+}
+cbw_ok(bc_cbs_validate_signer_endpoint('http://127.0.0.1:8443/sign') === 'http://127.0.0.1:8443/sign', 'allow loopback signer daemon');
+cbw_ok(bc_cbs_validate_signer_endpoint('https://signer.example.com/v1/sign') === 'https://signer.example.com/v1/sign', 'allow public HTTPS signer');
 
 // HMAC signer digest check
 $sig1 = bc_cbs_sign_signer_request('super-secret-key-012345', 1730000000, 'post', '/v1/payout', '{"amount":"10"}');

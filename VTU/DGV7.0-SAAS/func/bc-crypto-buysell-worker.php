@@ -15,6 +15,87 @@ function bc_cbs_sign_signer_request($secret, $timestamp, $method, $path, $body) 
     return hash_hmac('sha256', $canonical, $secret);
 }
 
+/** Validate isolated signer endpoint: allows public HTTPS or explicit loopback http://127.0.0.1 / [::1]. */
+function bc_cbs_validate_signer_endpoint($url) {
+    $url = trim((string)$url);
+    if ($url === '' || strlen($url) > 512) return null;
+    $p = parse_url($url);
+    if (!is_array($p) || isset($p['user']) || isset($p['pass'])) return null;
+    $scheme = strtolower((string)($p['scheme'] ?? ''));
+    $host   = strtolower((string)($p['host'] ?? ''));
+    if ($host === '') return null;
+    $isLoopback = ($host === '127.0.0.1' || $host === '[::1]' || $host === '::1');
+    if ($isLoopback) {
+        return in_array($scheme, ['http', 'https'], true) ? $url : null;
+    }
+    if ($scheme !== 'https' || $host === 'localhost' || str_ends_with($host, '.local') || str_ends_with($host, '.internal')) {
+        return null;
+    }
+    if (filter_var($host, FILTER_VALIDATE_IP)) {
+        if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            return null;
+        }
+    }
+    return $url;
+}
+
+function bc_cbs_make_http_signer_transport($endpointUrl, $hmacSecret) {
+    $cleanUrl = bc_cbs_validate_signer_endpoint($endpointUrl);
+    if ($cleanUrl === null) {
+        throw new InvalidArgumentException('Invalid isolated signer endpoint URL.');
+    }
+    if (!is_string($hmacSecret) || strlen($hmacSecret) < 16) {
+        throw new InvalidArgumentException('Invalid isolated signer HMAC secret.');
+    }
+    $path = (string)(parse_url($cleanUrl, PHP_URL_PATH) ?: '/');
+    return static function (array $row) use ($cleanUrl, $hmacSecret, $path) {
+        $payload = json_encode([
+            'order_id'            => (int)$row['order_id'],
+            'request_id'          => (string)$row['request_id'],
+            'asset'               => (string)$row['asset'],
+            'network'             => (string)$row['network'],
+            'destination_address' => (string)$row['destination_address'],
+            'crypto_units_1e8'    => (string)$row['crypto_units_1e8'],
+            'payload_sha256'      => (string)$row['payload_sha256'],
+        ], JSON_THROW_ON_ERROR);
+        $ts  = time();
+        $sig = bc_cbs_sign_signer_request($hmacSecret, $ts, 'POST', $path, $payload);
+
+        $ch = curl_init($cleanUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'X-CBS-Timestamp: ' . $ts,
+                'X-CBS-Signature: ' . $sig,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+        $raw = curl_exec($ch);
+        $err = curl_error($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if (!is_string($raw) || $err !== '' || $code >= 500 || $code === 0) {
+            return ['outcome' => 'unknown', 'error' => $err !== '' ? $err : ('http_' . $code)];
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return ['outcome' => 'unknown', 'error' => 'invalid_signer_json'];
+        }
+        return [
+            'outcome'      => (string)($decoded['outcome'] ?? 'unknown'),
+            'provider_ref' => (string)($decoded['provider_ref'] ?? ''),
+            'tx_hash'      => (string)($decoded['tx_hash'] ?? ''),
+            'error'        => (string)($decoded['error'] ?? ''),
+        ];
+    };
+}
+
 function bc_cbs_run_signer_worker(mysqli $db, $vendorId, callable $transport, $limit = 10) {
     if (!bc_cbs_execution_enabled()) {
         return ['ok' => false, 'code' => 'execution_disabled', 'processed' => 0];

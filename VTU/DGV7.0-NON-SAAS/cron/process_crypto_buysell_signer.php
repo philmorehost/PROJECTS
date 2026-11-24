@@ -8,7 +8,7 @@ if (PHP_SAPI === 'cli') {
     $vendorId = 0; $limit = 10;
     foreach (array_slice($argv, 1) as $arg) {
         if ($arg === '--help') {
-            echo "Usage: php cron/process_crypto_buysell_signer.php --vendor=ID [--limit=10]\nRequires CRYPTO_BUYSELL_EXECUTION_ENABLED=1 and isolated signer transport.\n";
+            echo "Usage: php cron/process_crypto_buysell_signer.php --vendor=ID [--limit=10]\nRequires CRYPTO_BUYSELL_EXECUTION_ENABLED=1, CRYPTO_SIGNER_ENDPOINT, and CRYPTO_SIGNER_HMAC_SECRET.\n";
             exit(0);
         }
         if (preg_match('/\A--vendor=([1-9][0-9]{0,9})\z/D', $arg, $m)) $vendorId = (int)$m[1];
@@ -20,8 +20,16 @@ if (PHP_SAPI === 'cli') {
         exit(0);
     }
     if ($vendorId <= 0) { fwrite(STDERR, "Missing --vendor=ID.\n"); exit(2); }
-    require_once __DIR__ . '/../func/bc-connect.php';
+    $endpoint = getenv('CRYPTO_SIGNER_ENDPOINT') ?: '';
+    $secret   = getenv('CRYPTO_SIGNER_HMAC_SECRET') ?: '';
     require_once __DIR__ . '/../func/bc-crypto-buysell-worker.php';
-    echo json_encode(['ok' => false, 'code' => 'no_isolated_signer_configured', 'vendor_id' => $vendorId, 'limit' => $limit]) . "\n";
-    exit(1);
+    if (bc_cbs_validate_signer_endpoint($endpoint) === null || strlen($secret) < 16) {
+        echo json_encode(['ok' => false, 'code' => 'no_isolated_signer_configured', 'vendor_id' => $vendorId, 'limit' => $limit]) . "\n";
+        exit(1);
+    }
+    require_once __DIR__ . '/../func/bc-connect.php';
+    $transport = bc_cbs_make_http_signer_transport($endpoint, $secret);
+    $res = bc_cbs_run_signer_worker($connection_server, $vendorId, $transport, $limit);
+    echo json_encode($res) . "\n";
+    exit(!empty($res['ok']) ? 0 : 1);
 }
