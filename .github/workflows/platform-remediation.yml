@@ -10,6 +10,8 @@ on:
       - 'VTU/**/bc-admin/ServiceReconciliation.php'
       - 'VTU/migrations/20261118_service_attempt_review_indexes.sql'
       - 'VTU/migrations/20261118_service_attempt_journal.sql'
+      - 'VTU/**/func/bc-payout-reservations.php'
+      - 'VTU/migrations/20261118_payout_reservations.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -148,6 +150,8 @@ on:
       - 'VTU/**/bc-admin/ServiceReconciliation.php'
       - 'VTU/migrations/20261118_service_attempt_review_indexes.sql'
       - 'VTU/migrations/20261118_service_attempt_journal.sql'
+      - 'VTU/**/func/bc-payout-reservations.php'
+      - 'VTU/migrations/20261118_payout_reservations.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -336,6 +340,7 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/service_attempt_journal_test.php
+          php VTU/tests/payout_reservations_test.php
           php -l PAYHUB/includes/functions.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php
@@ -551,6 +556,12 @@ jobs:
           BC_ATTEMPT_JOURNAL_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/service_attempt_journal_mysql_test.php
+
+      - name: Held payout reservation concurrency and unknown-outcome reconciliation in disposable MySQL
+        env:
+          BC_PAYOUT_RES_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/payout_reservations_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest
