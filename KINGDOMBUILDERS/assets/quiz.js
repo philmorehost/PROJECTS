@@ -366,7 +366,7 @@
         try {
           state = await request('state');
           const existing = state.questions[position];
-          if (existing && existing.locked) { render(); return; }
+          if (existing && existing.editable === false) { render(); return; }
         } catch { /* keep the current screen usable */ }
       }
       const retry = document.getElementById('quiz-next');

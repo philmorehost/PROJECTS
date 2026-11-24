@@ -190,8 +190,13 @@ qid = re.search(r'name="id" value="(\d+)"><input type="hidden" name="action" val
 question.update(id=qid, question_text="Edited smoke question " + RUN)
 ok(admin.post("/admin/questions", question)[0] == 200, "edit question")
 ok(admin.post("/admin/questions", {"action": "delete", "id": qid})[0] == 200, "delete question")
-ok("Load starter questions" in admin.get("/admin/questions")[2], "the bank offers the starter questions when it is short")
+# The starter bank is idempotent: an installation whose bank is already full shows
+# no prompt, but the action must still succeed and change nothing.
+bank_before = int(probe("count", "questions") or 0)
+questions_html = admin.get("/admin/questions")[2]
+ok(("Load starter questions" in questions_html) or bank_before >= 50, "the bank offers the starter questions when it is short")
 ok(admin.post("/admin/questions", {"action": "seed-questions"})[0] == 200, "administrator can top up the bank")
+ok(int(probe("count", "questions") or 0) >= min(50, len(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "seed.json"))))), "the starter bank fills a 50-question paper")
 email = f"smoke-{RUN}@example.test"
 password = "Smoke-Passphrase-2026!"
 ok(admin.post("/admin/users", {"action": "save", "id": "0", "name": "Smoke Member", "email": email, "role": "member", "status": "active", "password": password})[0] == 200, "administrator creates member")
