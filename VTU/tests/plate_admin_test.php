@@ -75,7 +75,8 @@ foreach (array('Dashboard', 'Manage User', 'System Function', 'API Manager', 'Su
 achk(!in_array('Renew Subscription', $labels, true) || true, 'admin menu shape');
 $sys = null;
 foreach ($admin as $block) { foreach ((array)$block['items'] as $item) { if ($item['label'] === 'System Function') $sys = $item; } }
-achk(is_array($sys) && count($sys['children']) === 25, 'SAAS System Function keeps 25 children including crypto overview without platform updater');
+achk(is_array($sys) && count($sys['children']) === 26, 'SAAS System Function keeps 26 children including read-only reconciliation without platform updater');
+achk(count(array_filter($sys['children'], fn($item) => ($item['href'] ?? '') === 'ServiceReconciliation.php')) === 1, 'read-only service reconciliation is reachable exactly once');
 achk(in_array('Service Control Center', array_map(function ($c) { return $c['label']; }, $sys['children']), true), 'Service Control Center is under System Function');
 
 achk(in_array('CryptoOverview.php', array_column($sys['children'], 'href'), true), 'vendor crypto operations entry present');

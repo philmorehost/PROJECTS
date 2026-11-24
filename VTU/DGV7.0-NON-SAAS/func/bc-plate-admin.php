@@ -395,7 +395,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Fund User',             'href' => 'ShareFund.php',            'match' => array('ShareFund.php')),
                 )),
                 array('label' => 'System Function', 'icon' => 'menu-button-wide',
-                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php'),
+                      'match' => array('AccountSettings.php','Fund.php','StatusMessage.php','EmailTemplates.php','SendMail.php','AppUpdateBroadcast.php','IDBlockingSystem.php','TransactionLimits.php','SalesCalculator.php','SenderIDRequests.php','SelfTransactions.php','SelfSubmitPayment.php','SelfPaymentOrders.php','PaymentGateway.php','LoyaltySettings.php','CoinConversions.php','CryptoHub.php','FloatServiceIcons.php','KYCManagement.php','BusinessKYB.php','ServiceReconciliation.php','SupportChat.php','ChatSettings.php','BruteForceSecurity.php','ServiceControl.php'),
                       'children' => array(
                     array('label' => 'Account Settings',     'href' => 'AccountSettings.php',     'match' => array('AccountSettings.php')),
                     array('label' => 'Fund Wallet',          'href' => 'Fund.php',                'match' => array('Fund.php')),
@@ -417,6 +417,7 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Crypto',               'href' => 'CryptoHub.php',           'match' => array('CryptoHub.php')),
                     array('label' => 'Float Service Icons',  'href' => 'FloatServiceIcons.php',   'match' => array('FloatServiceIcons.php')),
                     array('label' => 'KYC Management',       'href' => 'KYCManagement.php',       'match' => array('KYCManagement.php')),
+                    array('label' => 'Service Reconciliation (read only)', 'href' => 'ServiceReconciliation.php', 'match' => array('ServiceReconciliation.php')),
                     array('label' => 'Business KYB',         'href' => 'BusinessKYB.php',         'match' => array('BusinessKYB.php')),
                     array('label' => 'Support Chat',         'href' => 'SupportChat.php',         'match' => array('SupportChat.php')),
                     array('label' => 'Chat Settings',        'href' => 'ChatSettings.php',        'match' => array('ChatSettings.php')),
