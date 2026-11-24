@@ -14,6 +14,7 @@
   let offset = 0;
   let lastFlag = 0;
   let queue = Promise.resolve();
+  let leaving = false;
 
   const node = (tag, className, text) => {
     const el = document.createElement(tag);
@@ -93,9 +94,9 @@
     panel.append(node('h1', null, passed ? 'Another step forward.' : 'Keep growing—one question at a time.'));
     panel.append(node('p', 'quiz-finish-lead', canReview
       ? (passed
-        ? 'Your answers are saved. Review anything you missed while it is still fresh.'
-        : 'Your answers are saved. The review below shows the correct answers with references.')
-      : 'Your answers are saved and scored. Your score is ready on your result page.'));
+        ? 'Your assessment is submitted — this attempt is now complete. Review anything you missed while it is still fresh.'
+        : 'Your assessment is submitted — this attempt is now complete. The review below shows the correct answers with references.')
+      : 'Your assessment is submitted and scored. This attempt is complete, and your score is ready on your result page.'));
     if (state.percentage < (state.settings.pass_mark ?? 50)) {
       panel.append(node('p', 'quiz-finish-note', `The pass mark for this community is ${state.settings.pass_mark ?? 50}%.`));
     }
@@ -118,6 +119,7 @@
     say(expired ? 'Time is up. Saving your answers…' : 'Submitting your answers…');
     try {
       state = await enqueue('finish');
+      finished = true;
       showEnd();
     } catch (error) {
       say(error.message + ' Use “Finish quiz” to try again.', 'error');
@@ -142,10 +144,10 @@
     value.textContent = `${mins}:${String(left % 60).padStart(2, '0')}`;
     el.classList.toggle('is-urgent', left <= 60);
     if (bar) {
-      const total = state.total * (state.settings.seconds_per_question || 30);
+      const total = state.budget_seconds || state.total * (state.settings.seconds_per_question || 24);
       bar.style.width = Math.max(0, Math.min(100, (left / Math.max(1, total)) * 100)) + '%';
     }
-    if (left === 0) { clearInterval(clock); finish(true); }
+    if (left === 0) { clearInterval(clock); leaving = false; finish(true); }
   }
 
   /* ── Question screen ─────────────────────────────────────────────────── */
@@ -155,14 +157,29 @@
 
     const shell = node('div', 'quiz-shell');
     const q = state.questions[current];
-    const answered = state.questions.filter(item => item.locked).length;
-    const locked = !!q.locked;
+    const answered = state.questions.filter(item => item.answered).length;
+    // While the attempt runs, a saved answer can be changed (if the administrator
+    // allows revisiting). Once the attempt is finished, nothing is interactive.
+    const editable = q.editable !== false && state.status === 'active';
+    const revisitable = state.settings.allow_back !== false;
 
     /* header */
     const head = node('header', 'quiz-head');
     const meta = node('div', 'quiz-head-meta');
     meta.append(node('span', 'eyebrow', 'THE BIBLE QUIZ'));
     meta.append(node('span', 'quiz-count', `Question ${current + 1} of ${state.total}`));
+    const jump = node('button', 'quiz-jump');
+    jump.type = 'button';
+    jump.id = 'quiz-jump';
+    jump.setAttribute('aria-expanded', 'false');
+    jump.setAttribute('aria-controls', 'quiz-dots');
+    jump.append(node('span', null, 'Answer sheet'), node('strong', null, `${answered}/${state.total}`));
+    jump.addEventListener('click', () => {
+      const open = jump.getAttribute('aria-expanded') === 'true';
+      jump.setAttribute('aria-expanded', open ? 'false' : 'true');
+      document.getElementById('quiz-dots')?.classList.toggle('is-open', !open);
+    });
+    meta.append(jump);
     const timer = node('div', 'quiz-timer');
     timer.id = 'quiz-timer';
     timer.setAttribute('role', 'timer');
@@ -184,12 +201,21 @@
     timeFill.id = 'quiz-time-fill';
     rail.append(fill, timeFill);
     const dots = node('ol', 'quiz-dots');
+    dots.id = 'quiz-dots';
     state.questions.forEach((item, index) => {
       const dot = node('li', 'quiz-dot');
-      if (item.locked) dot.classList.add('is-done');
+      if (item.answered) dot.classList.add('is-done');
       if (index === current) dot.classList.add('is-current');
-      dot.setAttribute('aria-label', item.locked ? `Question ${index + 1}: answered` : `Question ${index + 1}: not answered`);
-      dot.append(node('span', null, String(index + 1)));
+      const tip = node('button', 'quiz-dot-button');
+      tip.type = 'button';
+      tip.append(node('span', null, String(index + 1)));
+      tip.setAttribute('aria-label', `Question ${index + 1}: ${item.answered ? 'answered' : 'not answered'}${index === current ? ', current question' : ''}`);
+      tip.setAttribute('aria-current', index === current ? 'true' : 'false');
+      // Jumping back is only an option when the administrator allows revisiting.
+      const canJump = index === current || state.settings.allow_back;
+      tip.disabled = !canJump;
+      if (canJump) tip.addEventListener('click', () => { current = index; render(); focusQuestion(); });
+      dot.append(tip);
       dots.append(dot);
     });
     progress.append(rail, dots);
@@ -200,7 +226,8 @@
     const badges = node('div', 'quiz-badges');
     if (q.category) badges.append(node('span', 'quiz-chip', q.category));
     badges.append(node('span', 'quiz-chip is-quiet', `Question ${current + 1} / ${state.total}`));
-    if (locked) badges.append(node('span', 'quiz-chip is-lock', '🔒 Answer locked'));
+    if (q.answered && editable) badges.append(node('span', 'quiz-chip is-edit', revisitable ? '✓ Answer saved · you can change it' : '✓ Answer saved · still current question'));
+    else if (q.answered) badges.append(node('span', 'quiz-chip is-lock', '🔒 Answer locked'));
     card.append(badges);
 
     const question = node('h1', 'quiz-question', q.question);
@@ -213,42 +240,53 @@
     answers.setAttribute('aria-labelledby', 'quiz-question');
     q.options.forEach((text, index) => {
       const picked = q.answer === index;
-      const button = node('button', 'answer' + (picked ? ' is-picked' : '') + (locked ? ' is-locked' : ''));
+      const muted = q.answer !== null && q.answer !== -1 && !editable;
+      const button = node('button', 'answer' + (picked ? ' is-picked' : '') + (muted && !picked ? ' is-dimmed' : ''));
       button.type = 'button';
       button.setAttribute('aria-pressed', String(picked));
-      button.disabled = locked;
+      button.disabled = !editable;
       button.append(node('span', 'answer-letter', String.fromCharCode(65 + index)));
       button.append(node('span', 'answer-text', text));
-      button.append(node('span', 'answer-state', picked ? 'Saved' : ''));
-      if (!locked) button.addEventListener('click', () => save(index));
+      button.append(node('span', 'answer-state', picked ? 'Selected' : ''));
+      if (editable) button.addEventListener('click', () => save(index));
       answers.append(button);
     });
     card.append(answers);
 
-    const lockNote = node('div', 'quiz-locked-note' + (locked ? '' : ' is-hidden'));
+    const lockNote = node('div', 'quiz-locked-note' + (q.answered ? '' : ' is-hidden'));
     lockNote.id = 'quiz-lock-note';
-    lockNote.append(node('span', 'quiz-locked-icon', '🔒'), node('span', null, locked
-      ? 'Your answer is saved and locked. It cannot be changed.'
-      : 'Once you choose, your answer is saved and locked.'));
+    lockNote.append(node('span', 'quiz-locked-icon', editable ? '✓' : '🔒'), node('span', null,
+      !q.answered ? ''
+        : (editable
+          ? 'Saved. Think another option is better? Choose it — you can change your answer until time runs out or you submit.'
+          : 'This answer is final. The assessment has ended.')));
     card.append(lockNote);
+    if (revisitable && state.total > 1) {
+      const sheetHint = node('p', 'quiz-sheet-hint', 'Use “Answer sheet” or the numbered strip to revisit any question. Answers are only final when you submit.');
+      card.append(sheetHint);
+    }
 
     /* footer controls */
     const footer = node('footer', 'quiz-footer');
     const back = node('button', 'button secondary quiz-back', '← Previous');
     back.type = 'button';
-    back.disabled = current === 0 || !state.settings.allow_back;
+    back.disabled = current === 0 || !revisitable;
     back.addEventListener('click', () => {
       if (busy || current === 0) return;
-      current -= 1; render();
+      current -= 1; render(); focusQuestion();
     });
 
     const hint = node('span', 'quiz-hint');
     hint.append(node('kbd', null, '1'), node('span', null, '–'), node('kbd', null, '4'), node('span', null, ' to answer · '), node('kbd', null, 'Enter'), node('span', null, ' to continue'));
 
-    const next = node('button', 'button quiz-next', current === state.total - 1 ? 'Finish quiz →' : 'Next question →');
+    // "Next" only needs an answer for the question on screen; "Submit" is
+    // available once anything has been answered, so a member can hand in early.
+    const last = current === state.total - 1;
+    const anyAnswered = state.questions.some(item => item.answered);
+    const next = node('button', 'button quiz-next', last ? 'Submit assessment →' : 'Next question →');
     next.type = 'button';
     next.id = 'quiz-next';
-    next.disabled = !locked;
+    next.disabled = last ? !anyAnswered : !q.answered;
     next.addEventListener('click', advance);
 
     footer.append(back, hint, next);
@@ -258,51 +296,63 @@
     status.id = 'quiz-status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
-    status.textContent = locked ? 'Answer saved. Continue when you are ready.' : 'Choose the answer you believe is correct. It locks as soon as it is saved.';
+    status.textContent = q.answered
+      ? (editable ? 'Answer saved. You can change it until you submit.' : 'This answer is final.')
+      : 'Choose the answer you believe is correct. You can change it until you submit.';
 
     shell.append(head, progress, card, status);
     root.append(shell);
     updateClock();
   }
 
+  function focusQuestion() {
+    const heading = document.getElementById('quiz-question');
+    if (heading) heading.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
   function advance() {
     if (busy || finished) return;
     const q = state.questions[current];
-    if (!q.locked) { say('Choose an answer first — it locks once saved.', 'error'); return; }
+    if (!q.answered) { say('Choose an answer first. You can change it later.', 'error'); return; }
     if (current < state.total - 1) {
       current += 1;
       render();
-      const heading = document.getElementById('quiz-question');
-      if (heading) heading.focus({ preventScroll: true });
-      window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+      focusQuestion();
       return;
     }
-    const unanswered = state.questions.filter(item => !item.locked).length;
-    if (unanswered === 0 || confirm(`${unanswered} question${unanswered === 1 ? ' has' : 's have'} no answer. Finish anyway? Your saved answers will be scored.`)) finish();
+    // Submitting is final, so say exactly what will be handed in.
+    const unanswered = state.questions.filter(item => !item.answered).length;
+    const message = unanswered === 0
+      ? 'Submit your assessment now? This is final — you cannot take it again.'
+      : `${unanswered} question${unanswered === 1 ? ' has' : 's have'} no answer. Submit anyway? This is final — you cannot take it again.`;
+    if (confirm(message)) finish();
   }
 
   async function save(choice) {
     if (busy || finished) return;
     const position = current;
     const question = state.questions[position];
-    if (question.locked) { say('That answer is already saved and cannot be changed.', 'error'); return; }
+    if (question.editable === false) { say('The assessment has ended. Your answers are final.', 'error'); return; }
+    if (question.answered && question.answer === choice) { say('That is already your saved answer.', ''); return; }
 
     busy = true;
+    const changing = question.answered;
     const buttons = Array.from(document.querySelectorAll('.quiz-answers .answer'));
     buttons.forEach(button => { button.disabled = true; });
     const nextButton = document.getElementById('quiz-next');
     if (nextButton) nextButton.disabled = true;
     buttons[choice]?.classList.add('is-choosing');
-    say('Saving your answer…');
+    say(changing ? 'Changing your answer…' : 'Saving your answer…');
 
     try {
       const result = await enqueue('answer', { position, choice });
       question.answer = choice;
-      question.locked = true;
+      question.answered = true;
       render();
       const fresh = document.getElementById('quiz-next');
       if (fresh) fresh.focus({ preventScroll: true });
-      say(result.unchanged ? 'That answer was already saved.' : 'Answer saved and locked.', 'success');
+      say(changing ? 'Answer changed. You can still change it again before you submit.' : 'Answer saved. You can change it before you submit.', 'success');
       if (result.feedback) {
         const card = document.querySelector('.quiz-card');
         const feedback = node('div', 'quiz-feedback' + (result.feedback.correct ? ' is-correct' : ' is-wrong'),
@@ -338,13 +388,64 @@
     }
   }
 
-  document.addEventListener('visibilitychange', flag);
-  window.addEventListener('beforeunload', event => {
-    if (!finished && (busy || (state && state.status === 'active' && state.questions[current] && !state.questions[current].locked))) {
-      event.preventDefault();
-      event.returnValue = '';
+  /**
+   * Leaving the page ends the assessment. ask() lets a click on a link or a
+   * button cancel first; the browser's own confirmation covers closing the tab.
+   */
+  function active() {
+    return !finished && state && state.status === 'active';
+  }
+
+  function leave(keepalive = false) {
+    if (!active() || leaving) return Promise.resolve();
+    leaving = true;
+    const body = JSON.stringify({ action: 'leave' });
+    if (keepalive && navigator.sendBeacon) {
+      // A beacon survives the page being closed. The CSRF token travels in the
+      // body, which sendBeacon can set with a Blob of type application/json.
+      navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }));
+      return Promise.resolve();
     }
+    return fetch(endpoint, {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-Token': token },
+      body,
+    }).then(response => response.json().catch(() => ({}))).then(result => {
+      if (result && result.ended) { finished = true; showEnd(); }
+      return result;
+    }).catch(() => {});
+  }
+
+  // Arm the answer sheet, the mobile dock and the header links.
+  document.addEventListener('click', event => {
+    if (!active()) return;
+    const link = event.target.closest('a[href], form[action] button');
+    if (!link || link.dataset.keepOpen === 'true') return;
+    // Same-page links (the answer sheet, for example) do not leave the paper.
+    const leavesQuiz = link.tagName === 'A' ? !link.getAttribute('href').startsWith('#') : true;
+    if (!leavesQuiz) return;
+    if (!window.confirm('Leave the quiz? Your assessment will be submitted with the answers saved so far, and you cannot take it again.')) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    // A page navigation needs the request to outlive it.
+    leave(true);
+  }, true);
+
+  document.addEventListener('visibilitychange', flag);
+
+  window.addEventListener('beforeunload', event => {
+    if (!active()) return;
+    // The browser shows its own wording; ours explains the consequence.
+    event.preventDefault();
+    event.returnValue = '';
+    leave(true);
   });
+
+  window.addEventListener('pagehide', () => { if (active()) leave(true); });
 
   document.addEventListener('keydown', event => {
     if (finished || busy || !state || state.status !== 'active') return;
@@ -352,7 +453,7 @@
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const question = state.questions[current];
     if (!question) return;
-    if (/^[1-4]$/.test(event.key) && !question.locked && Number(event.key) - 1 < question.options.length) {
+    if (/^[1-4]$/.test(event.key) && question.editable !== false && Number(event.key) - 1 < question.options.length) {
       event.preventDefault();
       save(Number(event.key) - 1);
     } else if (event.key === 'Enter' && document.activeElement?.tagName !== 'BUTTON') {
@@ -366,7 +467,9 @@
       state = data;
       offset = state.server_time - Math.floor(Date.now() / 1000);
       if (state.status === 'active') {
-        const unanswered = state.questions.findIndex(q => !q.locked);
+        // Resume where the member stopped: the first unanswered question, or the
+        // last one when everything has been answered and can still be revised.
+        const unanswered = state.questions.findIndex(q => !q.answered);
         current = unanswered < 0 ? state.total - 1 : unanswered;
         render();
         if (state.expires_at) clock = setInterval(updateClock, 500);

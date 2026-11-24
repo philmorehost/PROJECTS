@@ -43,6 +43,13 @@ final class Admin {
             if(is_post()) {
                 try {
                     $id=(int)post('id');
+                    if(post('action')==='seed-questions') {
+                        Security::throttle('questions.seed',(string)$admin['id'],5,3600);
+                        $added=Installer::seedQuestions();
+                        Audit::activity('question.bank_topped_up','site',null,['added'=>$added]);
+                        flash($added>0?$added.' starter question'.($added===1?'':'s').' added. The bank now holds '.DB::value('SELECT COUNT(*) FROM questions').' in total.':'Every starter question is already in your bank.');
+                        redirect('admin/questions');
+                    }
                     if(post('action')==='delete') {
                         if(!$id || !DB::one('SELECT id FROM questions WHERE id=?',[$id])) throw new UserError('Question not found.',404);
                         DB::transaction(static function () use($id): void { DB::run('DELETE FROM questions WHERE id=?',[$id]); Audit::activity('question.deleted','question',$id); });
@@ -156,7 +163,7 @@ final class Admin {
                         $input=array_merge(Settings::all(),$_POST);
                         // A hidden "0" plus a checked "1" means the last value wins; an
                         // unchecked box with no hidden field simply sends nothing.
-                        foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','large_text','google_enabled','otp_register','otp_login','recaptcha_enabled'] as $key) {
+                        foreach(['registration_open','quiz_open','timer_enabled','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','large_text','google_enabled','otp_register','otp_login','recaptcha_enabled'] as $key) {
                             $value=$_POST[$key] ?? '0';
                             $input[$key]=is_string($value) && $value==='1';
                         }

@@ -4,7 +4,7 @@ namespace KB;
 
 final class Quiz {
     public static function settingsSnapshot(): array {
-        $keys = ['questions_per_attempt','seconds_per_question','timer_enabled','pass_mark','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','one_attempt','max_tab_switches'];
+        $keys = ['questions_per_attempt','duration_minutes','seconds_per_question','timer_enabled','pass_mark','randomize_questions','randomize_answers','allow_back','practice_feedback','review_questions','max_tab_switches'];
         return array_intersect_key(Settings::all(),array_flip($keys));
     }
     public static function uuid(): string {
@@ -18,7 +18,8 @@ final class Quiz {
             $settings = self::settingsSnapshot();
             $existing = DB::one('SELECT id FROM attempts WHERE active_user_id=?',[$userId]);
             if ($existing) return $existing['id'];
-            if ($settings['one_attempt'] && DB::value('SELECT COUNT(*) FROM attempts WHERE user_id=? AND status<>"active"',[$userId])) throw new UserError('You have already completed this assessment.');
+            // One assessment per member, always: a finished attempt cannot be repeated.
+            if (DB::value('SELECT COUNT(*) FROM attempts WHERE user_id=? AND status<>"active"',[$userId])) throw new UserError(self::alreadyAttempted());
             $count = (int)DB::value('SELECT COUNT(*) FROM questions WHERE is_active=1');
             if (!$count) throw new UserError('No questions are available yet. Please contact your administrator.');
             $take = min($count,(int)$settings['questions_per_attempt']);
@@ -26,19 +27,22 @@ final class Quiz {
             $ids=[];
             if ($settings['randomize_questions']) {
                 // Bounded work: no ORDER BY RAND(), no loading question bodies during sampling.
-                for ($i=0; $i<$take*3 && count($ids)<$take; $i++) {
+                // Random pivots are cheap but collide on a sparse bank, so the
+                // attempt count scales with the number of questions requested.
+                for ($i=0; $i<max($take*6,200) && count($ids)<$take; $i++) {
                     $pivot=random_int(1,max(1,$max));
-                    $row=DB::one('SELECT id FROM questions WHERE is_active=1 AND id>=? ORDER BY id LIMIT 1',[$pivot]);
+                    $row=DB::one('SELECT id FROM questions WHERE is_active=1 AND id>=? ORDER BY id LIMIT 1 OFFSET '.random_int(0,3),[$pivot]);
                     if (!$row) $row=DB::one('SELECT id FROM questions WHERE is_active=1 ORDER BY id LIMIT 1');
                     if ($row) $ids[(int)$row['id']]=true;
                 }
                 $ids=array_keys($ids);
             } else $ids=array_column(DB::all('SELECT id FROM questions WHERE is_active=1 ORDER BY id LIMIT ?',[$take]),'id');
             if (count($ids)<$take) $ids=array_column(DB::all('SELECT id FROM questions WHERE is_active=1 ORDER BY id LIMIT ?',[$take]),'id');
+            $ids=array_slice(array_values(array_unique(array_map('intval',$ids))),0,$take);
             $in=implode(',',array_fill(0,count($ids),'?'));
             $questions=DB::all("SELECT * FROM questions WHERE id IN ($in)",$ids);
             $byId=array_column($questions,null,'id');
-            $id=self::uuid(); $start=time(); $expiry=$settings['timer_enabled'] ? gmdate('Y-m-d H:i:s',$start+$take*$settings['seconds_per_question']) : null;
+            $id=self::uuid(); $start=time(); $budget=self::budget($settings,$take); $expiry=$settings['timer_enabled'] ? gmdate('Y-m-d H:i:s',$start+$budget) : null;
             DB::run('INSERT INTO attempts(id,user_id,active_user_id,settings_snapshot,total_questions,started_at,expires_at) VALUES (?,?,?,?,?,?,?)',[$id,$userId,$userId,json_encode($settings),$take,gmdate('Y-m-d H:i:s',$start),$expiry]);
             foreach ($ids as $position=>$questionId) {
                 $q=$byId[$questionId]; $options=[$q['option_a'],$q['option_b'],$q['option_c'],$q['option_d']]; $order=[0,1,2,3];
@@ -50,6 +54,34 @@ final class Quiz {
             return $id;
         });
     }
+    /**
+     * Seconds the member has for the whole attempt.
+     *
+     * The administrator sets the total budget in minutes (20 by default), so the
+     * count and the clock are independent: 50 questions in 20 minutes is 24
+     * seconds each, but a bank with fewer questions still gets the full 20
+     * minutes. `seconds_per_question` remains the fallback for an attempt that
+     * was created before the duration setting existed.
+     */
+    public static function budget(array $settings, int $questions): int {
+        $minutes = (int) ($settings['duration_minutes'] ?? 0);
+        if ($minutes > 0) return min(86400, $minutes * 60);
+        $pace = max(5, (int) ($settings['seconds_per_question'] ?? 24));
+        return min(86400, max(60, $questions * $pace));
+    }
+
+    /** Human wording for a remaining time, e.g. "19 minutes". */
+    public static function durationLabel(int $seconds): string {
+        if ($seconds >= 3600) { $hours = intdiv($seconds, 3600); $minutes = (int) round(($seconds % 3600) / 60); return $hours . ' hour' . ($hours === 1 ? '' : 's') . ($minutes ? ' ' . $minutes . ' minutes' : ''); }
+        $minutes = max(1, (int) round($seconds / 60));
+        return $minutes . ' minute' . ($minutes === 1 ? '' : 's');
+    }
+
+    public static function alreadyAttempted(): string {
+        return 'You have already taken this assessment. Each member may take it once, so your first submission stands. '
+            . (self::reviewEnabled() ? 'Open your result from the dashboard to review the questions.' : 'Open your result from the dashboard to see your score.');
+    }
+
     /**
      * Whether completed members may see the questions and answers again.
      * Off by default: a finished attempt exposes its score, not its content.
@@ -75,6 +107,7 @@ final class Quiz {
         $review=self::reviewEnabled();
         // Once an attempt is finished, question content is only loaded when the
         // administrator allows review. Otherwise it never reaches the browser.
+        $settings=json_decode($a['settings_snapshot'],true);
         $items=$a['status']!=='active' && !$review ? [] : DB::all('SELECT ai.id,ai.position,ai.question_text,ai.options_snapshot,ai.answer,ai.is_skipped,ai.reference,q.category FROM attempt_items ai LEFT JOIN questions q ON q.id=ai.question_id WHERE ai.attempt_id=? ORDER BY ai.position',[$id]);
         $public=[];
         foreach ($items as $item) {
@@ -86,11 +119,15 @@ final class Quiz {
                 'answer'=>(int)$item['is_skipped']?-1:($item['answer']===null?null:(int)$item['answer']),
                 'reference'=>$item['reference'],
                 'category'=>(string)($item['category']??''),
-                // An answer is final once saved: the client renders it as locked and the server refuses changes.
-                'locked'=>$answered,
+                // "answered" marks the position menu and the progress bar; an
+                // answer stays changeable only while the attempt is running.
+                'answered'=>$answered,
+                // Editable while the attempt runs (subject to the administrator's
+                // "allow revisiting" setting); never editable once submitted.
+                'editable'=>$a['status']==='active' && ($answered ? $settings['allow_back'] : true),
             ];
         }
-        return ['id'=>$id,'status'=>$a['status'],'settings'=>json_decode($a['settings_snapshot'],true),'questions'=>$public,'can_review'=>$review,'server_time'=>time(),'expires_at'=>$a['expires_at']?strtotime($a['expires_at'].' UTC'):null,'score'=>(int)$a['score'],'total'=>(int)$a['total_questions'],'percentage'=>(float)$a['percentage'],'tab_switches'=>(int)$a['tab_switches']];
+        return ['id'=>$id,'status'=>$a['status'],'settings'=>$settings,'questions'=>$public,'can_review'=>$review,'budget_seconds'=>self::budget($settings,(int)$a['total_questions']),'duration_label'=>self::durationLabel(self::budget($settings,(int)$a['total_questions'])),'server_time'=>time(),'expires_at'=>$a['expires_at']?strtotime($a['expires_at'].' UTC'):null,'score'=>(int)$a['score'],'total'=>(int)$a['total_questions'],'percentage'=>(float)$a['percentage'],'tab_switches'=>(int)$a['tab_switches']];
     }
     public static function answer(string $id,int $userId,int $position,int $choice): array {
         if ($choice < -1 || $choice>3) throw new UserError('Invalid answer.');
@@ -102,22 +139,49 @@ final class Quiz {
             $item=DB::one('SELECT * FROM attempt_items WHERE attempt_id=? AND position=?',[$id,$position]);
             if (!$item) throw new UserError('Question not found.',404);
             $alreadySaved=$item['answer']!==null || (int)$item['is_skipped']===1;
-            if ($alreadySaved) {
-                // Saved answers are final. A repeated identical request (network retry) succeeds
-                // so the client can recover; any different choice is refused.
-                if ($choice>=0 && $item['answer']!==null && (int)$item['answer']===$choice) {
-                    return ['saved'=>true,'locked'=>true,'unchanged'=>true,'feedback'=>$settings['practice_feedback']?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
-                }
-                throw new UserError('That answer is already saved and cannot be changed.',409);
+            // A repeated identical request (a network retry) is acknowledged so the
+            // client can recover without changing anything.
+            $same=$choice<0 ? (int)$item['is_skipped']===1 : ($item['answer']!==null && (int)$item['answer']===$choice);
+            if ($alreadySaved && $same) {
+                return ['saved'=>true,'changed'=>false,'feedback'=>!empty($settings['practice_feedback'])?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
             }
-            if (!$settings['allow_back']) {
+            if ($alreadySaved) {
+                // Changing one's mind is allowed while the attempt is running and
+                // inside the time limit. Nothing can be changed after submission.
+                // With revisiting switched off, only the question on screen can be
+                // changed — you cannot go back to earlier ones.
+                if (!$settings['allow_back']) {
+                    $next=(int)DB::value('SELECT COALESCE(MIN(position),?) FROM attempt_items WHERE attempt_id=? AND answer IS NULL AND is_skipped=0',[$a['total_questions'],$id]);
+                    if ($position!==$next) throw new UserError('Earlier answers cannot be changed in this assessment.',409);
+                }
+            } elseif (!$settings['allow_back']) {
                 $next=(int)DB::value('SELECT COALESCE(MIN(position),?) FROM attempt_items WHERE attempt_id=? AND answer IS NULL AND is_skipped=0',[$a['total_questions'],$id]);
                 if ($position!==$next) throw new UserError('Earlier answers cannot be changed in this assessment.',409);
             }
             DB::run('UPDATE attempt_items SET answer=?,is_skipped=?,answered_at=? WHERE id=?',[$choice<0?null:$choice,$choice<0?1:0,now(),$item['id']]);
-            return ['saved'=>true,'locked'=>true,'feedback'=>$settings['practice_feedback']?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
+            return ['saved'=>true,'changed'=>$alreadySaved,'locked'=>false,
+                'remaining'=>max(0,($a['expires_at']!==null?strtotime($a['expires_at'].' UTC')-time():0)),
+                'feedback'=>!empty($settings['practice_feedback'])?['correct'=>$choice===(int)$item['correct_option'],'explanation'=>$item['explanation']]:null];
         });
     }
+    /**
+     * End the attempt when a member walks away from the quiz page.
+     *
+     * The paper is submitted rather than left open, so "one attempt" is literal:
+     * leaving the page keeps the answers already saved and uses up the attempt.
+     * The clock is still authoritative if they come back before it expires.
+     */
+    public static function leave(string $id,int $userId): array {
+        return DB::transaction(static function () use ($id,$userId): array {
+            $a=self::owned($id,$userId,true);
+            if ($a['status']!=='active') return ['ended'=>true,'status'=>$a['status']];
+            $answered=(int)DB::value('SELECT COUNT(*) FROM attempt_items WHERE attempt_id=? AND (answer IS NOT NULL OR is_skipped=1)',[$id]);
+            self::finishLocked($a,'submitted');
+            Audit::log('assessment.left','attempt',$id,['answered'=>$answered]);
+            return ['ended'=>true,'status'=>'submitted','answered'=>$answered];
+        });
+    }
+
     public static function flag(string $id,int $userId): array {
         return DB::transaction(static function () use ($id,$userId): array {
             $a=self::owned($id,$userId,true);

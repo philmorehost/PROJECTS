@@ -490,5 +490,473 @@
     ],
     "correct": 1,
     "reference": "1"
+  },
+  {
+    "category": "Acts",
+    "question": "Who was chosen to replace Judas among the twelve apostles?",
+    "options": [
+      "Matthias",
+      "Barsabbas",
+      "Stephen",
+      "Philip"
+    ],
+    "correct": 0,
+    "reference": "Acts 1"
+  },
+  {
+    "category": "Acts",
+    "question": "On which day did the Holy Spirit come upon the disciples in Jerusalem?",
+    "options": [
+      "Passover",
+      "The Day of Pentecost",
+      "The Feast of Tabernacles",
+      "The Sabbath"
+    ],
+    "correct": 1,
+    "reference": "Acts 2"
+  },
+  {
+    "category": "Acts",
+    "question": "How many people were baptised after Peter preached at Pentecost?",
+    "options": [
+      "About three hundred",
+      "About one thousand",
+      "About three thousand",
+      "About five thousand"
+    ],
+    "correct": 2,
+    "reference": "Acts 2"
+  },
+  {
+    "category": "Acts",
+    "question": "What did Peter say to the beggar at the temple gate called Beautiful?",
+    "options": [
+      "Silver and gold I give you",
+      "Rise and walk — in the name of Jesus Christ of Nazareth",
+      "Go home and be healed",
+      "Wait here until evening"
+    ],
+    "correct": 1,
+    "reference": "Acts 3"
+  },
+  {
+    "category": "Acts",
+    "question": "Who was the first Christian martyr?",
+    "options": [
+      "Stephen",
+      "James",
+      "Barnabas",
+      "Philip"
+    ],
+    "correct": 0,
+    "reference": "Acts 7"
+  },
+  {
+    "category": "Acts",
+    "question": "What happened to Saul on the road to Damascus?",
+    "options": [
+      "He was struck by lightning",
+      "A light from heaven shone around him",
+      "He was arrested by soldiers",
+      "He fell asleep and dreamed"
+    ],
+    "correct": 1,
+    "reference": "Acts 9"
+  },
+  {
+    "category": "Acts",
+    "question": "What was the name of the disciple who was also called Barnabas?",
+    "options": [
+      "Joseph",
+      "Silas",
+      "Lucius",
+      "Mnason"
+    ],
+    "correct": 0,
+    "reference": "Acts 4"
+  },
+  {
+    "category": "Acts",
+    "question": "In what city were the disciples first called Christians?",
+    "options": [
+      "Jerusalem",
+      "Antioch",
+      "Corinth",
+      "Rome"
+    ],
+    "correct": 1,
+    "reference": "Acts 11"
+  },
+  {
+    "category": "John",
+    "question": "According to John's Gospel, what was in the beginning?",
+    "options": [
+      "The law",
+      "The Word",
+      "The temple",
+      "The prophets"
+    ],
+    "correct": 1,
+    "reference": "John 1"
+  },
+  {
+    "category": "John",
+    "question": "Who did John the Baptist say he was preparing the way for?",
+    "options": [
+      "Elijah",
+      "Moses",
+      "The Lord",
+      "The high priest"
+    ],
+    "correct": 2,
+    "reference": "John 1"
+  },
+  {
+    "category": "John",
+    "question": "What was Jesus' first recorded miracle in John's Gospel?",
+    "options": [
+      "Walking on water",
+      "Turning water into wine",
+      "Healing a blind man",
+      "Feeding five thousand"
+    ],
+    "correct": 1,
+    "reference": "John 2"
+  },
+  {
+    "category": "John",
+    "question": "How many days was Lazarus in the tomb before Jesus raised him?",
+    "options": [
+      "Two",
+      "Three",
+      "Four",
+      "Seven"
+    ],
+    "correct": 2,
+    "reference": "John 11"
+  },
+  {
+    "category": "John",
+    "question": "What did Jesus call himself in John 6?",
+    "options": [
+      "The bread of life",
+      "The living water",
+      "The good shepherd",
+      "The light of the world"
+    ],
+    "correct": 0,
+    "reference": "John 6"
+  },
+  {
+    "category": "Luke",
+    "question": "Which Gospel records the parable of the good Samaritan?",
+    "options": [
+      "Matthew",
+      "Mark",
+      "Luke",
+      "John"
+    ],
+    "correct": 2,
+    "reference": "Luke 10"
+  },
+  {
+    "category": "Luke",
+    "question": "Who was the Roman governor before whom Jesus was tried and who sent him to Herod?",
+    "options": [
+      "Festus",
+      "Pilate",
+      "Felix",
+      "Gallio"
+    ],
+    "correct": 1,
+    "reference": "Luke 23"
+  },
+  {
+    "category": "Luke",
+    "question": "What did Simeon say about Jesus when he saw him in the temple?",
+    "options": [
+      "A light to the Gentiles",
+      "A mighty king",
+      "A prophet like Moses",
+      "A teacher of the law"
+    ],
+    "correct": 0,
+    "reference": "Luke 2"
+  },
+  {
+    "category": "Genesis",
+    "question": "Who built the ark at God's command?",
+    "options": [
+      "Abraham",
+      "Noah",
+      "Methuselah",
+      "Enoch"
+    ],
+    "correct": 1,
+    "reference": "Genesis 6"
+  },
+  {
+    "category": "Genesis",
+    "question": "What did God create on the first day?",
+    "options": [
+      "The sun and moon",
+      "Light",
+      "The sea and land",
+      "Birds and fish"
+    ],
+    "correct": 1,
+    "reference": "Genesis 1"
+  },
+  {
+    "category": "Genesis",
+    "question": "Which tree was in the middle of the garden of Eden?",
+    "options": [
+      "The tree of life",
+      "The olive tree",
+      "The fig tree",
+      "The cedar of Lebanon"
+    ],
+    "correct": 0,
+    "reference": "Genesis 3"
+  },
+  {
+    "category": "Genesis",
+    "question": "What was the name of Abraham's son born to Sarah?",
+    "options": [
+      "Ishmael",
+      "Isaac",
+      "Jacob",
+      "Esau"
+    ],
+    "correct": 1,
+    "reference": "Genesis 21"
+  },
+  {
+    "category": "Genesis",
+    "question": "Who wrestled with Jacob until daybreak?",
+    "options": [
+      "An angel",
+      "A man",
+      "Esau",
+      "Laban"
+    ],
+    "correct": 1,
+    "reference": "Genesis 32"
+  },
+  {
+    "category": "Genesis",
+    "question": "What did Joseph's brothers sell him for?",
+    "options": [
+      "Twenty pieces of silver",
+      "Thirty pieces of gold",
+      "A flock of sheep",
+      "A coat"
+    ],
+    "correct": 0,
+    "reference": "Genesis 37"
+  },
+  {
+    "category": "Exodus",
+    "question": "Who did God call to lead the Israelites out of Egypt?",
+    "options": [
+      "Aaron",
+      "Moses",
+      "Joshua",
+      "Caleb"
+    ],
+    "correct": 1,
+    "reference": "Exodus 3"
+  },
+  {
+    "category": "Exodus",
+    "question": "What was the final plague on Egypt?",
+    "options": [
+      "Locusts",
+      "Darkness",
+      "Death of the firstborn",
+      "Boils"
+    ],
+    "correct": 2,
+    "reference": "Exodus 12"
+  },
+  {
+    "category": "Exodus",
+    "question": "Through what did the Israelites cross to escape Egypt?",
+    "options": [
+      "The Red Sea",
+      "The Jordan River",
+      "The Nile",
+      "The Dead Sea"
+    ],
+    "correct": 0,
+    "reference": "Exodus 14"
+  },
+  {
+    "category": "Exodus",
+    "question": "On which mountain did Moses receive the Ten Commandments?",
+    "options": [
+      "Mount Carmel",
+      "Mount Sinai",
+      "Mount of Olives",
+      "Mount Hermon"
+    ],
+    "correct": 1,
+    "reference": "Exodus 20"
+  },
+  {
+    "category": "Psalms",
+    "question": "Who is described as a shepherd in Psalm 23?",
+    "options": [
+      "David",
+      "The Lord",
+      "The king",
+      "Israel"
+    ],
+    "correct": 1,
+    "reference": "Psalm 23"
+  },
+  {
+    "category": "Psalms",
+    "question": "According to Psalm 119, where should God's word be hidden?",
+    "options": [
+      "In the temple",
+      "In the heart",
+      "In a scroll",
+      "On the altar"
+    ],
+    "correct": 1,
+    "reference": "Psalm 119"
+  },
+  {
+    "category": "Proverbs",
+    "question": "What does Proverbs say is the beginning of knowledge?",
+    "options": [
+      "Fear of the Lord",
+      "Wealth",
+      "Wisdom of the aged",
+      "Hard work"
+    ],
+    "correct": 0,
+    "reference": "Proverbs 1"
+  },
+  {
+    "category": "Proverbs",
+    "question": "A soft answer turns away what, according to Proverbs 15?",
+    "options": [
+      "Anger",
+      "Sorrow",
+      "Poverty",
+      "Fear"
+    ],
+    "correct": 0,
+    "reference": "Proverbs 15"
+  },
+  {
+    "category": "Isaiah",
+    "question": "Which prophet saw the Lord seated on a throne, high and lifted up?",
+    "options": [
+      "Jeremiah",
+      "Isaiah",
+      "Ezekiel",
+      "Daniel"
+    ],
+    "correct": 1,
+    "reference": "Isaiah 6"
+  },
+  {
+    "category": "Isaiah",
+    "question": "What sign did Isaiah give to Ahaz?",
+    "options": [
+      "A star in the east",
+      "A virgin shall conceive",
+      "A pillar of fire",
+      "A voice from heaven"
+    ],
+    "correct": 1,
+    "reference": "Isaiah 7"
+  },
+  {
+    "category": "Jonah",
+    "question": "What did Jonah do when God told him to go to Nineveh?",
+    "options": [
+      "He obeyed at once",
+      "He fled to Tarshish",
+      "He prayed for three days",
+      "He asked for a sign"
+    ],
+    "correct": 1,
+    "reference": "Jonah 1"
+  },
+  {
+    "category": "Jonah",
+    "question": "What swallowed Jonah?",
+    "options": [
+      "A whale",
+      "A great fish",
+      "A storm",
+      "A sea lion"
+    ],
+    "correct": 1,
+    "reference": "Jonah 1"
+  },
+  {
+    "category": "Hebrews",
+    "question": "According to Hebrews, what is faith?",
+    "options": [
+      "Belief in what is seen",
+      "The substance of things hoped for",
+      "Certainty of reward",
+      "Obedience to the law"
+    ],
+    "correct": 1,
+    "reference": "Hebrews 11"
+  },
+  {
+    "category": "Romans",
+    "question": "What does Romans 6 say is the wages of sin?",
+    "options": [
+      "Sorrow",
+      "Death",
+      "Judgement",
+      "Poverty"
+    ],
+    "correct": 1,
+    "reference": "Romans 6"
+  },
+  {
+    "category": "Romans",
+    "question": "Who does Romans say all have sinned and fallen short of?",
+    "options": [
+      "The glory of God",
+      "The law of Moses",
+      "The temple",
+      "The kingdom"
+    ],
+    "correct": 0,
+    "reference": "Romans 3"
+  },
+  {
+    "category": "1 Corinthians",
+    "question": "What is the greatest of faith, hope and love?",
+    "options": [
+      "Faith",
+      "Hope",
+      "Love",
+      "They are equal"
+    ],
+    "correct": 2,
+    "reference": "1 Corinthians 13"
+  },
+  {
+    "category": "Ephesians",
+    "question": "What does Ephesians call the sword of the Spirit?",
+    "options": [
+      "Faith",
+      "The word of God",
+      "Righteousness",
+      "Truth"
+    ],
+    "correct": 1,
+    "reference": "Ephesians 6"
   }
 ]

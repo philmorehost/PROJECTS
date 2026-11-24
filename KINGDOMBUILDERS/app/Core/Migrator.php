@@ -11,7 +11,9 @@ namespace KB;
  * simply retried on the next request.
  */
 final class Migrator {
-    public const VERSION = 2;
+    public const VERSION = 3;
+    /** Schema level at which the 0.11.x assessment defaults are applied once. */
+    private const ASSESSMENT_DEFAULTS = 3;
 
     public static function run(): void {
         static $ran = false;
@@ -37,6 +39,30 @@ final class Migrator {
             }
             DB::run('INSERT IGNORE INTO schema_migrations(version,applied_at) VALUES (?,?)', [$version, now()]);
             $current = $version;
+        }
+        if ($current < self::ASSESSMENT_DEFAULTS) self::applyAssessmentDefaults();
+    }
+
+    /**
+     * One 50-question, 20-minute paper with revisable answers, for a site that
+     * was installed with the older 15-question, 30-seconds-each rule. Runs once:
+     * the schema version records it, so later administrator changes survive.
+     */
+    private static function applyAssessmentDefaults(): void {
+        try {
+            $save = static function (string $key, mixed $value): void {
+                DB::run('INSERT INTO settings(setting_key,setting_value,updated_at) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_at=VALUES(updated_at)', [$key, json_encode($value, JSON_THROW_ON_ERROR), now()]);
+            };
+            $save('questions_per_attempt', 50);
+            $save('duration_minutes', 20);
+            $save('seconds_per_question', 24);
+            $save('allow_back', true);
+            DB::run('DELETE FROM settings WHERE setting_key=?', ['one_attempt']);
+            DB::run('INSERT IGNORE INTO schema_migrations(version,applied_at) VALUES (?,?)', [self::ASSESSMENT_DEFAULTS, now()]);
+            Settings::flushCache();
+            Audit::log('settings.assessment_defaults', 'site', null, ['questions'=>50,'minutes'=>20,'allow_back'=>true]);
+        } catch (\Throwable $e) {
+            error_log('KB assessment defaults: ' . get_class($e));
         }
     }
 

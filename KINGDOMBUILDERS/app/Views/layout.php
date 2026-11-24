@@ -9,13 +9,17 @@ $textChoice=in_array($_COOKIE['kb_text']??'',['large','xlarge'],true)?$_COOKIE['
 $textClass=$textChoice!==''?'text-'.$textChoice:((KB\installed() && KB\Settings::get('large_text'))?'text-large':'');
 // Mobile dock: only for signed-in people, and never during an assessment or
 // on the installer/authorisation gate where it would compete with the task.
-$dockAttempt=null; $dockQuizOpen=false; $dockVerified=true;
+$dockAttempt=null; $dockTaken=null; $dockQuizOpen=false; $dockVerified=true;
 $showDock=$auth && !in_array($current,['install','quiz','admin/authorization'],true);
 if($showDock && !$isAdmin){
     $dockQuizOpen=(bool)KB\Settings::get('quiz_open');
     // Unconfirmed accounts cannot open an assessment; send them to the confirmation screen.
     $dockVerified=!empty($auth['email_verified_at']);
     try { $dockAttempt=KB\Quiz::activeId((int)$auth['id']); } catch(Throwable $e) { $dockAttempt=null; }
+    if($dockAttempt===null && $dockVerified){
+        // One assessment per member: show that it is done instead of offering a restart.
+        try { $dockTaken=KB\DB::one('SELECT id FROM attempts WHERE user_id=? AND status<>"active" LIMIT 1',[(int)$auth['id']]); } catch(Throwable $e) { $dockTaken=null; }
+    }
 }
 ?>
 <!doctype html>
