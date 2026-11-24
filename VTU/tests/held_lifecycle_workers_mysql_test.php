@@ -72,7 +72,7 @@ try {
             return [
                 'outcome' => 'confirmed_success',
                 'provider_reference' => 'FLW_CARD_1',
-                'card_payload' => ['masked_pan' => '411111******1111', 'expiry_month' => '12', 'expiry_year' => '29'],
+                'card_payload' => ['masked_pan' => '**** **** **** 1111', 'expiry_month' => '12', 'expiry_year' => '29'],
             ];
         }
         if ($ord['reference'] === $v2['reference']) {
