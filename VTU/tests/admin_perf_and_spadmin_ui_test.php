@@ -89,7 +89,9 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
     ap_check(strpos($func, 'function sendVendorEmail($recipient_email, $email_subject, $email_body, $background = null)') !== false, "$ed sendVendorEmail supports background parameter");
     ap_check(strpos($func, 'CURLOPT_CONNECTTIMEOUT, 5') !== false, "$ed bc-func sets connect timeout on external gateways");
     ap_check(strpos($app, 'e.defaultPrevented') !== false && strpos($app, 'pagehide') !== false, "$ed bc-plate-app guards submit lock against prevented/invalid forms");
+    ap_check(strpos($app, '.pk-app__profile .pk-app__hide-sm { display: none; }') !== false && strpos($app, 'bi-chevron-down pk-app__hide-sm') !== false, "$ed bc-plate-app collapses topbar profile button to icon-only on mobile");
     ap_check(strpos($adm, 'd.vendor_name') !== false && strpos($adm, 'd.vendor_email') !== false, "$ed bc-plate-admin displays vendor details in transaction modal");
+    ap_check(strpos($adm, '.pk-adm__memeta, .pk-adm__me .pk-app__chev { display: none; }') !== false && strpos($adm, 'aria-label="<?php echo htmlspecialchars($name . \' profile menu\'') !== false, "$ed bc-plate-admin collapses topbar profile link to icon-only on mobile");
     ap_check(strpos($hist, '$show_vendor_col') !== false, "$ed history-table displays vendor column when enabled");
     ap_check(strpos($cfg, "DELETE FROM sas_") !== false && strpos($cfg, 'system_migration_version') !== false, "$ed bc-config persists system_migration_version without duplicate-key drift");
 }

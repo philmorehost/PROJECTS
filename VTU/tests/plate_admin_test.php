@@ -133,6 +133,9 @@ achk(strpos($admin_html, 'jquery-3.3.1.min.js') !== false, 'admin loads jQuery')
 achk(strpos($admin_html, 'bc-custom-vendor.js') !== false, 'admin loads the vendor helper bundle');
 achk(strpos($admin_html, 'apexcharts') === false, 'admin does not load charts on a non-chart page');
 achk(strpos($admin_html, 'USERS') !== false, 'admin topbar renders the title');
+achk(strpos($admin_html, '.pk-adm__memeta, .pk-adm__me .pk-app__chev { display: none; }') !== false, 'admin topbar hides profile metadata and chevron on mobile');
+achk(strpos($admin_html, 'aria-label="adaobi profile menu"') !== false, 'admin topbar profile button exposes accessible label');
+achk(strpos($admin_html, '<div class="pk-app__menuhead">') !== false, 'admin topbar profile menu shows account header');
 
 // ---------------------------------------------------------------- render: spadmin
 $_SERVER['PHP_SELF'] = '/bc-spadmin/Vendors.php';

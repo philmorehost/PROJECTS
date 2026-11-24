@@ -601,17 +601,32 @@ if (!function_exists('bc_adm_css')) {
         .pk-app__sub a { font-size: .86rem; }
         .pk-app__badge { margin-left: auto; }
         .pk-app__gicon { display: inline-flex; }
-        .pk-app__top .pk-app__title { max-width: 62vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pk-adm__me { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px;
+        .pk-app__top .pk-app__titletxt { min-width: 0; flex: 1 1 auto; }
+        .pk-app__top .pk-app__title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-app__top .pk-app__crumb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-app__actions { flex-shrink: 0; }
+        .pk-adm__me { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 280px; padding: 10px 14px;
             border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
             font: inherit; cursor: pointer; text-align: left; }
         .pk-adm__me:hover { border-color: var(--brand); }
         .pk-adm__memeta { display: flex; flex-direction: column; min-width: 0; }
         .pk-adm__mename { font-weight: 700; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .pk-adm__merole { font-size: .72rem; color: var(--muted); }
-        .pk-app__menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px;
+        .pk-app__menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px; max-width: calc(100vw - 24px);
             background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
             box-shadow: var(--shadow); padding: 8px; display: none; z-index: 60; }
+        .pk-app__menuhead strong { overflow-wrap: anywhere; }
+        @media (max-width: 767.98px) {
+            .pk-app__top { gap: 8px; }
+            .pk-app__top .pk-app__title { font-size: .96rem; }
+            .pk-app__actions { gap: 6px; }
+            .pk-adm__me {
+                width: 38px; height: 38px; max-width: none; padding: 0; gap: 0;
+                justify-content: center; border-radius: 999px;
+            }
+            .pk-adm__me .pk-app__avatar { width: 32px; height: 32px; font-size: .82rem; }
+            .pk-adm__memeta, .pk-adm__me .pk-app__chev { display: none; }
+        }
         .pk-app__menu.is-open { display: block; }
         .pk-app__wrap .dropdown, .pk-app__wrap .btn-group { position: relative; }
         .pk-app__wrap .dropdown-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 65; display: none; min-width: 220px;
@@ -757,7 +772,7 @@ if (!function_exists('bc_adm_topbar')) {
             <?php endforeach; ?>
         <?php endif; ?>
         <div class="pk-app__profile">
-            <button class="pk-adm__me" type="button" id="pkAppProfile" aria-expanded="false">
+            <button class="pk-adm__me" type="button" id="pkAppProfile" aria-expanded="false" aria-haspopup="true" aria-label="<?php echo htmlspecialchars($name . ' profile menu', ENT_QUOTES, 'UTF-8'); ?>" title="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>">
                 <span class="pk-app__avatar"><?php echo htmlspecialchars(strtoupper(substr($name, 0, 1))); ?></span>
                 <span class="pk-adm__memeta">
                     <span class="pk-adm__mename"><?php echo htmlspecialchars($name); ?></span>
@@ -765,7 +780,11 @@ if (!function_exists('bc_adm_topbar')) {
                 </span>
                 <i class="bi bi-chevron-down pk-app__chev" aria-hidden="true"></i>
             </button>
-            <div class="pk-app__menu" id="pkAppProfileMenu">
+            <div class="pk-app__menu" id="pkAppProfileMenu" role="menu">
+                <div class="pk-app__menuhead">
+                    <strong><?php echo htmlspecialchars($name); ?></strong>
+                    <span><?php echo $area === 'spadmin' ? 'Super admin' : 'Administrator'; ?></span>
+                </div>
                 <a href="<?php echo htmlspecialchars($dash); ?>"><?php echo bc_adm_icon('grid'); ?> Dashboard</a>
                 <a href="<?php echo htmlspecialchars(bc_adm_url('AccountSettings.php', $area)); ?>"><?php echo bc_adm_icon('gear'); ?> Account settings</a>
                 <a href="<?php echo htmlspecialchars(bc_adm_url('SiteMap.php', $area)); ?>"><?php echo bc_adm_icon('grid-3x3-gap'); ?> Platform guide</a>
