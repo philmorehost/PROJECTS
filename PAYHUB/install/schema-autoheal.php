@@ -63,6 +63,7 @@ if (!function_exists('payhub_install_apply_migrations')) {
             while ($row = $q->fetch(PDO::FETCH_ASSOC)) {
                 $already[(string)$row['migration_path']] = (string)$row['sha256'];
             }
+            $q->closeCursor();
         }
 
         $applied = [];
@@ -84,7 +85,25 @@ if (!function_exists('payhub_install_apply_migrations')) {
             $sql = (string)file_get_contents($full);
             foreach (payhub_install_split_sql($sql) as $stmt) {
                 try {
-                    $pdo->exec($stmt);
+                    // Statements like EXECUTE / SELECT / SHOW can yield result sets (e.g., PREPARE/EXECUTE 'SELECT 1'
+                    // idempotency guards). Running them via PDO::exec() leaves an unconsumed result set on pdo_mysql
+                    // and breaks all subsequent queries with SQLSTATE[HY000] 2014. Drain all rowsets via query().
+                    if (preg_match('/^\s*(SELECT|SHOW|EXECUTE|DESCRIBE|EXPLAIN|PRAGMA)\b/i', $stmt)) {
+                        $res = $pdo->query($stmt);
+                        if ($res instanceof PDOStatement) {
+                            try {
+                                do {
+                                    if ($res->columnCount() > 0) {
+                                        $res->fetchAll();
+                                    }
+                                } while ($res->nextRowset());
+                            } finally {
+                                $res->closeCursor();
+                            }
+                        }
+                    } else {
+                        $pdo->exec($stmt);
+                    }
                 } catch (PDOException $e) {
                     $msg = $e->getMessage();
                     $ignore = false;
@@ -101,6 +120,7 @@ if (!function_exists('payhub_install_apply_migrations')) {
             }
             $ins = $pdo->prepare('INSERT INTO schema_migrations_applied (migration_path, sha256) VALUES (?, ?) ON DUPLICATE KEY UPDATE sha256 = VALUES(sha256)');
             $ins->execute([$key, $sha]);
+            $ins->closeCursor();
             $applied[] = $key;
         }
 
