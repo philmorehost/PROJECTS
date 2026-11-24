@@ -265,7 +265,7 @@ function bc_cbs_execute_buy_order(mysqli $db, $vendorId, $userId, $quoteId, $req
         $insOrd = $db->prepare('INSERT INTO sas_crypto_trade_orders(vendor_id, user_id, quote_id, request_id, side, asset, network, fiat_currency, crypto_units_1e8, fiat_minor, destination_address, state, ledger_claim_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)');
         $side = 'buy';
         $units = (string)$quote['crypto_units_1e8'];
-        $insOrd->bind_param('iiissssssisssi', $vendorId, $userId, $quoteId, $reqId, $side, $quote['asset'], $quote['network'], $quote['fiat_currency'], $units, $fiatMinor, $quote['destination_address'], $ordState, $claimId);
+        $insOrd->bind_param('iiissssssissi', $vendorId, $userId, $quoteId, $reqId, $side, $quote['asset'], $quote['network'], $quote['fiat_currency'], $units, $fiatMinor, $quote['destination_address'], $ordState, $claimId);
         $insOrd->execute();
         $orderId = (int)$insOrd->insert_id;
         $insOrd->close();

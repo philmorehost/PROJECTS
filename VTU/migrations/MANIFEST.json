@@ -133,7 +133,7 @@
     },
     {
       "name": "bc-crypto-buysell.php",
-      "sha256": "b9d59ed61bef9c1fafa026ea5bb1bbbf944577885df8802d86785a5c224ad579"
+      "sha256": "8bb7070ee90100a6afdbf56769187988055156a3e3265222fea5af227456d647"
     },
     {
       "name": "bc-update-manifest-guard.php",
