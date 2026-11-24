@@ -114,9 +114,9 @@ try {
     sdl_test(bc_sdl_acquire_lease(7, 13, 'worker-o', 60, 0)['code'] === 'outer_transaction', 'outer tx refused');
     $db->rollback();
 
-    $db->query('ALTER TABLE sas_service_dispatch_leases ENGINE=MyISAM');
+    $db->query('ALTER TABLE sas_users ENGINE=MyISAM');
     sdl_test(bc_sdl_acquire_lease(7, 13, 'worker-m', 60, 0)['code'] === 'nontransactional', 'MyISAM refused');
-    $db->query('ALTER TABLE sas_service_dispatch_leases ENGINE=InnoDB');
+    $db->query('ALTER TABLE sas_users ENGINE=InnoDB');
 
     $db->query("CREATE TRIGGER fail_sdl_ins BEFORE INSERT ON sas_service_dispatch_leases FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture failure'");
     $trig = bc_sdl_acquire_lease(7, 13, 'worker-t', 60, 0);
