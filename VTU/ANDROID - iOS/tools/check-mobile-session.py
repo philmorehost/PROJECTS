@@ -15,6 +15,13 @@ class MobileSession(unittest.TestCase):
                 self.assertIn('persistLogin(data)',auth[auth.index('suspend fun loginWithOtp'):])
                 transport=(base/'api/RetrofitClient.kt').read_text()
                 self.assertIn('builder.header("Authorization", "Bearer $token")',transport)
+                self.assertIn('builder.header("X-App-Token", token)',transport)
+                lock=(base/'ui/security/LockActivity.kt').read_text()
+                self.assertEqual(lock.count('"app_token" to prefs.getApiKey()'),4)
+                self.assertNotIn('"api_key" to prefs.getApiKey()',lock)
+                self.assertIn('APP_TOKEN_REQUIRED',lock)
+                self.assertIn('APP_SESSION_INVALID',lock)
+
                 self.assertIn('!publicAuth',transport)
                 self.assertIn('PreferenceManager(it).getApiKey()',transport)
                 self.assertIn('RetrofitClient.install(this)',(base/'DGApp.kt').read_text())

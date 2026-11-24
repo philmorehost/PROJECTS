@@ -33,6 +33,9 @@ Options -Indexes
 # ─── URL-level guards (all valid in .htaccess context) ────────────────────────────────────────────
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # Preserve first-party bearer sessions for PHP/FastCGI (no token logging or query strings).
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
     # Incident hardening: development tools must not execute in the public webroot.
     RewriteRule ^(?:tests|scratch)(?:/|$) - [F,NC,L]
     RewriteRule ^(?:test[^/]*|mtn)\.php$ - [G,NC,L]
