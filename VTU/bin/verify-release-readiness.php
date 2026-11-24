@@ -39,6 +39,17 @@ function bc_release_readiness_report($repoRoot, $withDb = false) {
         }
     }
 
+    // Verify paired v2 API endpoints & replacement crypto bridge files exist
+    foreach ([
+        'VTU/DGV7.0-SAAS/web/api/virtual-card-v2.php',
+        'VTU/DGV7.0-NON-SAAS/web/api/virtual-card-v2.php',
+        'VTU/cryptocurrency-idea/service/src/cbs-bridge.js',
+    ] as $reqRel) {
+        if (!is_file($repoRoot . '/' . $reqRel)) {
+            $manifestErrors[] = 'required_artifact_missing:' . $reqRel;
+        }
+    }
+
     // 2. Verify Bybit runtime retirement
     $bybitRetired = true;
     foreach (['VTU/DGV7.0-SAAS/bc-admin/CryptoBybit.php', 'VTU/DGV7.0-NON-SAAS/bc-admin/CryptoBybit.php'] as $rel) {
@@ -56,6 +67,7 @@ function bc_release_readiness_report($repoRoot, $withDb = false) {
         'BC_VIRTUALCARD_WORKER_ENABLED'       => getenv('BC_VIRTUALCARD_WORKER_ENABLED') === '1',
         'BC_GIFTCARD_WORKER_ENABLED'          => getenv('BC_GIFTCARD_WORKER_ENABLED') === '1',
         'BC_CHECKOUT_EXPIRE_ENABLED'          => getenv('BC_CHECKOUT_EXPIRE_ENABLED') === '1',
+        'BC_CHECKOUT_EXECUTION_ENABLED'       => getenv('BC_CHECKOUT_EXECUTION_ENABLED') === '1',
         'PAYHUB_ALERT_SINK_ENABLED'           => getenv('PAYHUB_ALERT_SINK_ENABLED') === '1',
         'PAYHUB_WEBHOOK_RECONCILE_ENABLED'    => getenv('PAYHUB_WEBHOOK_RECONCILE_ENABLED') === '1',
     ];
@@ -63,6 +75,31 @@ function bc_release_readiness_report($repoRoot, $withDb = false) {
     $warnings = [];
     if (is_file($repoRoot . '/PAYHUB/webhook_debug.log')) {
         $warnings[] = 'legacy_webhook_debug_log_present';
+    }
+    if ($flags['CRYPTO_BUYSELL_EXECUTION_ENABLED']) {
+        if (trim((string)getenv('CRYPTO_SIGNER_ENDPOINT')) === '' || strlen((string)getenv('CRYPTO_SIGNER_HMAC_SECRET')) < 16) {
+            $warnings[] = 'crypto_signer_env_incomplete';
+        }
+        if (trim((string)getenv('CRYPTO_WATCHER_ENDPOINT')) === '' || strlen((string)getenv('CRYPTO_WATCHER_HMAC_SECRET')) < 16) {
+            $warnings[] = 'crypto_watcher_env_incomplete';
+        }
+    }
+    if ($flags['BC_PAYOUT_WORKER_ENABLED'] && (trim((string)getenv('BC_PAYOUT_PROVIDER_ENDPOINT')) === '' || strlen((string)getenv('BC_PAYOUT_PROVIDER_HMAC_SECRET')) < 16)) {
+        $warnings[] = 'payout_provider_env_incomplete';
+    }
+    if ($flags['BC_VIRTUALCARD_WORKER_ENABLED'] && (trim((string)getenv('BC_VIRTUALCARD_PROVIDER_ENDPOINT')) === '' || strlen((string)getenv('BC_VIRTUALCARD_PROVIDER_HMAC_SECRET')) < 16)) {
+        $warnings[] = 'virtualcard_provider_env_incomplete';
+    }
+    if ($flags['BC_GIFTCARD_WORKER_ENABLED']) {
+        if (trim((string)getenv('BC_GIFTCARD_PROVIDER_ENDPOINT')) === '' || strlen((string)getenv('BC_GIFTCARD_PROVIDER_HMAC_SECRET')) < 16) {
+            $warnings[] = 'giftcard_provider_env_incomplete';
+        }
+        if (strlen(trim((string)getenv('BC_GIFTCARD_KMS_KEY'))) < 16) {
+            $warnings[] = 'giftcard_kms_key_unset_using_vendor_secret_fallback';
+        }
+    }
+    if ($flags['BC_SERVICE_DISPATCH_WORKER_ENABLED'] && (trim((string)getenv('BC_SERVICE_DISPATCH_ENDPOINT')) === '' || strlen((string)getenv('BC_SERVICE_DISPATCH_HMAC_SECRET')) < 16)) {
+        $warnings[] = 'service_dispatch_env_incomplete';
     }
 
     $dbChecked = false;

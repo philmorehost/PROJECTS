@@ -121,7 +121,7 @@
     },
     {
       "name": "bc-fintech-webhook.php",
-      "sha256": "3e44b5aceef963d3cfc417c988eaeeb7ab70566a8feb37f7a16651ccea79051f"
+      "sha256": "ea837f42cf7ea3d5e46c63ad50da48549cfa315d82a6c0b478a17f349f5e7388"
     },
     {
       "name": "bc-incident-wallet.php",
