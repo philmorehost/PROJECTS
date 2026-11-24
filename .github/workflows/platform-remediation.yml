@@ -38,7 +38,10 @@ on:
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
-      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/index-bc-style-template-*.php'
+      - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/cssfile/template/bc-style-template-1.css'
+      - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
       - 'VTU/tests/public_navigation_render.php'
@@ -150,7 +153,10 @@ on:
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
-      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/index-bc-style-template-*.php'
+      - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/cssfile/template/bc-style-template-1.css'
+      - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
       - 'VTU/tests/public_navigation_render.php'
@@ -239,6 +245,7 @@ jobs:
         run: npm ci --prefix VTU/tests/harness
       - name: Homepage browser layout and accessible navigation
         run: |
+          node VTU/tests/harness/run-test.mjs tests/public_app_brand_test.php
           node VTU/tests/harness/public-navigation-browser.test.mjs
           node VTU/tests/harness/admin-pin-setup-ui-test.mjs
           node VTU/tests/harness/live-capture-ui-test.mjs

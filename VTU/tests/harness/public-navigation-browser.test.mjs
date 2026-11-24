@@ -21,6 +21,7 @@ const browser=await playwright.launch({args:chromium.args,executablePath:await c
  env:{...process.env,LD_LIBRARY_PATH:path.join(libraries,'lib')+':'+(process.env.LD_LIBRARY_PATH||'')}});
 const html=execFileSync(process.execPath,[path.join(dir,'run-test.mjs'),'tests/public_navigation_render.php'],{encoding:'utf8',maxBuffer:4*1024*1024});
 const css=fs.readFileSync(path.resolve(dir,'../../DGV7.0-SAAS/asset/bc-public-navigation.css'),'utf8');
+const cardCss=fs.readFileSync(path.resolve(dir,'../../DGV7.0-SAAS/cssfile/template/bc-style-template-1.css'),'utf8');
 const script=fs.readFileSync(path.resolve(dir,'../../DGV7.0-SAAS/jsfile/bc-public-navigation.js'),'utf8');
 try {
  for (const edition of ['SAAS','NON-SAAS']) {
@@ -32,6 +33,7 @@ try {
  await page.route('**/*',route=> {
   const url=new URL(route.request().url());
   if(url.hostname==='public.example.test' && url.pathname==='/')return route.fulfill({contentType:'text/html',body:html});
+  if(url.pathname==='/cssfile/template/bc-style-template-1.css')return route.fulfill({contentType:'text/css',body:cardCss});
   if(url.pathname==='/asset/bc-public-navigation.css')return route.fulfill({contentType:'text/css',body:css});
   if(url.pathname==='/jsfile/bc-public-navigation.js')return route.fulfill({contentType:'text/javascript',body:script});
   return route.abort(); // No provider/rate/external resources in this layout check.
@@ -41,6 +43,9 @@ try {
   await page.goto('https://public.example.test/');
   const nav=page.locator('[data-public-navigation]'), toggle=nav.locator('button.public-menu-toggle'), links=nav.locator('#public-menu-links');
   assert.ok(await nav.isVisible());
+  assert.equal(await page.locator('.bc-card-brand').count(),2);
+  for(const card of await page.locator('.bc-card-brand').all()){assert.equal(await card.textContent(),'a-long-vendor-name.example.test');assert.equal(await card.evaluate(el=>getComputedStyle(el).textOverflow),'ellipsis');}
+  assert.equal(await page.locator('.bc-app-badge').count(),0,'unset app has no store badge');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`no page overflow at ${width}`);
   if(width<=800){
    assert.ok(await toggle.isVisible());assert.equal(await links.isVisible(),false);

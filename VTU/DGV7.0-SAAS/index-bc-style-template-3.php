@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/func/bc-public-app-brand.php';
 // Initialize SEO engine and variables
 include_once(__DIR__ . "/func/bc-seo.php");
 
@@ -688,6 +689,7 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
             </div>
         </div>
     <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
+<?php echo bc_public_app_badge_html(bc_public_saved_app_url((int)($vendor_account_details['id'] ?? 0), $site_details ?? [])); ?>
 </footer>
 
     <!-- Scripting -->
