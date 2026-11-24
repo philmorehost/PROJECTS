@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/webhook-retry.php';
 
-/** Persist exact payload + exclusive reservation BEFORE generic initial delivery.
+/** Persist exact payload + exclusive reservation BEFORE protected initial delivery.
  * This is not an outbox worker: there is no automatic replay, including after process death.
  * Calls inside accounting transactions fail closed without committing the caller's work.
  */
@@ -32,4 +32,22 @@ function payhub_claim_initial_webhook(PDO $db, array $expected, $body) {
         $db->commit();
         return ['delivery'=>['id'=>$logId,'transaction_id'=>(int)$row['id'],'payload'=>$body],'token'=>$token,'signature'=>$signature];
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+}
+
+/** Bind the forwarding payload to current persisted settlement evidence.
+ * Uses the existing PayHub conversion policy; does not calculate or change settlement.
+ */
+function payhub_forwarded_payload_matches($row, $payload) {
+    if (!is_array($row) || !is_array($payload) || ($payload['event']??null)!=='charge.success' || !is_array($payload['data']??null)) return false;
+    $data=$payload['data'];
+    if (($row['status']??null)!=='success' || ($data['status']??null)!=='success'
+        || ($data['reference']??null)!==($row['reference']??null)
+        || !is_string($row['currency']??null) || $row['currency']===''
+        || ($data['currency']??null)!==$row['currency']
+        || ($data['receiving_account_number']??null)!==($row['receiving_account_number']??null)) return false;
+    foreach (['amount'=>'gateway_amount','gateway_amount'=>'gateway_amount','requested_amount'=>'amount','fee_amount'=>'fee_amount','settled_amount'=>'settled_amount'] as $field=>$column) {
+        if (!isset($row[$column]) || !is_numeric($row[$column]) || !is_int($data[$field]??null)
+            || $data[$field]!==to_minor_units($row[$column])) return false;
+    }
+    return true;
 }

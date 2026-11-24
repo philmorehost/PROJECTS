@@ -120,5 +120,19 @@ try {
     }
     $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean initial worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','losing initial worker refused');}
     retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM webhook_logs WHERE transaction_id=23')->fetchColumn()===1,'concurrent generic initial sends reserve one exact payload');
+    // Forwarded and generic initial deliveries share exactly the same transaction reservation.
+    $functions=file_get_contents(__DIR__.'/../includes/functions.php');$from=strpos($functions,'function to_minor_units(');$to=strpos($functions,"\n}",$from)+2;eval(substr($functions,$from,$to-$from));
+    $db->exec("ALTER TABLE transactions ADD amount DECIMAL(15,2) DEFAULT 100.00, ADD gateway_amount DECIMAL(15,2) DEFAULT 102.00, ADD fee_amount DECIMAL(15,2) DEFAULT 2.00, ADD settled_amount DECIMAL(15,2) DEFAULT 100.00, ADD currency VARCHAR(3) DEFAULT 'NGN', ADD receiving_account_number VARCHAR(10) NULL");
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(24,1,'forward-fixture','success',0)");
+    $snapshot=initialfixture($db,24);
+    $forward=['event'=>'charge.success','data'=>['reference'=>'forward-fixture','status'=>'success','domain'=>'live','currency'=>'NGN','amount'=>10200,'gateway_amount'=>10200,'requested_amount'=>10000,'fee_amount'=>200,'settled_amount'=>10000,'receiving_account_number'=>null]];
+    retrycheck(payhub_forwarded_payload_matches($snapshot,$forward),'forwarded payload matches committed evidence');
+    foreach(['amount','gateway_amount','requested_amount','fee_amount','settled_amount','reference','currency','receiving_account_number','status'] as $field){$bad=$forward;$bad['data'][$field]='mismatch';retrycheck(!payhub_forwarded_payload_matches($snapshot,$bad),'forwarded mismatch refused '.$field);}
+    foreach(['gateway_amount','fee_amount','settled_amount'] as $column){$bad=$snapshot;$bad[$column]=null;retrycheck(!payhub_forwarded_payload_matches($bad,$forward),'missing persisted evidence refused '.$column);}
+    $forwarded=payhub_claim_initial_webhook($db,$snapshot,json_encode($forward));
+    retryreject(fn()=>payhub_claim_initial_webhook($other,$snapshot,initialbody($snapshot)),'generic sender cannot duplicate forwarded claim');
+    retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$forwarded['delivery']['id'],true),'admin retry cannot duplicate forwarded claim');
+    retrycheck(payhub_finish_webhook_retry($db,$forwarded,503,true)===false,'forwarding non-2xx remains uncertain');
+    retrycheck($other->query('SELECT state FROM webhook_retry_claims WHERE transaction_id=24')->fetchColumn()==='unknown','forwarding uncertainty durable');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}

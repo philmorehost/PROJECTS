@@ -383,21 +383,43 @@ if ($event_type === 'charge_success') {
                         $res = false; $code = 0;
                         $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
                     } else {
-                        $ch = curl_init();
-                        curl_setopt($ch, CURLOPT_URL, $m['webhook_url']);
-                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                        curl_setopt($ch, CURLOPT_POST, true);
-                        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-                        $headers = ['Content-Type: application/json'];
-                        if ($signature !== '') {
-                            $headers[] = 'X-Payhub-Signature: ' . $signature;
+                        try {
+                            // Re-read committed accounting; the original $tx predates fulfilment updates.
+                            $deliveryQuery = $db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=?');
+                            $deliveryQuery->execute([(int)$tx['id']]);
+                            $deliverySnapshot = $deliveryQuery->fetch(PDO::FETCH_ASSOC);
+                            if (!payhub_forwarded_payload_matches($deliverySnapshot, $payload)) {
+                                throw new RuntimeException('Committed forwarding evidence does not match the payload.');
+                            }
+                            $forwardClaim = payhub_claim_initial_webhook($db, $deliverySnapshot, $body);
+                            // The claim binds these current credentials and destination, not the earlier email snapshot.
+                            $signature = $forwardClaim['signature'];
+                            $ch = curl_init();
+                            curl_setopt($ch, CURLOPT_URL, $deliverySnapshot['webhook_url']);
+                            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+                            curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            curl_setopt($ch, CURLOPT_POST, true);
+                            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                            $headers = ['Content-Type: application/json'];
+                            if ($signature !== '') {
+                                $headers[] = 'X-Payhub-Signature: ' . $signature;
+                            }
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                            $res = curl_exec($ch);
+                            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                            $curlErr = curl_error($ch);
+                            curl_close($ch);
+                            payhub_finish_webhook_retry($db, $forwardClaim, $code, $res !== false && $curlErr === '');
+                        } catch (Throwable $e) {
+                            // Accounting already committed. Never roll it back or replay on delivery uncertainty.
+                            $res = false; $code = 0;
+                            $curlErr = 'Protected forwarding unavailable; inspect schema and durable claims before reconciliation.';
                         }
-                        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                        $res = curl_exec($ch);
-                        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                        $curlErr = curl_error($ch);
-                        curl_close($ch);
                     }
 
                     $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200));
@@ -410,21 +432,8 @@ if ($event_type === 'charge_success') {
                         FILE_APPEND
                     );
 
-                    // Record the delivery attempt in the schema admin/webhooks.php reads.
-                    // The previous insert named columns that do not exist in webhook_logs
-                    // (user_id, event_type, response_code) inside a swallowed catch, so no
-                    // outbound webhook was ever logged.
-                    try {
-                        $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
-                        $stmtLog->execute([
-                            $tx['id'],
-                            (($code >= 200 && $code < 300) ? 'success' : 'failed'),
-                            $body,
-                            'HTTP ' . $code . ($curlErr !== '' ? ' | ' . $curlErr : ($resText !== '' ? ' | ' . $resText : ''))
-                        ]);
-                    } catch (\Throwable $t) {
-                        error_log('[PayHub] webhook_logs write failed: ' . $t->getMessage());
-                    }
+                    // The exact payload and exclusive claim were committed before HTTP.
+
                 }
             }
         }
