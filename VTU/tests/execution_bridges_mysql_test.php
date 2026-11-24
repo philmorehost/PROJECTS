@@ -7,10 +7,15 @@
  *  - Virtual card reserve -> dispatch -> PCI-safe masked card issuance
  *  - Gift card reserve + P2P escrow hold/release + KMS AES-256-GCM
  */
+set_exception_handler(function ($e) {
+    $msg = str_replace(['%', "\r", "\n"], ['%25', '', '%0A'], $e->getMessage());
+    echo '::error file=VTU/tests/execution_bridges_mysql_test.php,line=' . $e->getLine() . '::' . $msg . "\n";
+    exit(1);
+});
+
 $ed = strtoupper((string)(getenv('BC_TEST_EDITION') ?: 'SAAS'));
 if (!in_array($ed, ['SAAS', 'NON-SAAS'], true)) {
-    fwrite(STDERR, "Invalid BC_TEST_EDITION: $ed\n");
-    exit(1);
+    throw new RuntimeException("Invalid BC_TEST_EDITION: $ed");
 }
 
 $host = getenv('MYSQL_HOST') ?: '127.0.0.1';
@@ -45,7 +50,7 @@ $conn->query("CREATE TABLE sas_users (
     vendor_id INT UNSIGNED NOT NULL,
     username VARCHAR(120) NOT NULL,
     email VARCHAR(190) NOT NULL DEFAULT '',
-    balance DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+    balance DECIMAL(65,30) NOT NULL DEFAULT 0,
     status TINYINT NOT NULL DEFAULT 1,
     is_blocked TINYINT NOT NULL DEFAULT 0,
     force_password_change TINYINT NOT NULL DEFAULT 0,
@@ -61,10 +66,10 @@ $conn->query("CREATE TABLE sas_transactions (
     type_alternative VARCHAR(120) NOT NULL DEFAULT '',
     reference VARCHAR(120) NOT NULL,
     api_reference VARCHAR(120) NOT NULL DEFAULT '',
-    amount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
-    discounted_amount DECIMAL(18,2) NOT NULL DEFAULT 0.00,
-    balance_before DECIMAL(18,2) NOT NULL DEFAULT 0.00,
-    balance_after DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+    amount DECIMAL(65,30) NOT NULL DEFAULT 0,
+    discounted_amount DECIMAL(65,30) NOT NULL DEFAULT 0,
+    balance_before DECIMAL(65,30) NOT NULL DEFAULT 0,
+    balance_after DECIMAL(65,30) NOT NULL DEFAULT 0,
     description VARCHAR(255) NOT NULL DEFAULT '',
     mode VARCHAR(32) NOT NULL DEFAULT '',
     api_website VARCHAR(120) NOT NULL DEFAULT '',
@@ -73,29 +78,13 @@ $conn->query("CREATE TABLE sas_transactions (
     KEY idx_vref (vendor_id, reference)
 ) ENGINE=InnoDB");
 
-$conn->query("CREATE TABLE sas_wallet_mutation_events (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    vendor_id INT UNSIGNED NOT NULL,
-    actor_key VARCHAR(160) NOT NULL,
-    direction VARCHAR(16) NOT NULL,
-    amount DECIMAL(18,2) NOT NULL,
-    event_key CHAR(64) NOT NULL,
-    event_hash CHAR(64) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_vk (vendor_id, event_key)
-) ENGINE=InnoDB");
-
-$conn->query("CREATE TABLE sas_secure_payment_intents (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    reference VARCHAR(100) NOT NULL,
-    vendor_id INT UNSIGNED NOT NULL,
-    username VARCHAR(120) NOT NULL,
-    provider VARCHAR(64) NOT NULL,
-    currency VARCHAR(16) NOT NULL,
-    amount DECIMAL(18,2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_ref (reference)
-) ENGINE=InnoDB");
+$tables_src = file_get_contents("$base/func/bc-tables.php");
+foreach (['sas_wallet_mutation_events', 'sas_secure_payment_intents'] as $tbl) {
+    if (!preg_match('/CREATE TABLE IF NOT EXISTS ' . $tbl . ' \(.*?\) ENGINE=InnoDB/s', $tables_src, $ddl)) {
+        throw new RuntimeException('Missing ' . $tbl . ' DDL in bc-tables.php');
+    }
+    $conn->query($ddl[0]);
+}
 
 $conn->query("CREATE TABLE sas_bank_transfer_history (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -114,20 +103,23 @@ $conn->query("CREATE TABLE sas_bank_transfer_history (
 ) ENGINE=InnoDB");
 
 $conn->query("CREATE TABLE sas_virtual_cards_v2 (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    vendor_id INT UNSIGNED NOT NULL,
-    username VARCHAR(120) NOT NULL,
-    reference VARCHAR(100) NOT NULL UNIQUE,
-    provider_card_id VARCHAR(120) NOT NULL DEFAULT '',
-    card_name VARCHAR(160) NOT NULL,
-    masked_pan VARCHAR(32) NOT NULL,
-    expiry_month VARCHAR(4) NOT NULL,
-    expiry_year VARCHAR(8) NOT NULL,
-    cvv VARCHAR(8) NOT NULL DEFAULT '',
-    balance_usd DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
-    provider VARCHAR(32) NOT NULL DEFAULT 'flutterwave',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    vendor_id INT NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    reference VARCHAR(100) UNIQUE,
+    provider_card_id VARCHAR(255) NOT NULL DEFAULT '',
+    card_name VARCHAR(255) NOT NULL,
+    masked_pan VARCHAR(25) NOT NULL,
+    expiry_month VARCHAR(5) NOT NULL,
+    expiry_year VARCHAR(5) NOT NULL,
+    cvv VARCHAR(10) NOT NULL DEFAULT '',
+    balance_usd DECIMAL(20,2) DEFAULT 0.00,
+    status ENUM('active','frozen','terminated') DEFAULT 'active',
+    is_frozen_auto TINYINT(1) DEFAULT 0,
+    metadata TEXT,
+    provider VARCHAR(50) DEFAULT 'flutterwave',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB");
 
 $conn->query("CREATE TABLE sas_vendor_giftcard_products (
@@ -149,7 +141,7 @@ $conn->query("CREATE TABLE sas_giftcard_inventory (
     card_code TEXT NOT NULL,
     card_pin VARCHAR(120) NOT NULL DEFAULT '',
     face_value DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-    currency_code VARCHAR(16) NOT NULL DEFAULT 'USD',
+    currency VARCHAR(16) NOT NULL DEFAULT 'USD',
     current_owner_id INT UNSIGNED NOT NULL,
     source VARCHAR(32) NOT NULL DEFAULT 'api',
     is_for_sale TINYINT NOT NULL DEFAULT 0,
@@ -165,8 +157,18 @@ $conn->query("CREATE TABLE sas_settings (
     UNIQUE KEY uniq_vs (vendor_id, setting_name)
 ) ENGINE=InnoDB");
 
+$conn->query("CREATE TABLE sas_dollar_exchange_rates (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    vendor_id INT UNSIGNED NOT NULL,
+    product_type VARCHAR(64) NOT NULL,
+    currency VARCHAR(16) NOT NULL,
+    debit_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    credit_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+    UNIQUE KEY uniq_vpc (vendor_id, product_type, currency)
+) ENGINE=InnoDB");
+
 $conn->query("CREATE TABLE sas_service_requests (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     vendor_id INT UNSIGNED NOT NULL,
     user_id INT UNSIGNED NOT NULL,
     username VARCHAR(120) NOT NULL DEFAULT '',
@@ -208,15 +210,17 @@ $conn->query("CREATE TABLE sas_service_control (
     status TINYINT NOT NULL DEFAULT 1
 ) ENGINE=InnoDB");
 
-// Apply all bundled VTU migrations in order (exactly like bc_schema_autoheal)
+// Apply all bundled VTU migrations in order (stripping SQL comments before splitting)
 require_once "$base/func/bc-fintech-schema.php";
 bc_fintech_ensure_schema();
 $sqlFiles = glob("$base/migrations/20261118_*.sql");
 sort($sqlFiles);
 foreach ($sqlFiles as $sf) {
-    $sql = file_get_contents($sf);
+    $sql = preg_replace('/^\s*--.*$/m', '', file_get_contents($sf));
     foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
-        $conn->query($stmt);
+        if ($stmt !== '') {
+            $conn->query($stmt);
+        }
     }
 }
 
@@ -224,15 +228,14 @@ $conn->query("INSERT INTO sas_vendors (id, website_url, email, balance, giftcard
 $conn->query("INSERT INTO sas_users (id, vendor_id, username, email, balance, status) VALUES (10, 1, 'alice', 'alice@tenant.test', 50000.00, 1), (11, 1, 'bob', 'bob@tenant.test', 10000.00, 1)");
 $conn->query("INSERT INTO sas_settings (vendor_id, setting_name, setting_value) VALUES (0, 'live_rate_USD_NGN', '1500.00')");
 $conn->query("INSERT INTO sas_vendor_giftcard_products (vendor_id, reloadly_product_id, product_name, currency_code, vendor_markup, status) VALUES (1, 101, 'Amazon US', 'USD', 3.00, 1)");
-$conn->query("INSERT INTO sas_giftcard_inventory (id, vendor_id, reloadly_product_id, product_name, card_code, face_value, currency_code, current_owner_id, is_for_sale, sale_price_ngn) VALUES (50, 1, 101, 'Amazon US', 'sealed', 25.00, 'USD', 11, 1, 5000.00)");
+$conn->query("INSERT INTO sas_giftcard_inventory (id, vendor_id, reloadly_product_id, product_name, card_code, face_value, currency, current_owner_id, is_for_sale, sale_price_ngn) VALUES (50, 1, 101, 'Amazon US', 'sealed', 25.00, 'USD', 11, 1, 5000.00)");
 
 $checks = 0;
 function ebm_chk($cond, $msg) {
     global $checks;
     $checks++;
     if (!$cond) {
-        fwrite(STDERR, "FAIL: $msg\n");
-        exit(1);
+        throw new RuntimeException("FAIL: $msg");
     }
 }
 
@@ -240,15 +243,16 @@ function ebm_chk($cond, $msg) {
 require_once "$base/func/bc-service-intake-bridge.php";
 require_once "$base/func/bc-service-dispatch-worker.php";
 $reqRef = 'SVC-' . bin2hex(random_bytes(8));
-$payloadJson = json_encode(['amount_usd' => 100, 'recipient_name' => 'John'], JSON_THROW_ON_ERROR);
+$payloadJson = json_encode(['currency' => 'USD', 'amount_usd' => 100, 'recipient_name' => 'John'], JSON_THROW_ON_ERROR);
 $conn->query("INSERT INTO sas_service_requests (vendor_id, user_id, username, type, provider, reference, payload) VALUES (1, 10, 'alice', 'intl_transfer', 'klasha', '$reqRef', '$payloadJson')");
 $held = bc_svc_enqueue_held_attempt(1, $reqRef);
 ebm_chk(!empty($held['ok']) && $held['state'] === 'held', 'service intake bridge creates held sas_service_attempts row');
 
-bc_sdl_set_capability(1, 'intl_transfer', 'klasha', 'global_transfer', true, 'CAP-PROOF-1');
+$cap = bc_sdl_set_capability(1, 'intl_transfer', 'klasha', 'USD', true, 'CAP-PROOF-1');
+ebm_chk(!empty($cap['ok']), 'service capability matrix stores authorized capability');
 putenv('BC_SERVICE_DISPATCH_WORKER_ENABLED=1');
 $svcRun = bc_sdl_run_worker(1, 'worker-1', function ($row) {
-    return ['outcome' => 'confirmed_success', 'provider_ref' => 'KL-9001', 'evidence' => ['ok' => true]];
+    return ['outcome' => 'confirmed_success', 'provider_reference' => 'KL-9001', 'evidence' => ['ok' => true]];
 }, 60, 5);
 ebm_chk(!empty($svcRun['ok']) && $svcRun['processed'] === 1 && $svcRun['results'][0]['state'] === 'confirmed_success', 'service dispatch worker settles held intake row');
 putenv('BC_SERVICE_DISPATCH_WORKER_ENABLED=');
@@ -287,14 +291,13 @@ putenv('BC_PAYOUT_WORKER_ENABLED=');
 
 // 4. Virtual card reserve -> dispatch -> masked PAN persisted (zero CVV)
 require_once "$base/func/bc-virtualcard-execution.php";
-require_once "$base/func/bc-virtualcard-worker.php";
 putenv('BC_VIRTUALCARD_WORKER_ENABLED=1');
 $vcRes = bc_vc_reserve_issue(1, 10, '10.00', '2.00', '1500.000000', 'Alice Card', hash('sha256', 'vc-1'));
 ebm_chk(!empty($vcRes['ok']) && $vcRes['state'] === 'held', 'virtual card issue reserved');
 $vcDisp = bc_vc_dispatch_one(1, $vcRes['reference'], (int)$vcRes['version'], function ($ord) {
     return [
         'outcome' => 'confirmed_success',
-        'provider_ref' => 'FLW-VC-77',
+        'provider_reference' => 'FLW-VC-77',
         'card_payload' => ['masked_pan' => '**** **** **** 4242', 'expiry_month' => '11', 'expiry_year' => '2029', 'cvv' => ''],
     ];
 });

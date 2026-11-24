@@ -41,23 +41,37 @@ if (!function_exists('bc_svc_enqueue_held_attempt')) {
 }
 
 if (!function_exists('bc_sdl_set_capability')) {
-    function bc_sdl_set_capability($vendor_id, $service_type, $provider, $capability_key, $enabled, $evidence_ref = '') {
+    function bc_sdl_set_capability(
+        $vendor_id,
+        $service_type,
+        $provider,
+        $currency,
+        $authorized,
+        $evidence_ref = '',
+        $idempotency_verified = true,
+        $status_query_verified = true
+    ) {
         global $connection_server;
         $vendor_id = (int)$vendor_id;
-        $service_type = trim((string)$service_type);
-        $provider = trim((string)$provider);
-        $capability_key = trim((string)$capability_key);
-        $enabled = $enabled ? 1 : 0;
-        $evidence_ref = trim((string)$evidence_ref);
-        if ($vendor_id <= 0 || $service_type === '' || $provider === '' || $capability_key === '' || !($connection_server instanceof mysqli)) {
+        $service_type = strtolower(trim((string)$service_type));
+        $provider = strtolower(trim((string)$provider));
+        $currency = strtoupper(trim((string)$currency));
+        $is_auth = $authorized ? 1 : 0;
+        $idem_ok = ($authorized && $idempotency_verified) ? 1 : 0;
+        $stat_ok = ($authorized && $status_query_verified) ? 1 : 0;
+        $ev_raw = trim((string)$evidence_ref);
+        $digest = preg_match('/\A[a-f0-9]{64}\z/D', $ev_raw)
+            ? $ev_raw
+            : hash('sha256', $ev_raw !== '' ? $ev_raw : ($vendor_id . '|' . $service_type . '|' . $provider . '|' . $currency));
+        if ($vendor_id <= 0 || $service_type === '' || $provider === '' || !preg_match('/\A[A-Z]{3}\z/D', $currency) || !($connection_server instanceof mysqli)) {
             return ['ok' => false, 'code' => 'invalid'];
         }
         $stmt = $connection_server->prepare(
-            'INSERT INTO sas_service_capability_matrix(vendor_id, service_type, provider, capability_key, enabled, verified_evidence_ref) VALUES(?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE enabled=VALUES(enabled), verified_evidence_ref=VALUES(verified_evidence_ref), updated_at=NOW()'
+            'INSERT INTO sas_service_capability_matrix(vendor_id, service_type, provider, currency, is_authorized, idempotency_verified, status_query_verified, evidence_digest) VALUES(?,?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE is_authorized=VALUES(is_authorized), idempotency_verified=VALUES(idempotency_verified), status_query_verified=VALUES(status_query_verified), evidence_digest=VALUES(evidence_digest), updated_at=NOW()'
         );
         if (!$stmt) return ['ok' => false, 'code' => 'unavailable'];
-        $stmt->bind_param('isssis', $vendor_id, $service_type, $provider, $capability_key, $enabled, $evidence_ref);
+        $stmt->bind_param('isssiiis', $vendor_id, $service_type, $provider, $currency, $is_auth, $idem_ok, $stat_ok, $digest);
         $ok = $stmt->execute();
         $stmt->close();
         return ['ok' => $ok, 'code' => $ok ? 'saved' : 'unavailable'];

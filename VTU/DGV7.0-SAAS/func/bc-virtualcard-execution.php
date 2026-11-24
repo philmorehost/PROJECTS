@@ -5,11 +5,45 @@
  * Uses bc_vc_reserve_issue / bc_vc_reserve_fund / bc_vc_cancel_held (zero CVV, masked PAN only).
  */
 require_once __DIR__ . '/bc-virtualcard-settlement.php';
+require_once __DIR__ . '/bc-virtualcard-worker.php';
 require_once __DIR__ . '/bc-virtualcard-flutterwave.php';
 
 if (!function_exists('bc_vc_execution_enabled')) {
     function bc_vc_execution_enabled() {
         return getenv('BC_VIRTUALCARD_WORKER_ENABLED') === '1';
+    }
+}
+
+if (!function_exists('bc_vc_dispatch_one')) {
+    function bc_vc_dispatch_one($vendor_id, $reference, $expected_version, callable $transport) {
+        if (!bc_vc_worker_enabled()) {
+            return ['ok' => false, 'code' => 'CARD_SECURITY_HOLD'];
+        }
+        $claim = bc_vc_claim_dispatch((int)$vendor_id, (string)$reference, (int)$expected_version);
+        if (empty($claim['ok'])) {
+            return $claim;
+        }
+        $dispVer = (int)$claim['version'];
+        $outcome = 'unknown';
+        $provRef = '';
+        $cardPayload = [];
+        $evidencePayload = [];
+        try {
+            $resp = $transport($claim['order']);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (in_array($cand, ['unknown', 'confirmed_success', 'confirmed_failure'], true)) {
+                $outcome = $cand;
+            }
+            $provRef = (string)($resp['provider_reference'] ?? '');
+            $cardPayload = is_array($resp['card_payload'] ?? null) ? $resp['card_payload'] : [];
+            $evidencePayload = is_array($resp) ? $resp : ['raw' => (string)$resp];
+        } catch (Throwable $e) {
+            $outcome = 'unknown';
+            $evidencePayload = ['error' => $e->getMessage()];
+        }
+        $evHash = hash('sha256', json_encode($evidencePayload, JSON_THROW_ON_ERROR));
+        $evKey  = hash('sha256', json_encode(['vc_dispatch_one', (int)$vendor_id, (string)$reference, $dispVer], JSON_THROW_ON_ERROR));
+        return bc_vc_observe_outcome((int)$vendor_id, (string)$reference, $evKey, $outcome, $evHash, $provRef, $dispVer, $cardPayload);
     }
 }
 

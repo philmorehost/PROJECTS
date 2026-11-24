@@ -62,6 +62,37 @@ if (!function_exists('bc_payout_execute_user_request')) {
     }
 }
 
+if (!function_exists('bc_payout_dispatch_one')) {
+    function bc_payout_dispatch_one($vendor_id, $tx_reference, $expected_version, callable $transport) {
+        if (!bc_payout_worker_enabled()) {
+            return ['ok' => false, 'code' => 'PAYOUT_SECURITY_HOLD'];
+        }
+        $claim = bc_payout_claim_dispatch((int)$vendor_id, (string)$tx_reference, (int)$expected_version);
+        if (empty($claim['ok'])) {
+            return $claim;
+        }
+        $dispVer = (int)$claim['version'];
+        $outcome = 'unknown';
+        $provRef = '';
+        $evidencePayload = [];
+        try {
+            $resp = $transport($claim['reservation']);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (in_array($cand, ['confirmed_success', 'confirmed_failure', 'unknown'], true)) {
+                $outcome = $cand;
+            }
+            $provRef = (string)($resp['provider_reference'] ?? '');
+            $evidencePayload = is_array($resp) ? $resp : ['raw' => (string)$resp];
+        } catch (Throwable $e) {
+            $outcome = 'unknown';
+            $evidencePayload = ['exception' => $e->getMessage()];
+        }
+        $evKey  = hash('sha256', json_encode(['payout_dispatch_one', (int)$vendor_id, (string)$tx_reference, $dispVer], JSON_THROW_ON_ERROR));
+        $evHash = hash('sha256', json_encode($evidencePayload, JSON_THROW_ON_ERROR));
+        return bc_payout_observe_outcome((int)$vendor_id, (string)$tx_reference, $evKey, $outcome, $evHash, $provRef, $dispVer);
+    }
+}
+
 if (!function_exists('bc_payout_admin_action')) {
     function bc_payout_admin_action($vendor_id, $admin_email, $tx_reference, $action, $reason = '', callable $transport = null) {
         $vendor_id = (int)$vendor_id;
@@ -91,7 +122,7 @@ if (!function_exists('bc_payout_admin_action')) {
                 if ($ep === '' || strlen($sec) < 16) {
                     return ['ok' => false, 'code' => 'provider_transport_unconfigured'];
                 }
-                $transport = bc_worker_make_http_transport('payout', $ep, $sec);
+                $transport = bc_payout_make_http_transport($ep, $sec);
             }
             return bc_payout_dispatch_one($vendor_id, $tx_reference, $ver, $transport);
         }
