@@ -37,4 +37,7 @@ hlw_chk(!$r1['ok'] && $r1['code'] === 'worker_disabled', 'checkout expire worker
 hlw_chk(!$r2['ok'] && $r2['code'] === 'worker_disabled', 'virtualcard worker refuses when disabled');
 hlw_chk(!$r3['ok'] && $r3['code'] === 'worker_disabled', 'giftcard worker refuses when disabled');
 
+hlw_chk(is_callable(bc_vc_make_http_transport('https://provider.example.com/vc', 'super-secret-vc-01234567')), 'virtualcard http transport factory works');
+hlw_chk(is_callable(bc_gc_make_http_transport('https://provider.example.com/gc', 'super-secret-gc-01234567')), 'giftcard http transport factory works');
+
 echo "PASS $n held lifecycle worker policy checks\n";

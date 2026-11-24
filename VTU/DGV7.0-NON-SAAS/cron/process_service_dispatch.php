@@ -27,6 +27,19 @@ if (PHP_SAPI === 'cli') {
         echo json_encode(bc_sdl_run_reaper($vendorId, $limit), JSON_THROW_ON_ERROR) . "\n";
         exit(0);
     }
-    echo json_encode(['ok' => false, 'code' => 'no_provider_transport_configured', 'vendor_id' => $vendorId]) . "\n";
-    exit(1);
+    $endpoint = (string)(getenv('BC_SERVICE_DISPATCH_ENDPOINT') ?: '');
+    $secret   = (string)(getenv('BC_SERVICE_DISPATCH_HMAC_SECRET') ?: '');
+    $workerId = (string)(getenv('BC_SERVICE_WORKER_ID') ?: gethostname() ?: 'worker-cli');
+    if ($endpoint === '' || $secret === '') {
+        echo json_encode(['ok' => false, 'code' => 'no_provider_transport_configured', 'vendor_id' => $vendorId]) . "\n";
+        exit(1);
+    }
+    try {
+        $transport = bc_sdl_make_http_transport($endpoint, $secret);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'code' => 'invalid_provider_endpoint', 'error' => $e->getMessage()]) . "\n";
+        exit(2);
+    }
+    echo json_encode(bc_sdl_run_worker($vendorId, $workerId, $transport, 60, min($limit, 100)), JSON_THROW_ON_ERROR) . "\n";
+    exit(0);
 }

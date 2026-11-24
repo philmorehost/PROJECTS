@@ -14,6 +14,12 @@ foreach (['bc-crypto-buysell-worker.php', 'bc-crypto-buysell-bridge.php', 'bc-cr
     }
     cbw_ok(!preg_match('/\b(CREATE|ALTER|DROP|TRUNCATE)\s+TABLE\b/i', $a), "no runtime DDL in $f");
 }
+cbw_ok(
+    file_get_contents(__DIR__ . '/../DGV7.0-SAAS/cron/process_crypto_buysell_deposits.php') ===
+    file_get_contents(__DIR__ . '/../DGV7.0-NON-SAAS/cron/process_crypto_buysell_deposits.php'),
+    'edition parity for cron/process_crypto_buysell_deposits.php'
+);
+cbw_ok(is_callable(bc_cbs_make_http_watcher_transport('https://watcher.example.com/poll', 'super-secret-watcher-012345')), 'watcher http transport factory works');
 
 foreach ([
     'http://signer.example.com/sign',

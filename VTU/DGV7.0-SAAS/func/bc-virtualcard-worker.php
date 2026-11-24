@@ -6,6 +6,7 @@
  * timeouts/exceptions record 'unknown' and never auto-refund or retry.
  */
 require_once __DIR__ . '/bc-virtualcard-settlement.php';
+require_once __DIR__ . '/bc-worker-http.php';
 
 if (!function_exists('bc_vc_worker_enabled')) {
     function bc_vc_worker_enabled() {
@@ -110,5 +111,37 @@ if (!function_exists('bc_vc_run_worker')) {
             ];
         }
         return ['ok' => true, 'code' => 'completed', 'processed' => count($results), 'results' => $results];
+    }
+}
+
+if (!function_exists('bc_vc_make_http_transport')) {
+    function bc_vc_make_http_transport($endpointUrl, $hmacSecret) {
+        $sender = bc_worker_make_signed_json_transport($endpointUrl, $hmacSecret);
+        return static function (array $order) use ($sender) {
+            $ref = (string)($order['reference'] ?? '');
+            $payload = [
+                'action'       => 'virtualcard_dispatch',
+                'vendor_id'    => (int)($order['vendor_id'] ?? 0),
+                'user_id'      => (int)($order['user_id'] ?? 0),
+                'reference'    => $ref,
+                'operation'    => (string)($order['operation'] ?? 'issue'),
+                'card_id'      => (string)($order['provider_card_id'] ?? ''),
+                'amount_minor' => (string)($order['amount_minor'] ?? '0'),
+                'currency'     => (string)($order['currency'] ?? 'USD'),
+            ];
+            $resp = $sender($payload, $ref);
+            $cand = (string)($resp['outcome'] ?? 'unknown');
+            if (!in_array($cand, ['confirmed_success', 'confirmed_failure', 'unknown'], true)) {
+                $cand = 'unknown';
+            }
+            $cardPayload = is_array($resp['card_payload'] ?? null) ? $resp['card_payload'] : [];
+            unset($cardPayload['cvv'], $cardPayload['cvc'], $cardPayload['pan'], $cardPayload['card_number']);
+            return [
+                'outcome'            => $cand,
+                'provider_reference' => (string)($resp['provider_reference'] ?? ($resp['provider_ref'] ?? '')),
+                'card_payload'       => $cardPayload,
+                'error'              => (string)($resp['error'] ?? ''),
+            ];
+        };
     }
 }

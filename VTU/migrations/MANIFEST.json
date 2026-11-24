@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.18-remediation-manifest-8",
+  "version": "2026.11.18-remediation-manifest-9",
   "migrations": [
     {
       "path": "PAYHUB/install/20261118_deposit_evidence.sql",
@@ -141,15 +141,15 @@
     },
     {
       "name": "bc-payout-worker.php",
-      "sha256": "963d78636549830a9aa83c468b7659fb39869d38c52a91eeb7461b18f0e75ed5"
+      "sha256": "2526e7c58b8fdb6fd6d97ab8ee943546e2eb21d6efcc2fa2afa11ae425895af4"
     },
     {
       "name": "bc-service-dispatch-worker.php",
-      "sha256": "00c4f19cfe7d4f5174b51e60952e00cf0a65104b212656034d03c6484d09120f"
+      "sha256": "fad576516bf6897442833a3eb60b140094a5ff0252c679aa0cbd1a0d3c44f3f7"
     },
     {
       "name": "bc-crypto-buysell-worker.php",
-      "sha256": "9aae6181753e3596bc5cd638e022092bab4f7f83ad5d284ebd2bd054ce85c877"
+      "sha256": "104be4e10f986a59c0acf1fdaca3146328942c8bc267c5cc5b670f3b575251dc"
     },
     {
       "name": "bc-crypto-buysell-bridge.php",
@@ -165,11 +165,15 @@
     },
     {
       "name": "bc-virtualcard-worker.php",
-      "sha256": "3bbcbfe077302134ecee97df81629bfb34c9074b311d43ef39b1533391afb6c1"
+      "sha256": "6d2ba9acdcd34241f4a27c3b10c75d4c6d7831de7de062749b4d3b1a1865204e"
     },
     {
       "name": "bc-giftcard-worker.php",
-      "sha256": "b4cfc0ffdcf5043dc083b5392320827e87de5435fb3b50a33f05e6c5a04f09ad"
+      "sha256": "91bb339ae02129a171f0f51c57b8845324cdffe49d96cf99d459034313f7964f"
+    },
+    {
+      "name": "bc-worker-http.php",
+      "sha256": "28c0d816089fcdb0112861af20ab8b6adcf839b3caf55e03466947cf972483ab"
     }
   ],
   "required_innodb_tables": [
