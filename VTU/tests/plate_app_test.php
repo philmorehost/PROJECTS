@@ -222,6 +222,9 @@ chk(strpos($html, 'API Documentation') !== false, 'profile menu has the API link
 chk(strpos($html, 'Account Settings') !== false, 'profile menu has settings');
 chk(strpos($html, 'Log Out') !== false, 'profile menu has logout');
 chk(strpos($html, 'data-pk-logout') !== false, 'logout carries its marker');
+chk(strpos($html, '.pk-app__profile .pk-app__hide-sm { display: none; }') !== false, 'app topbar collapses profile button to icon-only on mobile');
+chk(strpos($html, 'bi-chevron-down pk-app__hide-sm') !== false, 'app topbar hides profile chevron on mobile');
+chk(strpos($html, 'aria-label="adaobi profile menu"') !== false, 'app topbar profile button exposes accessible label');
 
 // ---------------------------------------------------------------- gating both ways
 $GLOBALS['__services']['data'] = 0;
