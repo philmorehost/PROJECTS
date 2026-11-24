@@ -4,7 +4,7 @@ set_exception_handler(function($e){echo '::error::'.$e->getMessage().' line '.$e
 $edition=getenv('BC_TEST_EDITION')?:'SAAS';if(!in_array($edition,['SAAS','NON-SAAS'],true))throw new RuntimeException('edition');
 require __DIR__.'/../DGV7.0-'.$edition.'/func/bc-service-attempt-journal.php';
 mysqli_report(MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT);$db=$connection_server=new mysqli('127.0.0.1','root','disposable-ci-only','',3306);
-if(($argv[1]??'')==='race'){$name=$argv[2]??'';if(!preg_match('/\Abc_attempt_[a-f0-9]{12}\z/D',$name))throw new RuntimeException('db');$db->select_db($name);echo json_encode(bc_saj_hold(7,1));exit;}
+if(in_array($argv[1]??'',['race','event'],true)){$name=$argv[2]??'';if(!preg_match('/\Abc_attempt_[a-f0-9]{12}\z/D',$name))throw new RuntimeException('db');$db->select_db($name);echo json_encode(($argv[1]==='event')?bc_saj_observe(7,3,str_repeat('9',64),'confirmed_success',hash('sha256','race evidence'),'provider-3',0):bc_saj_hold(7,1));exit;}
 $name='bc_attempt_'.bin2hex(random_bytes(6));$db->query("CREATE DATABASE `$name`");$db->select_db($name);$n=0;
 function am($ok,$msg){$GLOBALS['n']++;if(!$ok)throw new RuntimeException($msg);}
 try{
@@ -35,6 +35,16 @@ $db->query("UPDATE sas_service_requests SET provider='other' WHERE id=1");am(bc_
 $db->begin_transaction();$db->query("UPDATE sas_service_requests SET status='outer-change' WHERE id=1");am(!bc_saj_hold(7,1)['ok'],'outer transaction refused');$db->rollback();
 am($db->query('SELECT status FROM sas_service_requests WHERE id=1')->fetch_assoc()['status']==='pending','journal never changes fulfilment status or commits caller transaction');
 am(bc_saj_hold(7,3)['ok'],'another request held');
+$db->query("UPDATE sas_service_attempts SET state='in_flight' WHERE vendor_id=7 AND request_id=3");
+$children=[];foreach([1,2] as $i){$pipes=[];$p=proc_open([PHP_BINARY,__FILE__,'event',$name],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);fclose($pipes[0]);$children[]=[$p,$pipes];}
+$receipts=[];foreach($children as [$p,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);am(proc_close($p)===0,'event race child '.$err);$receipts[]=json_decode($out,true);}
+am($receipts[0]['ok']&&$receipts[1]['ok']&&$receipts[0]['version']===1&&$receipts[1]['version']===1,'concurrent observations recover one result');
+am(count(array_filter($receipts,fn($r)=>$r['replayed']))===1,'one journal writer one replay');
+am((int)$db->query('SELECT COUNT(*) n FROM sas_service_attempt_events WHERE vendor_id=7 AND request_id=3')->fetch_assoc()['n']===1,'one observation receipt persisted');
+$db->query("INSERT INTO sas_service_requests VALUES(4,7,2,'esim','platnova','fixture-4','{}','pending')");am(bc_saj_hold(7,4)['ok'],'reference collision fixture held');$db->query("UPDATE sas_service_attempts SET state='in_flight' WHERE vendor_id=7 AND request_id=4");
+am(!bc_saj_observe(7,4,str_repeat('8',64),'confirmed_success',$proof,'provider-1',0)['ok'],'provider reference cannot attach to another request');
+am($db->query('SELECT state FROM sas_service_attempts WHERE vendor_id=7 AND request_id=4')->fetch_assoc()['state']==='in_flight','collision rolls back state');
+
 $db->query('ALTER TABLE sas_service_attempt_events DROP FOREIGN KEY service_attempt_event_owner');$db->query('ALTER TABLE sas_service_attempt_events ENGINE=MyISAM');am(bc_saj_hold(7,3)['code']==='nontransactional','nontransactional storage refused');
 echo "$n $edition native MySQL attempt journal checks passed; no provider execution or wallet changes\n";
 }finally{$db->query("DROP DATABASE `$name`");$db->close();}
