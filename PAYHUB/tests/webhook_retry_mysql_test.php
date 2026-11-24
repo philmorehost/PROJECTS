@@ -16,10 +16,20 @@ function retrymigration($db,$file){
     finally{$db->setAttribute(PDO::ATTR_EMULATE_PREPARES,$native);}
 }
 function retrydb($name='') {return new PDO('mysql:host=127.0.0.1;port=3306;dbname='.$name,'root','disposable-ci-only',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);}
+function sandboxfixtureclaim($db,$id,$token='sandbox-fixture-token',$owner=1){
+    $source=file_get_contents(__DIR__.'/../api/transaction/simulate.php');
+    preg_match('/prepare\("(UPDATE transactions SET status = \'success\', fee_amount[^";]+)"\)/',$source,$m);
+    if(!isset($m[1]))throw new RuntimeException('sandbox SQL not found');
+    $db->beginTransaction();
+    try{$q=$db->prepare($m[1]);$q->execute([2,100,'SIMULATED_FIXTURE',$id,$owner,$token]);
+        if($q->rowCount()!==1){$db->rollBack();return false;}
+        $db->exec('INSERT INTO sandbox_fixture_claims(transaction_id) VALUES('.(int)$id.')');$db->commit();return true;
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+}
 if (($argv[1]??'')==='worker') {
     $name=$argv[2]??'';if(!preg_match('/\Apayhub_retry_ci_[a-f0-9]{12}\z/',$name))exit(2);
     $worker=retrydb($name);usleep(200000);
-    try {if(($argv[4]??'')==='recovery'){$result=payhub_recover_outbox($worker,(int)$argv[3],true,function()use($worker){if($worker->inTransaction())throw new RuntimeException('HTTP inside DB transaction');$worker->exec('INSERT INTO recovery_fixture_sends(transaction_id) VALUES(70)');return [204,true];});echo $result==='acknowledged'?'claimed':'blocked';exit;}if(($argv[4]??'')==='initial'){$row=initialfixture($worker,(int)$argv[3]);payhub_claim_initial_webhook($worker,$row,initialbody($row));}else{payhub_claim_webhook_retry($worker,(int)$argv[3],true);}echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
+    try {if(($argv[4]??'')==='sandbox'){echo sandboxfixtureclaim($worker,(int)$argv[3])?'claimed':'blocked';exit;}if(($argv[4]??'')==='recovery'){$result=payhub_recover_outbox($worker,(int)$argv[3],true,function()use($worker){if($worker->inTransaction())throw new RuntimeException('HTTP inside DB transaction');$worker->exec('INSERT INTO recovery_fixture_sends(transaction_id) VALUES(70)');return [204,true];});echo $result==='acknowledged'?'claimed':'blocked';exit;}if(($argv[4]??'')==='initial'){$row=initialfixture($worker,(int)$argv[3]);payhub_claim_initial_webhook($worker,$row,initialbody($row));}else{payhub_claim_webhook_retry($worker,(int)$argv[3],true);}echo 'claimed';}catch(Throwable $e){echo 'blocked';}exit;
 }
 $n=0;function retrycheck($ok,$label){global $n;if(!$ok)throw new RuntimeException($label);$n++;}
 function retryreject($f,$label){try{$f();}catch(Throwable $e){retrycheck(true,$label);return;}throw new RuntimeException('accepted '.$label);}
@@ -278,5 +288,11 @@ try {
     $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean recovery worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','competing recovery blocked');}
     retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM recovery_fixture_sends')->fetchColumn()===1,'one recovery transport invocation under real process concurrency');
     putenv('PAYHUB_OUTBOX_RECOVERY_ENABLED');
+    $db->exec('ALTER TABLE transactions ADD checkout_token VARCHAR(100) NULL');$db->exec('CREATE TABLE sandbox_fixture_claims(id INT AUTO_INCREMENT PRIMARY KEY,transaction_id INT) ENGINE=InnoDB');
+    foreach([[90,1,'pending'],[91,0,'pending'],[92,1,'success'],[93,1,'pending']] as [$id,$mode,$state])$db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test,checkout_token) VALUES($id,1,'sandbox-$id','$state',$mode,'sandbox-fixture-token')");
+    retrycheck(!sandboxfixtureclaim($db,91),'sandbox conditional claim refuses live mode');retrycheck(!sandboxfixtureclaim($db,92),'sandbox conditional claim refuses success');retrycheck(!sandboxfixtureclaim($db,93,'wrong-token'),'sandbox rejects stale token');retrycheck(!sandboxfixtureclaim($db,93,'SANDBOX-FIXTURE-TOKEN'),'sandbox SQL token match is case-sensitive');retrycheck(!sandboxfixtureclaim($db,93,'sandbox-fixture-token',2),'sandbox refuses changed owner');
+    $workers=[];for($i=0;$i<6;$i++){$proc=proc_open([PHP_BINARY,__FILE__,'worker',$name,'90','sandbox'],[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($proc))throw new RuntimeException('sandbox worker failed');fclose($pipes[0]);$workers[]=[$proc,$pipes];}
+    $wins=0;foreach($workers as [$proc,$pipes]){$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);retrycheck(proc_close($proc)===0 && $err==='','clean sandbox worker');if($out==='claimed')$wins++;else retrycheck($out==='blocked','competing sandbox refused');}
+    retrycheck($wins===1 && (int)$db->query('SELECT COUNT(*) FROM sandbox_fixture_claims')->fetchColumn()===1,'one sandbox claim under independent process concurrency without webhook dependence');retrycheck($db->query('SELECT checkout_token FROM transactions WHERE id=90')->fetchColumn()===null,'sandbox consumes token atomically');retrycheck(!sandboxfixtureclaim($db,90),'consumed sandbox token cannot replay');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}
