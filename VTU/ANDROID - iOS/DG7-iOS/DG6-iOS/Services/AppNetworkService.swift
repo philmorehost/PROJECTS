@@ -343,3 +343,42 @@ final class BrandTheme: ObservableObject {
         } catch { /* Last-known-good origin-scoped palette remains usable offline. */ }
     }
 }
+
+// No redirects: never forward captured identity evidence or bearer credentials to another URL.
+private final class KYCEvidenceRedirectGuard: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+}
+extension AppNetworkService {
+    func uploadKYCCaptures(photo: Data?, video: Data?, completion: @escaping (Result<String, Error>) -> Void) {
+        let fail: (String) -> Void = { message in DispatchQueue.main.async { completion(.failure(NSError(domain: "KYCEvidence", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))) } }
+        guard let token = apiKey, !token.isEmpty else { fail("Your app session is missing. Sign in again."); return }
+        guard photo != nil || video != nil,
+              photo.map({ !$0.isEmpty && $0.count <= 512 * 1024 }) ?? true,
+              video.map({ !$0.isEmpty && $0.count <= 3 * 1024 * 1024 }) ?? true,
+              let url = URL(string: mobileOrigin + "web/api/kyc.php"), url.scheme == "https" else { fail("Invalid capture size or server configuration."); return }
+        let boundary = "KYC-" + UUID().uuidString
+        var body = Data()
+        func text(_ value: String) { body.append(Data(value.utf8)) }
+        text("--\(boundary)\r\nContent-Disposition: form-data; name=\"action\"\r\n\r\nupload_document\r\n")
+        text("--\(boundary)\r\nContent-Disposition: form-data; name=\"app_token\"\r\n\r\n\(token)\r\n")
+        if let photo = photo { text("--\(boundary)\r\nContent-Disposition: form-data; name=\"selfie\"; filename=\"camera.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n"); body.append(photo); text("\r\n") }
+        if let video = video { text("--\(boundary)\r\nContent-Disposition: form-data; name=\"liveliness_video\"; filename=\"camera.mp4\"\r\nContent-Type: video/mp4\r\n\r\n"); body.append(video); text("\r\n") }
+        text("--\(boundary)--\r\n")
+        var request = URLRequest(url: url); request.httpMethod = "POST"; request.httpBody = body; request.timeoutInterval = 90
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let session = URLSession(configuration: .ephemeral, delegate: KYCEvidenceRedirectGuard(), delegateQueue: nil)
+        session.dataTask(with: request) { data, response, error in
+            defer { session.finishTasksAndInvalidate() }
+            guard error == nil, let data = data else { fail("Submission result is uncertain. Check your KYC status before retrying. Your captures were retained in this screen."); return }
+            if self.inspectRequiredSetup(data) { fail("Complete required security setup on the website, then sign in again."); return }
+            guard let http = response as? HTTPURLResponse,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { fail("Could not confirm the server response. Check your KYC status before retrying."); return }
+            guard (200..<300).contains(http.statusCode), json["status"] as? String == "success" else { fail(json["desc"] as? String ?? json["message"] as? String ?? "Submission was refused. Sign in again if your session has expired."); return }
+            let accepted = json["accepted_media"] as? [String] ?? []
+            guard (photo == nil || accepted.contains("selfie")), (video == nil || accepted.contains("liveliness_video")) else { fail("The server did not confirm every capture. Check your KYC status; do not assume all files were saved. The backend may need updating."); return }
+            DispatchQueue.main.async { completion(.success(json["desc"] as? String ?? "Captures submitted for review. This is not approval.")) }
+        }.resume()
+    }
+}

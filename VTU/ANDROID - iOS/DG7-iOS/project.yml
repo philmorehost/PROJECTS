@@ -33,7 +33,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
         # AIChatView drives SFSpeechRecognizer + AVAudioEngine. iOS KILLS the app on the first
         # permission request if these strings are missing - not a warning, a crash.
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Microphone access is used to dictate messages to the AI assistant."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Microphone access records your live KYC video and supports voice features."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Speech recognition converts your spoken words into text for the AI assistant."
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Photo library access is used to upload your KYC documents."
         INFOPLIST_KEY_NSCameraUsageDescription: "Camera access is used to capture your KYC documents and selfie."

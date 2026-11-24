@@ -196,6 +196,7 @@ if ($action === 'upload_document') {
             "status" => "success",
             "desc"   => $in_review ? "Documents submitted and waiting for admin review" : "Documents saved",
             "in_review" => $in_review,
+            "accepted_media" => $uploaded,
             "still_needed" => array_map('bc_kyc_check_label', $still),
         ]);
     } else {

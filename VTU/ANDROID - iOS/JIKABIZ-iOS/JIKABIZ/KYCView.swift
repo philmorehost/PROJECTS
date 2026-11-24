@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+import UIKit
+import AVFoundation
+import UniformTypeIdentifiers
 @MainActor
 
 struct KYCView: View {
@@ -22,6 +25,8 @@ struct KYCView: View {
                     // Traditional KYC Methods
                     TraditionalKYCSection(viewModel: viewModel)
                     
+                    KYCLiveCaptureSection(onAccepted: { viewModel.loadKYCStatus() })
+
                     // AI Interview Section
                     AIInterviewSection(viewModel: viewModel)
                 }
@@ -330,6 +335,133 @@ final class KYCViewModel: ObservableObject {
                 self.resultMessage = error.localizedDescription
                 self.showResult = true
             }
+        }
+    }
+}
+// Camera capture is manual review evidence, not biometric liveness attestation.
+private enum KYCCameraKind: String, Identifiable { case photo, video; var id: String { rawValue } }
+@MainActor
+private struct KYCLiveCaptureSection: View {
+    let onAccepted: () -> Void
+    @State private var camera: KYCCameraKind?
+    @State private var photo: Data?
+    @State private var video: Data?
+    @State private var busy = false
+    @State private var message = "Captures are submitted for manual review, not automatic verification."
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Live photo and video").font(.headline)
+            Text("Use your camera. For video, say your full name and today’s date, then turn your head slowly. Record 1–8 seconds. No gallery uploads.").font(.caption)
+            Button(photo == nil ? "Take live photo" : "Retake live photo") { open(.photo) }.disabled(busy)
+            if let data = photo, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 180)
+                Text("Photo: \(data.count / 1024) KB").font(.caption)
+            }
+            Button(video == nil ? "Record live video" : "Retake live video") { open(.video) }.disabled(busy)
+            if let data = video { Text("Video ready: \(data.count / 1024) KB (maximum 3 MB)").font(.caption) }
+            Button("Submit captures for review") { submit() }.disabled(busy || (photo == nil && video == nil))
+            Button("Discard captures") { photo = nil; video = nil; message = "Unsubmitted captures discarded." }.disabled(busy || (photo == nil && video == nil))
+            if busy { ProgressView("Processing…") }
+            Text(message).font(.caption).accessibilityIdentifier("kycCaptureStatus")
+        }
+        .padding().background(Color.secondary.opacity(0.08)).cornerRadius(12)
+        .sheet(item: $camera) { kind in
+            KYCLiveCamera(kind: kind) { image, url, error in
+                camera = nil
+                if let error = error { busy = false; message = error; return }
+                if let image = image {
+                    let size = image.size
+                    guard min(size.width, size.height) >= 160 else { busy = false; message = "Photo too small. Please retake."; return }
+                    let ratio = min(1, 960 / max(size.width, size.height))
+                    let format = UIGraphicsImageRendererFormat(); format.scale = 1
+                    let target = CGSize(width: size.width * ratio, height: size.height * ratio)
+                    let renderer = UIGraphicsImageRenderer(size: target, format: format)
+                    let normalized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
+                    if let jpeg = normalized.jpegData(compressionQuality: 0.78), jpeg.count <= 512 * 1024 {
+                        photo = jpeg; message = "Photo ready. Review it before submitting."
+                    } else { message = "Photo exceeds 512 KB. Please retake." }
+                    busy = false
+                } else if let url = url {
+                    Task { do { video = try await compressVideo(url); message = "Video ready for submission." }
+                        catch { message = error.localizedDescription }; busy = false }
+                } else { busy = false; message = "Capture cancelled. Previous captures, if any, were retained." }
+            }.interactiveDismissDisabled(true)
+        }
+    }
+    private func open(_ kind: KYCCameraKind) {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { message = "A live camera is unavailable. Use a camera-enabled device or the secure website."; return }
+        let wanted = kind == .video ? UTType.movie.identifier : UTType.image.identifier
+        guard UIImagePickerController.availableMediaTypes(for: .camera)?.contains(wanted) == true else { message = "This camera does not support the requested capture format."; return }
+        busy = true
+        Task {
+            let cameraAllowed = await permission(.video)
+            let audioAllowed = kind == .video ? await permission(.audio) : true
+            guard cameraAllowed && audioAllowed else { busy = false; message = "Allow camera/microphone access in Settings to capture live evidence. No gallery fallback is offered."; return }
+            camera = kind
+        }
+    }
+    private func permission(_ type: AVMediaType) async -> Bool {
+        if AVCaptureDevice.authorizationStatus(for: type) == .authorized { return true }
+        return await withCheckedContinuation { continuation in AVCaptureDevice.requestAccess(for: type) { continuation.resume(returning: $0) } }
+    }
+    private func compressVideo(_ source: URL) async throws -> Data {
+        defer { try? FileManager.default.removeItem(at: source) }
+        let asset = AVURLAsset(url: source)
+        let duration = CMTimeGetSeconds(asset.duration)
+        guard duration.isFinite, duration >= 1, duration <= 9,
+              !asset.tracks(withMediaType: .video).isEmpty, !asset.tracks(withMediaType: .audio).isEmpty else {
+            throw captureError("Record 1–8 seconds of video with audio, then try again.")
+        }
+        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset640x480), exporter.supportedFileTypes.contains(.mp4) else { throw captureError("This recording cannot be compressed to MP4. Please retake.") }
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+        defer { try? FileManager.default.removeItem(at: output) }
+        exporter.outputURL = output; exporter.outputFileType = .mp4; exporter.shouldOptimizeForNetworkUse = true
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in exporter.exportAsynchronously { continuation.resume() } }
+        guard exporter.status == .completed else { throw captureError("Video compression failed. Please retake.") }
+        let size = try output.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size > 0, size <= 3 * 1024 * 1024 else { throw captureError("Compressed video exceeds 3 MB. Record a shorter video.") }
+        let result = AVURLAsset(url: output)
+        let seconds = CMTimeGetSeconds(result.duration)
+        guard seconds.isFinite, seconds >= 1, seconds <= 9, !result.tracks(withMediaType: .audio).isEmpty else { throw captureError("Exported video is invalid. Please retake.") }
+        return try Data(contentsOf: output)
+    }
+    private func captureError(_ message: String) -> NSError { NSError(domain: "KYCCapture", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
+    private func submit() {
+        busy = true
+        AppNetworkService.shared.uploadKYCCaptures(photo: photo, video: video) { result in
+            busy = false
+            switch result {
+            case .success(let description): photo = nil; video = nil; message = description; onAccepted()
+            case .failure(let error): message = error.localizedDescription
+            }
+        }
+    }
+}
+private struct KYCLiveCamera: UIViewControllerRepresentable {
+    let kind: KYCCameraKind
+    let finished: (UIImage?, URL?, String?) -> Void
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.mediaTypes = [kind == .video ? UTType.movie.identifier : UTType.image.identifier]
+        if UIImagePickerController.isCameraDeviceAvailable(.front) { picker.cameraDevice = .front }
+        picker.cameraCaptureMode = kind == .video ? .video : .photo
+        picker.videoMaximumDuration = 8; picker.videoQuality = .typeLow
+        picker.delegate = context.coordinator
+        return picker
+    }
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: KYCLiveCamera
+        init(_ parent: KYCLiveCamera) { self.parent = parent }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.finished(nil, nil, nil) }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if parent.kind == .photo { parent.finished(info[.originalImage] as? UIImage, nil, nil); return }
+            guard let source = info[.mediaURL] as? URL else { parent.finished(nil, nil, "Recording was not returned. Please retry."); return }
+            let owned = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mov")
+            do { try FileManager.default.copyItem(at: source, to: owned); parent.finished(nil, owned, nil) }
+            catch { try? FileManager.default.removeItem(at: owned); parent.finished(nil, nil, "Could not retain the recording for compression.") }
         }
     }
 }
