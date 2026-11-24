@@ -1,5 +1,6 @@
 <?php
 // php-version/includes/functions.php
+require_once __DIR__ . "/webhook-signing.php";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -74,7 +75,7 @@ function ensure_critical_tables() {
             'tickets' => "CREATE TABLE IF NOT EXISTS tickets (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NULL, guest_email VARCHAR(255) NULL, is_registered TINYINT DEFAULT 1, subject VARCHAR(255), message TEXT, status ENUM('open', 'processing', 'resolved', 'closed') DEFAULT 'open', priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'ticket_messages' => "CREATE TABLE IF NOT EXISTS ticket_messages (id INT AUTO_INCREMENT PRIMARY KEY, ticket_id INT, user_id INT NULL, message TEXT, is_admin TINYINT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'blog_posts' => "CREATE TABLE IF NOT EXISTS blog_posts (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), content TEXT, author VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
-            'webhook_logs' => "CREATE TABLE IF NOT EXISTS webhook_logs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, event_type VARCHAR(100), payload TEXT, response_code INT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
+            'webhook_logs' => "CREATE TABLE IF NOT EXISTS webhook_logs (id INT AUTO_INCREMENT PRIMARY KEY, transaction_id INT NOT NULL, status ENUM('success', 'failed') DEFAULT 'failed', attempt_count INT DEFAULT 0, last_attempt_at TIMESTAMP NULL, payload TEXT, response TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, KEY idx_webhook_transaction (transaction_id)) ENGINE=InnoDB",
             'staff_roles' => "CREATE TABLE IF NOT EXISTS staff_roles (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, role VARCHAR(50), permissions TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB",
             'otp_codes' => "CREATE TABLE IF NOT EXISTS otp_codes (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) NOT NULL, otp_code VARCHAR(6) NOT NULL, purpose ENUM('registration','login') NOT NULL, expires_at DATETIME NOT NULL, used TINYINT DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_email_purpose (email, purpose)) ENGINE=InnoDB"
         ];
@@ -1885,6 +1886,10 @@ function trigger_merchant_webhook($transactionId) {
                     'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
                     // Report what actually settled. `amount` is merchant-supplied
                     // and must never be trusted as evidence of payment.
+                    // Additive contract: preserve the legacy amount value and declare its meaning.
+                    'money_contract_version' => 1,
+                    'amount_unit' => 'minor',
+                    'amount_basis' => $paid !== null ? 'gateway' : 'requested',
                     'amount' => to_minor_units($grossPaid),
                     'requested_amount' => to_minor_units($tx['amount']),
                     'gateway_amount' => to_minor_units($grossPaid),
@@ -1908,24 +1913,28 @@ function trigger_merchant_webhook($transactionId) {
             // SECURITY: sign the webhook body so the merchant can verify it genuinely
             // came from PayHub. Signature = HMAC-SHA256(raw JSON body, merchant secret key),
             // sent in the X-Payhub-Signature header. Verify with the SAME secret key.
-            $secret = (string)(((int)$tx['is_test'] === 1) ? ($tx['test_secret_key'] ?? '') : ($tx['secret_key'] ?? ''));
-            $signature = $secret !== '' ? hash_hmac('sha256', $body, $secret) : '';
+            $signature = payhub_merchant_webhook_signature($body, $tx, $tx['is_test'] ?? null);
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            $headers = ['Content-Type: application/json'];
-            if ($signature !== '') {
-                $headers[] = 'X-Payhub-Signature: ' . $signature;
+            if ($signature === '') {
+                $res = false; $code = 0;
+                $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+            } else {
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                $headers = ['Content-Type: application/json'];
+                if ($signature !== '') {
+                    $headers[] = 'X-Payhub-Signature: ' . $signature;
+                }
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $res = curl_exec($ch);
+                $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlErr = curl_error($ch);
+                curl_close($ch);
             }
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $res = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlErr = curl_error($ch);
-            curl_close($ch);
 
             @file_put_contents(
                 BASE_PATH . 'webhook_debug.log',
