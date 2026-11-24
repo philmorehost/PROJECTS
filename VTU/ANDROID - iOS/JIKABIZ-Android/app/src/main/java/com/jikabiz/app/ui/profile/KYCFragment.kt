@@ -100,8 +100,70 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
         } catch (e: Exception) { if (_binding != null) snack("Live camera unavailable. Please use the secure website camera.") }
     }
 
+    private var pendingVideo: File? = null
+    private var videoReady = false
+    private fun videoIsValid(file: File): Boolean {
+        if (!file.isFile || file.length() !in 1..(3L * 1024 * 1024)) return false
+        val metadata = android.media.MediaMetadataRetriever()
+        return try {
+            metadata.setDataSource(file.path)
+            val duration = metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val mime = metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+            val hasVideo = metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
+            val hasAudio = metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+            hasVideo && hasAudio && mime == "video/mp4" && duration in 1000L..9000L
+        } catch (_: Exception) { false } finally { metadata.release() }
+    }
+    private val recordVideo = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val file = pendingVideo
+        videoReady = result.resultCode == Activity.RESULT_OK && file != null && videoIsValid(file)
+        if (videoReady) {
+            _binding?.tvVideoName?.text = "Live recording ready (${file!!.length() / 1024} KB)"
+        } else {
+            file?.delete()
+            _binding?.tvVideoName?.text = "No recording saved"
+            if (_binding != null) snack("Recording cancelled or invalid. Record 1–8 seconds at low quality, maximum 3 MB.")
+        }
+    }
+    private val videoPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants[android.Manifest.permission.CAMERA] == true && grants[android.Manifest.permission.RECORD_AUDIO] == true) captureVideo()
+        else if (_binding != null) snack("Camera and microphone permissions are required for live video.")
+    }
+    private fun captureVideo() {
+        val permissions = arrayOf(android.Manifest.permission.CAMERA, android.Manifest.permission.RECORD_AUDIO)
+        if (permissions.any { androidx.core.content.ContextCompat.checkSelfPermission(requireContext(), it) != android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+            videoPermissions.launch(permissions); return
+        }
+        try {
+            pendingVideo?.delete(); videoReady = false
+            _binding?.tvVideoName?.text = "No recording saved"
+            val dir = File(requireContext().cacheDir, "kyc").apply { mkdirs() }
+            val file = File.createTempFile("kyc_video_", ".mp4", dir)
+            pendingVideo = file
+            val uri = androidx.core.content.FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.fileprovider", file)
+            val intent = Intent(android.provider.MediaStore.ACTION_VIDEO_CAPTURE).apply {
+                putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+                putExtra(android.provider.MediaStore.EXTRA_DURATION_LIMIT, 8)
+                putExtra(android.provider.MediaStore.EXTRA_SIZE_LIMIT, 3L * 1024 * 1024)
+                putExtra(android.provider.MediaStore.EXTRA_VIDEO_QUALITY, 0)
+                clipData = android.content.ClipData.newRawUri("KYC camera output", uri)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            recordVideo.launch(intent)
+        } catch (_: Exception) {
+            pendingVideo?.delete(); videoReady = false
+            if (_binding != null) snack("Live recording unavailable. Use the secure website camera instead.")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        savedInstanceState?.getString("kyc_video_file")?.let { name ->
+            if (name.matches(Regex("kyc_video_[A-Za-z0-9_-]+\\.mp4"))) {
+                pendingVideo = File(File(requireContext().cacheDir, "kyc"), name)
+                videoReady = savedInstanceState.getBoolean("kyc_video_ready") && pendingVideo?.let { videoIsValid(it) } == true
+            }
+        }
         savedInstanceState?.getString("kyc_camera_file")?.let { name ->
             if (name.matches(Regex("kyc_camera_[A-Za-z0-9_-]+\\.jpg"))) {
                 pendingSelfie = File(File(requireContext().cacheDir, "kyc"), name)
@@ -110,6 +172,8 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
     }
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        pendingVideo?.let { outState.putString("kyc_video_file", it.name) }
+        outState.putBoolean("kyc_video_ready", videoReady)
         pendingSelfie?.let { outState.putString("kyc_camera_file", it.name) }
     }
 
@@ -129,6 +193,8 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
         }
         binding.btnPickSelfie.text = "Take live selfie"
         binding.btnPickSelfie.setOnClickListener { captureSelfie() }
+        binding.btnRecordVideo.setOnClickListener { captureVideo() }
+        if (videoReady) binding.tvVideoName.text = "Live recording ready"
         binding.btnUploadDocuments.setOnClickListener { uploadDocuments() }
         
         // VoveID Verification button
@@ -275,7 +341,7 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
     }
 
     private fun uploadDocuments() {
-        if (govtIdUri == null && selfieUri == null) {
+        if (govtIdUri == null && selfieUri == null && !videoReady) {
             snack("Please select at least one document to upload")
             return
         }
@@ -308,6 +374,11 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
                     builder.addFormDataPart("selfie", f.name, f.asRequestBody("image/jpeg".toMediaType()))
                 }}
 
+                if (videoReady) {
+                    val video = pendingVideo
+                    if (video == null || !videoIsValid(video)) throw IllegalStateException("Video is no longer valid. Please record again.")
+                    builder.addFormDataPart("liveliness_video", video.name, video.asRequestBody("video/mp4".toMediaType()))
+                }
                 val resp = api.kycUpload(builder.build())
                 val desc = resp.body()?.get("desc") as? String ?: ""
                 activity?.runOnUiThread {
