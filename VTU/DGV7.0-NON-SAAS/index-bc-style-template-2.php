@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/func/bc-public-app-brand.php';
 // Initialize variables to be used in the template
 // §46: default to this site's own host; the vendor's saved Site Name overwrites it below.
 $site_title       = (string)($_SERVER['HTTP_HOST'] ?? '');
@@ -413,6 +414,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             <div>Designed with Glassmorphism Excellence.</div>
         </div>
     <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
+<?php echo bc_public_app_badge_html(bc_public_saved_app_url((int)($vendor_account_details['id'] ?? 0), $site_details ?? [])); ?>
 </footer>
 
     <?php echo $custom_footer; ?>

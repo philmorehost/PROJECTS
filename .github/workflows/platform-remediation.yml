@@ -38,7 +38,26 @@ on:
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
-      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/index-bc-style-template-*.php'
+      - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/func/bc-payhub-deposit*.php'
+      - 'VTU/**/users-payhub.php'
+      - 'VTU/**/vendors-payhub.php'
+      - 'VTU/**/func/bc-func.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - 'VTU/tests/payhub*test.php'
+      - 'VTU/**/web/Fund.php'
+      - 'VTU/**/func/bc-wallet-funding-page.php'
+      - 'VTU/**/jsfile/bc-wallet-funding.js'
+      - 'VTU/tests/wallet_funding*php'
+      - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
+      - 'PAYHUB/includes/functions.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/api/transaction/verify.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
+      - 'VTU/**/cssfile/template/bc-style-template-1.css'
+      - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
       - 'VTU/tests/public_navigation_render.php'
@@ -150,7 +169,26 @@ on:
       - 'VTU/**/func/bc-admin-pin-setup.php'
       - 'VTU/**/func/bc-plate-admin.php'
       - 'VTU/tests/harness/admin-pin-setup-ui-test.mjs'
-      - 'VTU/**/index-bc-style-template-home.php'
+      - 'VTU/**/index-bc-style-template-*.php'
+      - 'VTU/**/func/bc-public-app-brand.php'
+      - 'VTU/**/func/bc-payhub-deposit*.php'
+      - 'VTU/**/users-payhub.php'
+      - 'VTU/**/vendors-payhub.php'
+      - 'VTU/**/func/bc-func.php'
+      - 'VTU/migrations/20261118_payhub_deposits.sql'
+      - 'VTU/tests/payhub*test.php'
+      - 'VTU/**/web/Fund.php'
+      - 'VTU/**/func/bc-wallet-funding-page.php'
+      - 'VTU/**/jsfile/bc-wallet-funding.js'
+      - 'VTU/tests/wallet_funding*php'
+      - 'VTU/tests/harness/wallet-funding-browser.test.mjs'
+      - 'PAYHUB/includes/functions.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/api/transaction/verify.php'
+      - 'PAYHUB/install/20261118_deposit_evidence.sql'
+      - 'VTU/**/cssfile/template/bc-style-template-1.css'
+      - 'VTU/tests/public_app_brand_test.php'
       - 'VTU/**/asset/bc-public-navigation.css'
       - 'VTU/**/jsfile/bc-public-navigation.js'
       - 'VTU/tests/public_navigation_render.php'
@@ -239,7 +277,9 @@ jobs:
         run: npm ci --prefix VTU/tests/harness
       - name: Homepage browser layout and accessible navigation
         run: |
+          node VTU/tests/harness/run-test.mjs tests/public_app_brand_test.php
           node VTU/tests/harness/public-navigation-browser.test.mjs
+          node VTU/tests/harness/wallet-funding-browser.test.mjs
           node VTU/tests/harness/admin-pin-setup-ui-test.mjs
           node VTU/tests/harness/live-capture-ui-test.mjs
   remediation:
@@ -282,6 +322,13 @@ jobs:
           php VTU/tests/service_provider_routing_test.php
           php VTU/tests/service_request_idempotency_test.php
           php VTU/tests/service_attempt_journal_test.php
+          php -l PAYHUB/includes/functions.php
+          php -l PAYHUB/admin/webhooks.php
+          php -l PAYHUB/webhook-paystack.php
+          php -l PAYHUB/api/transaction/verify.php
+          php VTU/tests/wallet_funding_page_test.php
+          php VTU/tests/payhub_deposits_test.php
+          php VTU/tests/payhub_settlement_hold_test.php
           php VTU/tests/service_attempt_review_test.php
           php VTU/tests/service_attempt_review_render_test.php
           php VTU/tests/vendor_compliance_review_test.php
@@ -377,6 +424,12 @@ jobs:
           php-version: '8.3'
           extensions: mysqli
           coverage: none
+      - name: Verified PayHub deposits, rollback and concurrent replay safety
+        env:
+          BC_PAYHUB_DEPOSITS_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/payhub_deposits_mysql_test.php
+
       - name: Persist and independently read back API status in disposable MySQL
         env:
           BC_API_STATUS_CI: '1'

@@ -171,8 +171,10 @@ echo json_encode([
         'payment_status' => $tx['status'],                  // alias for clarity
         'paid' => ($tx['status'] === 'success'),            // boolean mirror of the above
         'reference' => $tx['reference'],
+        'receiving_account_number' => $tx['receiving_account_number'] ?? null,
+        'deposit_evidence_version' => !empty($tx['receiving_account_number']) ? 1 : null,
         'amount' => to_minor_units($tx['amount']),          // amount in KOBO
-        'currency' => 'NGN',
+        'currency' => (string)($tx['currency'] ?? ''), // Never label a non-NGN payment as NGN.
         // Lets an integrating script refuse to credit sandbox payments.
         'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
         /*

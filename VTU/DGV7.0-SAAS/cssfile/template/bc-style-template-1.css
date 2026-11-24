@@ -24,3 +24,17 @@
 	--color-9: #ffff00;
 	--color-10: #eec41e;
 } */
+/* Scoped public-home refinement: preserve other templates and account screens. */
+#dc-root .bc-card-brand{display:block;max-width:75%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.035em;line-height:1.25}
+#dc-root .bc-card-showcase{isolation:isolate}
+#dc-root .bc-card-showcase>div:first-child{perspective:1000px}
+#dc-root .bc-card-showcase>div:first-child>div{border:1px solid rgba(255,255,255,.2);overflow:hidden}
+.bc-app-badge:focus-visible{outline:3px solid #3983fa;outline-offset:5px}
+.bc-app-badge:hover{box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media(max-width:480px){
+ #dc-root .bc-card-showcase{gap:28px!important;padding:64px 18px!important}
+ #dc-root .bc-card-showcase>div:first-child{min-height:300px!important}
+ #dc-root .bc-card-showcase>div:first-child>div{padding:20px!important;border-radius:20px!important}
+ #dc-root .bc-card-brand{font-size:clamp(14px,5vw,22px)!important;max-width:70%}
+}
+@media(prefers-reduced-motion:reduce){#dc-root .mz-ticker,#dc-root .mz-feed,#dc-root .mz-orbit,#dc-root .mz-upright,#dc-root .mz-flash{animation:none!important}html{scroll-behavior:auto!important}}
