@@ -6,12 +6,14 @@ import { createPricing } from './pricing.js';
 import { createOrderService, AppError } from './orders.js';
 import { verifyRequest } from './auth.js';
 import { createCallbackSender } from './callbacks.js';
+import { createCbsBridge, verifyCbsSignerRequest, verifyCbsWatcherRequest } from './cbs-bridge.js';
 
 const config = loadConfig();
 const db = openDb(config.dbPath);
 const chain = await createChain({ config });
 const pricing = createPricing({ config, db });
 const svc = createOrderService({ db, chain, pricing, config });
+const cbsBridge = createCbsBridge({ db, chain, config });
 const sendCallback = createCallbackSender({ url: config.callbackUrl, secret: config.callbackSecret });
 
 // [method, pathRegex, auth, handler(match, body, query)]
@@ -24,6 +26,8 @@ const routes = [
   ['POST', /^\/v1\/orders\/sell$/, 'api', (m, b) => svc.createSellOrder(b)],
   ['GET', /^\/v1\/orders\/by-ref\/([\w\-:.]+)$/, 'api', (m) => svc.getOrderByRef(m[1])],
   ['GET', /^\/v1\/orders\/([\w-]+)$/, 'api', (m) => svc.getOrder(m[1])],
+  ['POST', /^\/v1\/cbs\/signer$/, 'cbs_signer', (m, b) => cbsBridge.handleSigner(b)],
+  ['POST', /^\/v1\/cbs\/watcher$/, 'cbs_watcher', (m, b) => cbsBridge.handleWatcher(b)],
 
   ['GET', /^\/v1\/admin\/wallet$/, 'admin', () => svc.walletStatus()],
   ['GET', /^\/v1\/admin\/orders$/, 'admin', (m, b, q) => svc.listOrders(Object.fromEntries(q))],
@@ -53,8 +57,14 @@ const server = http.createServer(async (req, res) => {
       const m = url.pathname.match(re);
       if (!m || req.method !== method) continue;
       if (auth) {
-        const secret = auth === 'admin' ? config.adminSecret : config.apiSecret;
-        if (!verifyRequest(secret, req, raw)) return reply(res, 401, { error: 'unauthorized' });
+        if (auth === 'cbs_signer') {
+          if (!verifyCbsSignerRequest(config.cbsSignerSecret, req, raw)) return reply(res, 401, { error: 'unauthorized' });
+        } else if (auth === 'cbs_watcher') {
+          if (!verifyCbsWatcherRequest(config.cbsWatcherSecret, req, raw)) return reply(res, 401, { error: 'unauthorized' });
+        } else {
+          const secret = auth === 'admin' ? config.adminSecret : config.apiSecret;
+          if (!verifyRequest(secret, req, raw)) return reply(res, 401, { error: 'unauthorized' });
+        }
       }
       let body = {};
       if (raw) {

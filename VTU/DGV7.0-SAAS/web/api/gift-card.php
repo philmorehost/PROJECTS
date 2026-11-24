@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 include_once("../../func/bc-giftcard-func.php");
+require_once __DIR__ . '/../../func/bc-giftcard-execution.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 if (empty($input)) {
@@ -91,45 +92,12 @@ elseif ($action === 'purchase') {
         }
     }
 
-    $q_p = mysqli_query($connection_server, "SELECT * FROM sas_vendor_giftcard_products WHERE vendor_id='$vendor_id' AND reloadly_product_id='$product_id' AND status=1 LIMIT 1");
-    $product = mysqli_fetch_assoc($q_p);
-
-    if (!$product) {
-        echo json_encode(['status' => 'error', 'message' => 'Product not found or inactive.']);
-        exit;
-    }
-
-    $rate = getLiveExchangeRate($product['currency_code'] ?: 'USD', 'NGN', $vendor_id, 'gift-card');
-    $qv = mysqli_query($connection_server, "SELECT giftcard_fee_percent FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-    $vendor_fee_percent = (float)(mysqli_fetch_assoc($qv)['giftcard_fee_percent'] ?? 0);
-
-    $cost_ngn = $amount * $rate;
-    $total_markup_percent = (float)$product['vendor_markup'] + $vendor_fee_percent;
-    $final_price_ngn = $cost_ngn + ($cost_ngn * ($total_markup_percent / 100));
-
-    if ($user['balance'] < $final_price_ngn) {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient wallet balance. NGN ' . number_format($final_price_ngn, 2) . ' required.']);
-        exit;
-    }
-
-    $token = getReloadlyAccessToken($vendor_id);
-    $order = placeReloadlyOrder($token, $product_id, $amount, 1, $user['email']);
-
-    if ($order && isset($order['status']) && $order['status'] == 'SUCCESSFUL') {
-        $reference = "GC_" . time() . "_" . rand(100, 999);
-        chargeUser($username, "debit", "giftcard_".$product_id, "Gift Card Purchase", $reference, $order['transactionId'], $final_price_ngn, $final_price_ngn, "Gift Card Purchase: " . $product['product_name'], "APP", $_SERVER["HTTP_HOST"], 1);
-
-        $raw_code = $order['product']['code'] ?? 'CODE-' . rand(1000, 9999);
-        $card_pin = $order['product']['pin'] ?? '';
-        $card_code = encryptGiftCode($raw_code, $vendor_id);
-
-        mysqli_query($connection_server, "INSERT INTO sas_giftcard_inventory
-            (vendor_id, reloadly_tx_id, reloadly_product_id, product_name, card_code, card_pin, face_value, currency_code, current_owner_id, source)
-            VALUES ('$vendor_id', '".$order['transactionId']."', '$product_id', '".$product['product_name']."', '$card_code', '$card_pin', '$amount', 'USD', '$user_id', 'api')");
-
-        echo json_encode(['status' => 'success', 'message' => 'Purchase successful!', 'card_code' => $raw_code, 'card_pin' => $card_pin]);
+    $gcRes = bc_gc_execute_purchase((int)$vendor_id, $user, $product_id, $amount, (string)($input['request_key'] ?? ''));
+    if (!empty($gcRes['ok'])) {
+        echo json_encode(['status' => 'success', 'message' => 'Gift card order queued (' . $gcRes['reference'] . ').', 'reference' => $gcRes['reference'], 'state' => $gcRes['state'] ?? 'held']);
     } else {
-        echo json_encode(['status' => 'error', 'message' => $order['message'] ?? 'API Error. Please try again later.']);
+        $code = (string)($gcRes['code'] ?? 'unavailable');
+        echo json_encode(['status' => 'error', 'code' => strtoupper($code), 'message' => 'Gift card purchase refused (' . $code . ').']);
     }
 }
 
@@ -207,37 +175,12 @@ elseif ($action === 'buy_p2p') {
         }
     }
 
-    $q_c = mysqli_query($connection_server, "SELECT * FROM sas_giftcard_inventory WHERE id='$card_id' AND is_for_sale=1 AND vendor_id='$vendor_id' LIMIT 1");
-    $card = mysqli_fetch_assoc($q_c);
-
-    if (!$card || $card['current_owner_id'] == $user_id) {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid trade or card unavailable.']);
-        exit;
-    }
-
-    $qv = mysqli_query($connection_server, "SELECT giftcard_fee_percent FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-    $vendor_fee_percent = (float)(mysqli_fetch_assoc($qv)['giftcard_fee_percent'] ?? 0);
-
-    $base_price_ngn = (float)$card['sale_price_ngn'];
-    $fee_ngn = $base_price_ngn * ($vendor_fee_percent / 100);
-    $total_buyer_cost_ngn = $base_price_ngn + $fee_ngn;
-
-    if ($user['balance'] < $total_buyer_cost_ngn) {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient wallet balance. ₦' . number_format($total_buyer_cost_ngn, 2) . ' required.']);
-        exit;
-    }
-
-    if (holdP2PFunds($username, $total_buyer_cost_ngn)) {
-        mysqli_query($connection_server, "INSERT INTO sas_p2p_trades (vendor_id, seller_id, buyer_id, card_id, amount_ngn, fee_ngn, status)
-            VALUES ('$vendor_id', '".$card['current_owner_id']."', '$user_id', '$card_id', '$base_price_ngn', '$fee_ngn', 'funded')");
-        $trade_id = mysqli_insert_id($connection_server);
-        if (releaseP2PFunds($trade_id)) {
-            echo json_encode(['status' => 'success', 'message' => 'P2P Trade completed! The card is now in your wallet.']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Funds held but release failed. Please contact support.']);
-        }
+    $p2pRes = bc_gc_execute_p2p_buy((int)$vendor_id, $user, $card_id, (string)($input['request_key'] ?? ''));
+    if (!empty($p2pRes['ok'])) {
+        echo json_encode(['status' => 'success', 'message' => 'P2P Trade completed! The card is now in your wallet.', 'reference' => $p2pRes['reference'] ?? '']);
     } else {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient balance for this P2P purchase.']);
+        $code = (string)($p2pRes['code'] ?? 'unavailable');
+        echo json_encode(['status' => 'error', 'code' => strtoupper($code), 'message' => 'P2P trade failed (' . $code . ').']);
     }
 }
 

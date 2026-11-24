@@ -2,10 +2,11 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET' && getenv('BC_PAYOUT_WORKER_ENABLED') !== '1') {
     http_response_code(503);
     exit('Withdrawal mutations are paused. Reconcile existing provider transfers before any approval, rejection or refund.');
 }
+require_once __DIR__ . '/../func/bc-payout-execution.php';
 
 
 // Handle Actions
@@ -89,6 +90,38 @@ if (isset($_POST['withdrawal_action']) || isset($_POST['send_stepup_code'])) {
         $total_debit = (float)$tx['discounted_amount'];
         $account_number = $tx['product_unique_id'];
         $bank_code_display = $tx['type_alternative']; // Standardly "Bank Transfer" or code
+
+        $durable_res = bc_payout_admin_action(
+            (int)$admin_vid,
+            (string)($get_logged_admin_details['email'] ?? ''),
+            (string)$tx['reference'],
+            (string)$action,
+            (string)($reason ?? '')
+        );
+        if (($durable_res['code'] ?? '') !== 'reservation_not_found') {
+            if (!empty($durable_res['ok'])) {
+                if ($action === 'approve') {
+                    $st = (string)($durable_res['state'] ?? 'unknown');
+                    if ($st === 'confirmed_success') {
+                        alterTransaction($ref, "status", 1);
+                        if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details['email'], 'withdrawal_approve', $ref, 'Approved durable payout');
+                        $_SESSION["product_purchase_response"] = "Withdrawal Approved and Processed Successfully";
+                    } elseif ($st === 'confirmed_failure') {
+                        alterTransaction($ref, "status", 3);
+                        $_SESSION["product_purchase_response"] = "Withdrawal failed at provider and funds were safely refunded";
+                    } else {
+                        $_SESSION["product_purchase_response"] = "Payout outcome is pending reconciliation (state: $st). Do not retry.";
+                    }
+                } else {
+                    alterTransaction($ref, "status", $action === 'reject' ? 3 : 4);
+                    $_SESSION["product_purchase_response"] = "Withdrawal " . ($action === 'reject' ? 'Rejected and Refunded' : 'Cancelled and Refunded');
+                }
+            } else {
+                $_SESSION["product_purchase_response"] = "Error: " . (string)($durable_res['code'] ?? 'unable_to_process');
+            }
+            header("Location: Withdrawals.php");
+            exit();
+        }
 
         if ($action == 'approve') {
             // Processing logic adapted from web/func/bank-transfer.php
