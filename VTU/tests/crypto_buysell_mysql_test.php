@@ -1,15 +1,20 @@
 <?php
 /** Disposable MySQL 8.0 tests for replacement crypto Buy/Sell foundation across SAAS & NON-SAAS. */
-$edition = getenv('VTU_TEST_EDITION') ?: 'SAAS';
+set_exception_handler(function ($e) {
+    $msg = str_replace(['%', "\r", "\n"], ['%25', '', '%0A'], $e->getMessage());
+    echo '::error file=VTU/tests/crypto_buysell_mysql_test.php,line=' . $e->getLine() . '::' . $msg . "\n";
+    exit(1);
+});
+
+$edition = getenv('BC_TEST_EDITION') ?: (getenv('VTU_TEST_EDITION') ?: 'SAAS');
 if ($edition !== 'SAAS' && $edition !== 'NON-SAAS') throw new RuntimeException('Invalid edition');
 $helper = __DIR__ . '/../DGV7.0-' . $edition . '/func/bc-crypto-buysell.php';
 require_once $helper;
 
 $host = getenv('DB_HOST') ?: '127.0.0.1';
 $user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
+$pass = getenv('DB_PASS') ?: 'disposable-ci-only';
 $port = (int)(getenv('DB_PORT') ?: '3306');
-if ($pass === '') throw new RuntimeException('CI DB_PASS required.');
 
 $root = new mysqli($host, $user, $pass, '', $port);
 $dbName = 'cbs_ci_' . strtolower(str_replace('-', '', $edition)) . '_' . bin2hex(random_bytes(5));

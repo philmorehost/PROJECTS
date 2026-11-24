@@ -630,7 +630,7 @@ jobs:
 
       - name: Held replacement crypto Buy/Sell quotes, orders & finality in disposable MySQL
         env:
-          VTU_TEST_EDITION: '${{ matrix.edition }}'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/crypto_buysell_mysql_test.php
 
   video-evidence:
