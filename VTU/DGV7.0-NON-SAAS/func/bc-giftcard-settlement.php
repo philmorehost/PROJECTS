@@ -243,7 +243,7 @@ if (!function_exists('bc_gc_reserve_order')) {
             ], JSON_THROW_ON_ERROR));
 
             $old = bc_gc_sql(
-                'SELECT id, payload_hash, reference, provider_key, state, version, total_ngn FROM sas_giftcard_orders WHERE vendor_id=? AND user_id=? AND request_key_hash=? LIMIT 1 FOR UPDATE',
+                'SELECT id, payload_hash, reference, provider_key, state, version, total_ngn FROM sas_giftcard_orders WHERE vendor_id=? AND user_id=? AND request_key_hash=? LIMIT 1',
                 [$vendor_id, $user_id, $request_key_hash]
             )[0] ?? null;
             if ($old) {
@@ -503,8 +503,11 @@ if (!function_exists('bc_gc_p2p_hold')) {
             bc_gc_begin();
             $begun = true;
 
+            $card = bc_gc_sql('SELECT id, current_owner_id, is_for_sale, sale_price_ngn FROM sas_giftcard_inventory WHERE vendor_id=? AND id=? LIMIT 1 FOR UPDATE', [$vendor_id, $card_id])[0] ?? null;
+            if (!$card) throw new RuntimeException('not_found');
+
             $old = bc_gc_sql(
-                'SELECT id, card_id, seller_id, payload_hash, reference, gross_ngn, fee_ngn, seller_net_ngn, state, version FROM sas_giftcard_escrows WHERE vendor_id=? AND buyer_id=? AND request_key_hash=? LIMIT 1 FOR UPDATE',
+                'SELECT id, card_id, seller_id, payload_hash, reference, gross_ngn, fee_ngn, seller_net_ngn, state, version FROM sas_giftcard_escrows WHERE vendor_id=? AND buyer_id=? AND request_key_hash=? LIMIT 1',
                 [$vendor_id, $buyer_id, $request_key_hash]
             )[0] ?? null;
             if ($old) {
@@ -518,10 +521,25 @@ if (!function_exists('bc_gc_p2p_hold')) {
                 ];
             }
 
-            $card = bc_gc_sql('SELECT id, current_owner_id, is_for_sale, sale_price_ngn FROM sas_giftcard_inventory WHERE vendor_id=? AND id=? LIMIT 1 FOR UPDATE', [$vendor_id, $card_id])[0] ?? null;
-            if (!$card) throw new RuntimeException('not_found');
             $seller_id = (int)$card['current_owner_id'];
-            if ($seller_id <= 0 || $seller_id === $buyer_id) throw new RuntimeException('invalid_trade');
+            if ((int)$card['is_for_sale'] !== 1 || $seller_id <= 0 || $seller_id === $buyer_id) {
+                $connection_server->rollback();
+                $begun = false;
+                $freshOld = bc_gc_sql(
+                    'SELECT id, card_id, seller_id, payload_hash, reference, gross_ngn, fee_ngn, seller_net_ngn, state, version FROM sas_giftcard_escrows WHERE vendor_id=? AND buyer_id=? AND request_key_hash=? LIMIT 1',
+                    [$vendor_id, $buyer_id, $request_key_hash]
+                )[0] ?? null;
+                if ($freshOld) {
+                    if ((int)$freshOld['card_id'] !== $card_id) return ['ok' => false, 'code' => 'conflict'];
+                    return [
+                        'ok' => true, 'code' => 'replayed', 'replayed' => true,
+                        'reference' => (string)$freshOld['reference'], 'state' => (string)$freshOld['state'],
+                        'version' => (int)$freshOld['version'], 'gross_ngn' => (string)$freshOld['gross_ngn'],
+                    ];
+                }
+                if ($seller_id <= 0 || $seller_id === $buyer_id) return ['ok' => false, 'code' => 'invalid_trade'];
+                return ['ok' => false, 'code' => 'card_unavailable'];
+            }
 
             $first_id  = min($buyer_id, $seller_id);
             $second_id = max($buyer_id, $seller_id);
@@ -582,6 +600,20 @@ if (!function_exists('bc_gc_p2p_hold')) {
             ];
         } catch (Throwable $e) {
             if ($begun) try { $connection_server->rollback(); } catch (Throwable $ignored) {}
+            if ((int)$e->getCode() === 1062) {
+                $freshOld = bc_gc_sql(
+                    'SELECT id, card_id, reference, state, version, gross_ngn FROM sas_giftcard_escrows WHERE vendor_id=? AND buyer_id=? AND request_key_hash=? LIMIT 1',
+                    [$vendor_id, $buyer_id, $request_key_hash]
+                )[0] ?? null;
+                if ($freshOld) {
+                    if ((int)$freshOld['card_id'] !== $card_id) return ['ok' => false, 'code' => 'conflict'];
+                    return [
+                        'ok' => true, 'code' => 'replayed', 'replayed' => true,
+                        'reference' => (string)$freshOld['reference'], 'state' => (string)$freshOld['state'],
+                        'version' => (int)$freshOld['version'], 'gross_ngn' => (string)$freshOld['gross_ngn'],
+                    ];
+                }
+            }
             $known = ['not_found', 'invalid_trade', 'restricted', 'conflict', 'card_unavailable', 'insufficient_balance', 'outer_transaction', 'schema_unavailable', 'nontransactional'];
             return ['ok' => false, 'code' => in_array($e->getMessage(), $known, true) ? $e->getMessage() : 'unconfirmed'];
         }

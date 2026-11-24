@@ -19,13 +19,15 @@ function gc_db($name = '') {
     return $m;
 }
 
-if (in_array($argv[1] ?? '', ['race-order', 'race-p2p-buy'], true)) {
+if (in_array($argv[1] ?? '', ['race-order', 'race-p2p-buy', 'race-p2p-replay'], true)) {
     $name = $argv[2] ?? '';
     if (!preg_match('/\Abc_gc_ci_[a-f0-9]{12}\z/D', $name)) throw new RuntimeException('db');
     $GLOBALS['connection_server'] = gc_db($name);
     usleep(150000);
     if ($argv[1] === 'race-order') {
         echo json_encode(bc_gc_reserve_order(7, 1, 101, '10.00', 'USD', '1500.000000', '1.00', $argv[3] ?? ''));
+    } elseif ($argv[1] === 'race-p2p-replay') {
+        echo json_encode(bc_gc_p2p_hold(7, 1, (int)($argv[3] ?? 0), '5.00', $argv[4] ?? ''));
     } else {
         $buyerId = (int)($argv[3] ?? 0);
         $rk = hash('sha256', 'p2p-race-' . $buyerId);
@@ -155,16 +157,42 @@ try {
         fclose($pipes[0]);
         $procs[] = [$bId, $p, $pipes];
     }
-    $winners = []; $losers = 0;
+    $winners = []; $losers = 0; $rawOuts = [];
     foreach ($procs as [$bId, $p, $pipes]) {
         $out = stream_get_contents($pipes[1]); $err = stream_get_contents($pipes[2]);
         fclose($pipes[1]); fclose($pipes[2]);
         gc_check(proc_close($p) === 0 && $err === '', 'clean p2p race worker: ' . $err . $out);
+        $rawOuts[] = $out;
         $r = json_decode($out, true);
         if (!empty($r['ok']) && ($r['code'] ?? '') === 'held_escrow') $winners[] = [$bId, $r['reference']];
         elseif (($r['code'] ?? '') === 'card_unavailable') $losers++;
     }
-    gc_check(count($winners) === 1 && $losers === 1, 'only one concurrent buyer acquires P2P escrow');
+    gc_check(count($winners) === 1 && $losers === 1, 'only one concurrent buyer acquires P2P escrow: ' . implode(' | ', $rawOuts));
+
+    // Concurrent same-buyer P2P replay race (3 workers with identical key -> 1 held_escrow, 2 replayed, 1x debit)
+    $db->query("INSERT INTO sas_giftcard_inventory(vendor_id, product_name, card_code, face_value, currency, current_owner_id, source, is_for_sale, sale_price_ngn) VALUES(7, 'Steam US', 'ENC:STEAM', 5.00, 'USD', 2, 'user_upload', 1, 5000.00)");
+    $card2Id = (int)$db->insert_id;
+    $p2pRepKey = hash('sha256', 'p2p-same-buyer-replay');
+    $rProcs = [];
+    for ($i = 0; $i < 3; $i++) {
+        $pipes = [];
+        $p = proc_open([PHP_BINARY, __FILE__, 'race-p2p-replay', $name, (string)$card2Id, $p2pRepKey], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        fclose($pipes[0]);
+        $rProcs[] = [$p, $pipes];
+    }
+    $p2pHeld = 0; $p2pRep = 0; $repOuts = [];
+    foreach ($rProcs as [$p, $pipes]) {
+        $out = stream_get_contents($pipes[1]); $err = stream_get_contents($pipes[2]);
+        fclose($pipes[1]); fclose($pipes[2]);
+        gc_check(proc_close($p) === 0 && $err === '', 'clean p2p replay race worker: ' . $err . $out);
+        $repOuts[] = $out;
+        $r = json_decode($out, true);
+        if (($r['code'] ?? '') === 'held_escrow') $p2pHeld++;
+        elseif (($r['code'] ?? '') === 'replayed') $p2pRep++;
+    }
+    gc_check($p2pHeld === 1 && $p2pRep === 2, 'concurrent same-buyer P2P replay debits once: ' . implode(' | ', $repOuts));
+    // Re-credit buyer 1 for the 5000 test debit so assertions below stay clean
+    $db->query('UPDATE sas_users SET balance = balance + 5000.00 WHERE id=1');
     [$winBuyerId, $escrowRef] = $winners[0];
     $loseBuyerId = $winBuyerId === 1 ? 3 : 1;
     gc_check((float)$db->query("SELECT balance FROM sas_users WHERE id=$winBuyerId")->fetch_assoc()['balance'] === 10000.0, 'winning buyer debited');
