@@ -373,28 +373,28 @@ if ($event_type === 'charge_success') {
                     ];
 
                     $body = json_encode($payload);
-                    $webhook_secret = ((int)$tx['is_test'] === 1) ? ($m['test_secret_key'] ?? '') : ($m['secret_key'] ?? '');
-                    if (empty($webhook_secret)) {
-                        $webhook_secret = getConfig('payhub_webhook_secret', 'secret');
-                    }
-                    // SECURITY: matches trigger_merchant_webhook() and PayHub API docs (HMAC-SHA256).
-                    $signature = $webhook_secret !== '' ? hash_hmac('sha256', $body, $webhook_secret) : '';
+                    $signature = payhub_merchant_webhook_signature($body, $m, $tx['is_test'] ?? null);
 
-                    $ch = curl_init();
-                    curl_setopt($ch, CURLOPT_URL, $m['webhook_url']);
-                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                    curl_setopt($ch, CURLOPT_POST, true);
-                    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-                    $headers = ['Content-Type: application/json'];
-                    if ($signature !== '') {
-                        $headers[] = 'X-Payhub-Signature: ' . $signature;
+                    if ($signature === '') {
+                        $res = false; $code = 0;
+                        $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+                    } else {
+                        $ch = curl_init();
+                        curl_setopt($ch, CURLOPT_URL, $m['webhook_url']);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                        curl_setopt($ch, CURLOPT_POST, true);
+                        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                        $headers = ['Content-Type: application/json'];
+                        if ($signature !== '') {
+                            $headers[] = 'X-Payhub-Signature: ' . $signature;
+                        }
+                        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                        $res = curl_exec($ch);
+                        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                        $curlErr = curl_error($ch);
+                        curl_close($ch);
                     }
-                    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-                    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                    $res = curl_exec($ch);
-                    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                    $curlErr = curl_error($ch);
-                    curl_close($ch);
 
                     $resText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$res), 0, 200));
                     file_put_contents(

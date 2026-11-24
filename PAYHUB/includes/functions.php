@@ -1,5 +1,6 @@
 <?php
 // php-version/includes/functions.php
+require_once __DIR__ . "/webhook-signing.php";
 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -1908,24 +1909,28 @@ function trigger_merchant_webhook($transactionId) {
             // SECURITY: sign the webhook body so the merchant can verify it genuinely
             // came from PayHub. Signature = HMAC-SHA256(raw JSON body, merchant secret key),
             // sent in the X-Payhub-Signature header. Verify with the SAME secret key.
-            $secret = (string)(((int)$tx['is_test'] === 1) ? ($tx['test_secret_key'] ?? '') : ($tx['secret_key'] ?? ''));
-            $signature = $secret !== '' ? hash_hmac('sha256', $body, $secret) : '';
+            $signature = payhub_merchant_webhook_signature($body, $tx, $tx['is_test'] ?? null);
 
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            $headers = ['Content-Type: application/json'];
-            if ($signature !== '') {
-                $headers[] = 'X-Payhub-Signature: ' . $signature;
+            if ($signature === '') {
+                $res = false; $code = 0;
+                $curlErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+            } else {
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $tx['webhook_url']);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+                $headers = ['Content-Type: application/json'];
+                if ($signature !== '') {
+                    $headers[] = 'X-Payhub-Signature: ' . $signature;
+                }
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $res = curl_exec($ch);
+                $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlErr = curl_error($ch);
+                curl_close($ch);
             }
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $res = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlErr = curl_error($ch);
-            curl_close($ch);
 
             @file_put_contents(
                 BASE_PATH . 'webhook_debug.log',

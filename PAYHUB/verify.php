@@ -275,25 +275,27 @@ if ($tx && $tx['status'] === 'success') {
                         // Signed the same way as trigger_merchant_webhook(): the merchant verifies it
                         // with the same secret key it authenticates its API calls with.
                         $webhook_body = json_encode($payload);
-                        $webhook_secret = (string)($webhook_owner['secret_key'] ?? '');
-                        if ($webhook_secret === '' && !empty($webhook_owner['test_secret_key'])) {
-                            $webhook_secret = (string)$webhook_owner['test_secret_key'];
-                        }
+                        $webhook_signature = payhub_merchant_webhook_signature($webhook_body, $webhook_owner, $tx['is_test'] ?? null);
                         $webhook_headers = ['Content-Type: application/json'];
-                        if ($webhook_secret !== '') {
-                            $webhook_headers[] = 'X-Payhub-Signature: ' . hash_hmac('sha256', $webhook_body, $webhook_secret);
+                        if ($webhook_signature !== '') {
+                            $webhook_headers[] = 'X-Payhub-Signature: ' . $webhook_signature;
                         }
 
-                        $ch = curl_init($webhook_url);
-                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                        curl_setopt($ch, CURLOPT_POST, true);
-                        curl_setopt($ch, CURLOPT_POSTFIELDS, $webhook_body);
-                        curl_setopt($ch, CURLOPT_HTTPHEADER, $webhook_headers);
-                        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-                        $whRes = curl_exec($ch);
-                        $whCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                        $whErr = curl_error($ch);
-                        curl_close($ch);
+                        if ($webhook_signature === '') {
+                            $whRes = false; $whCode = 0;
+                            $whErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+                        } else {
+                            $ch = curl_init($webhook_url);
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            curl_setopt($ch, CURLOPT_POST, true);
+                            curl_setopt($ch, CURLOPT_POSTFIELDS, $webhook_body);
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, $webhook_headers);
+                            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                            $whRes = curl_exec($ch);
+                            $whCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                            $whErr = curl_error($ch);
+                            curl_close($ch);
+                        }
 
                         $whResText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$whRes), 0, 180));
                         @file_put_contents(

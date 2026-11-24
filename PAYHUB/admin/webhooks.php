@@ -35,17 +35,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             } elseif (!function_exists('curl_init')) {
                 $error_msg = 'PHP cURL is unavailable, so the webhook could not be sent.';
             } else {
-                $secret = (string)(((int)$delivery['is_test'] === 1) ? ($delivery['test_secret_key'] ?? '') : ($delivery['secret_key'] ?? ''));
+                $signature = payhub_merchant_webhook_signature($payload, $delivery, $delivery['is_test'] ?? null);
                 $headers = ['Content-Type: application/json'];
-                if ($secret !== '') {
-                    $headers[] = 'X-Payhub-Signature: ' . hash_hmac('sha256', $payload, $secret);
-                }
+                if ($signature !== '') $headers[] = 'X-Payhub-Signature: ' . $signature;
 
-                $ch = curl_init($delivery['webhook_url']);
+                $ch = $signature !== '' ? curl_init($delivery['webhook_url']) : false;
                 if ($ch === false) {
                     $httpCode = 0;
                     $responseBody = false;
-                    $curlError = 'Could not initialize cURL.';
+                    $curlError = $signature === '' ? 'Webhook signing refused: check mode-specific merchant key and payload domain.' : 'Could not initialize cURL.';
                 } else {
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
                     curl_setopt($ch, CURLOPT_POST, true);

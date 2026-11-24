@@ -1,0 +1,41 @@
+name: PayHub merchant webhook signing
+on:
+  push:
+    paths:
+      - 'PAYHUB/includes/**'
+      - 'PAYHUB/tests/webhook_signing_test.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/verify.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - '.github/workflows/payhub-webhook-signing.yml'
+  pull_request:
+    paths:
+      - 'PAYHUB/includes/**'
+      - 'PAYHUB/tests/webhook_signing_test.php'
+      - 'PAYHUB/webhook-paystack.php'
+      - 'PAYHUB/verify.php'
+      - 'PAYHUB/admin/webhooks.php'
+      - '.github/workflows/payhub-webhook-signing.yml'
+permissions:
+  contents: read
+jobs:
+  signing:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          coverage: none
+      - name: Parse changed senders
+        run: |
+          php -l PAYHUB/includes/functions.php
+          php -l PAYHUB/includes/webhook-signing.php
+          php -l PAYHUB/webhook-paystack.php
+          php -l PAYHUB/verify.php
+          php -l PAYHUB/admin/webhooks.php
+      - name: Exact-mode signing regression matrix (no network)
+        run: php PAYHUB/tests/webhook_signing_test.php
