@@ -302,8 +302,9 @@ try {
     retrycheck(payhub_record_webhook_review($db,95,$review)==='recorded','review appends exact observation');
     retrycheck(payhub_record_webhook_review($db,95,$review)==='already_recorded','identical review retry idempotent');
     $conflict=$review;$conflict['finding']='escalated';retryreject(fn()=>payhub_record_webhook_review($db,95,$conflict),'review request conflict');
-    retrycheck(payhub_recover_outbox($db,95,false)==='ready','review never changes eligibility');
-    $driftReview=$review;$driftReview['request_id']='review-fixture-drift';$db->exec("UPDATE users SET webhook_url='https://changed.example.test/webhook' WHERE id=1");retryreject(fn()=>payhub_record_webhook_review($db,95,$driftReview),'endpoint drift invalidates review');$db->exec("UPDATE users SET webhook_url='https://fixture.example.test/webhook' WHERE id=1");
+    retrycheck(payhub_recover_outbox($db,95,false)==='ready_dry_run','review never changes eligibility');
+    $reviewOriginalEndpoint=$db->query('SELECT webhook_url FROM users WHERE id=1')->fetchColumn();
+    $driftReview=$review;$driftReview['request_id']='review-fixture-drift';$db->exec("UPDATE users SET webhook_url='https://changed.example.test/webhook' WHERE id=1");retryreject(fn()=>payhub_record_webhook_review($db,95,$driftReview),'endpoint drift invalidates review');$restoreEndpoint=$db->prepare('UPDATE users SET webhook_url=? WHERE id=1');$restoreEndpoint->execute([$reviewOriginalEndpoint]);
     $db->exec("UPDATE users SET secret_key='rotated-fixture' WHERE id=1");retryreject(fn()=>payhub_record_webhook_review($db,95,$driftReview),'signing key drift invalidates review');$db->exec("UPDATE users SET secret_key='live-fixture' WHERE id=1");
 
     $stale=$review;$stale['request_id']='review-fixture-0002';$db->exec("UPDATE transactions SET status='pending' WHERE id=95");retryreject(fn()=>payhub_record_webhook_review($db,95,$stale),'changed payment observation rejected');$db->exec("UPDATE transactions SET status='success' WHERE id=95");
