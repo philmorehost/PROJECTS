@@ -134,5 +134,22 @@ try {
     retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$forwarded['delivery']['id'],true),'admin retry cannot duplicate forwarded claim');
     retrycheck(payhub_finish_webhook_retry($db,$forwarded,503,true)===false,'forwarding non-2xx remains uncertain');
     retrycheck($other->query('SELECT state FROM webhook_retry_claims WHERE transaction_id=24')->fetchColumn()==='unknown','forwarding uncertainty durable');
+    $db->exec("INSERT INTO transactions(id,user_id,reference,status,is_test) VALUES(25,1,'verify-fixture','success',0)");
+    $snapshot=initialfixture($db,25);
+    $verify=['event'=>'charge.success','data'=>['reference'=>'verify-fixture','status'=>'success','domain'=>'live','currency'=>'NGN','amount'=>'100.00','amount_kobo'=>10000,'gateway_amount'=>10200,'requested_amount'=>10000,'fee_amount'=>200,'settled_amount'=>10000,'money_contract_version'=>1,'amount_unit'=>'major','amount_basis'=>'requested']];
+    $raw=json_encode($verify);
+    retrycheck(payhub_verify_payload_matches($snapshot,$verify),'legacy verify amount contract matches committed evidence');
+    retrycheck(json_encode($verify)===$raw,'validation does not change legacy payload');
+    foreach(['amount'=>102,'amount_kobo'=>10200,'gateway_amount'=>10000,'fee_amount'=>0,'settled_amount'=>9999,'requested_amount'=>10200,'amount_unit'=>'minor','currency'=>'USD','reference'=>'other'] as $field=>$value){$bad=$verify;$bad['data'][$field]=$value;retrycheck(!payhub_verify_payload_matches($snapshot,$bad),'verify evidence mismatch refused '.$field);}
+    $db->beginTransaction();retryreject(fn()=>payhub_claim_initial_webhook($db,$snapshot,$raw),'verify cannot send inside accounting transaction');$db->rollBack();
+    $verifyClaim=payhub_claim_initial_webhook($db,$snapshot,$raw);
+    retrycheck($other->query('SELECT payload FROM webhook_logs WHERE id='.(int)$verifyClaim['delivery']['id'])->fetchColumn()===$raw,'verify legacy body durably persisted unchanged');
+    retryreject(fn()=>payhub_claim_initial_webhook($other,$snapshot,initialbody($snapshot)),'other initial sender blocked by verify claim');
+    retryreject(fn()=>payhub_claim_webhook_retry($other,(int)$verifyClaim['delivery']['id'],true),'admin blocked by verify claim');
+    retrycheck(payhub_finish_webhook_retry($db,$verifyClaim,200,true),'verify successful completion shares ownership rules');
+    $verifySource=file_get_contents(__DIR__.'/../verify.php');
+    $flag=strpos($verifySource,'$verifiedForDelivery = false;');$commit=strpos($verifySource,'$db->commit();',$flag);$ready=strpos($verifySource,'$verifiedForDelivery = true;',$flag);$dispatch=strpos($verifySource,'if ($verifiedForDelivery)',$flag);$claimAt=strpos($verifySource,'$verifyClaim = payhub_claim_initial_webhook(',$dispatch);$http=strpos($verifySource,'$ch = curl_init(',$dispatch);
+    retrycheck($flag!==false && $commit<$ready && $ready<$dispatch && $dispatch<$claimAt && $claimAt<$http,'actual verify source commits before gated claim and HTTP');
+    retrycheck(strpos(substr($verifySource,$dispatch,strpos($verifySource,'} else {',$http)-$dispatch),'$db->rollBack()')===false,'isolated dispatch does not roll back committed accounting');
     echo "PASS $n PayHub retry MySQL/concurrency checks (no HTTP or provider)\n";
 } finally {$db->exec("DROP DATABASE `$name`");}

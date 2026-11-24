@@ -51,3 +51,22 @@ function payhub_forwarded_payload_matches($row, $payload) {
     }
     return true;
 }
+
+/** Verify-page keeps its legacy requested-naira amount and requested-kobo alias.
+ * Normalize only a private validation copy; never rewrite the emitted/stored body.
+ */
+function payhub_verify_payload_matches($row, $payload) {
+    if (!is_array($row) || !is_array($payload) || !is_array($payload['data']??null)) return false;
+    $data=$payload['data'];$legacy=$data['amount']??null;
+    if ((!is_int($legacy) && !is_float($legacy) && !is_string($legacy)) || !is_numeric($legacy)
+        || !isset($row['amount']) || !is_numeric($row['amount'])
+        || to_minor_units($legacy)!==to_minor_units($row['amount'])
+        || ($data['amount_kobo']??null)!==to_minor_units($row['amount'])
+        || ($data['amount_unit']??null)!=='major' || ($data['amount_basis']??null)!=='requested'
+        || ($data['money_contract_version']??null)!==1) return false;
+    $normalized=$payload;
+    $normalized['data']['amount']=$data['gateway_amount']??null;
+    // This legacy payload does not publish receiving-account evidence. Do not add it to the body.
+    $normalized['data']['receiving_account_number']=$row['receiving_account_number']??null;
+    return payhub_forwarded_payload_matches($row,$normalized);
+}

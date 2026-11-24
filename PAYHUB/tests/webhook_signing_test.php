@@ -30,7 +30,7 @@ function wh_spy_curl_init(){throw new RuntimeException('refused signature reache
 foreach([
  ['includes/functions.php',"            if (\$signature === '') {",'            @file_put_contents(', 'code','curlErr'],
  ['webhook-paystack.php',"                    if (\$signature === '') {",'                    $resText =', 'code','curlErr'],
- ['verify.php',"                        if (\$webhook_signature === '') {",'                        $whResText =', 'whCode','whErr'],
+ ['verify.php',"if (\$webhook_signature === '') {",'$whResText =', 'whCode','whErr'],
  ['admin/webhooks.php',"                \$ch = \$signature !== '' ? curl_init(",'                $deliverySucceeded =', 'httpCode','curlError']
 ] as [$file,$begin,$end,$codeVar,$errorVar]){
  $source=file_get_contents(__DIR__.'/../'.$file);$start=strpos($source,$begin);$stop=strpos($source,$end,$start);

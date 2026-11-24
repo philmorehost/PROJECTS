@@ -165,6 +165,7 @@ if ($tx && $tx['status'] === 'success') {
             $amount = $res['data']['amount'] / 100;
 
             if ($tx['status'] === 'pending') {
+                $verifiedForDelivery = false;
                 $db->beginTransaction();
                 try {
                     // Atomically claim this transaction before moving any money. A
@@ -222,108 +223,8 @@ if ($tx && $tx['status'] === 'success') {
 
                     log_transaction_event($tx['id'], 'verified', "Payment verified via direct lookup.");
 
-                    // Trigger Webhook if configured
-                    //
-                    // NOTE: this is a second, older sender that duplicates
-                    // includes/functions.php's trigger_merchant_webhook(). They differ, and the
-                    // difference is worth knowing:
-                    //
-                    //   * this one sent NO signature at all, so a merchant that follows the
-                    //     documented contract ("verify X-Payhub-Signature") saw a webhook it could
-                    //     not verify and had to either reject it - losing real payments - or fall
-                    //     back to re-verifying through the API. The header is now sent, which is
-                    //     additive: a merchant that ignores it is unaffected.
-                    //   * this one reports `amount` in NAIRA (the stored figure), while
-                    //     trigger_merchant_webhook() reports it in KOBO (`to_minor_units()`).
-                    //     That has deliberately NOT been changed here, because a live merchant
-                    //     parsing this webhook would suddenly read the amount as 100x its value.
-                    //     Unifying the two should be an announced change, not a silent one.
-                    $stmt = $db->prepare("SELECT webhook_url, secret_key, test_secret_key FROM users WHERE id = ?");
-                    $stmt->execute([$tx['user_id']]);
-                    $webhook_owner = $stmt->fetch();
-                    $webhook_url = $webhook_owner['webhook_url'] ?? '';
-
-                    if ($webhook_url) {
-                        $txMeta = normalize_metadata_array($tx['metadata'] ?? null);
-                        $resMeta = normalize_metadata_array($res['data']['metadata'] ?? null);
-                        $finalMeta = array_merge($resMeta, $txMeta);
-
-                        $payload = [
-                            'event' => 'charge.success',
-                            'data' => [
-                                'id' => $tx['id'],
-                                'reference' => $tx['reference'],
-                                // Additive contract: preserve the legacy amount value and declare its meaning.
-                                'money_contract_version' => 1,
-                                'amount_unit' => 'major',
-                                'amount_basis' => 'requested',
-                                'amount' => $tx['amount'],
-                                'amount_kobo' => to_minor_units($tx['amount']),
-                                'currency' => $tx['currency'],
-                                'requested_amount' => to_minor_units($tx['amount']),
-                                'gateway_amount' => to_minor_units($gateway_amount),
-                                'fee_amount' => to_minor_units($fee),
-                                'settled_amount' => to_minor_units($settled),
-                                'status' => 'success',
-                                'channel' => $channel,
-                                'paid_at' => $res['data']['paid_at'] ?? ($tx['created_at'] ?? date('c')),
-                                // Lets the merchant's script refuse to credit a sandbox payment.
-                                'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
-                                'customer' => [
-                                    'email' => $tx['customer_email'],
-                                    'name' => $tx['customer_name']
-                                ],
-                                'metadata' => $finalMeta
-                            ]
-                        ];
-
-                        // Signed the same way as trigger_merchant_webhook(): the merchant verifies it
-                        // with the same secret key it authenticates its API calls with.
-                        $webhook_body = json_encode($payload);
-                        $webhook_signature = payhub_merchant_webhook_signature($webhook_body, $webhook_owner, $tx['is_test'] ?? null);
-                        $webhook_headers = ['Content-Type: application/json'];
-                        if ($webhook_signature !== '') {
-                            $webhook_headers[] = 'X-Payhub-Signature: ' . $webhook_signature;
-                        }
-
-                        if ($webhook_signature === '') {
-                            $whRes = false; $whCode = 0;
-                            $whErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
-                        } else {
-                            $ch = curl_init($webhook_url);
-                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                            curl_setopt($ch, CURLOPT_POST, true);
-                            curl_setopt($ch, CURLOPT_POSTFIELDS, $webhook_body);
-                            curl_setopt($ch, CURLOPT_HTTPHEADER, $webhook_headers);
-                            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-                            $whRes = curl_exec($ch);
-                            $whCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                            $whErr = curl_error($ch);
-                            curl_close($ch);
-                        }
-
-                        $whResText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$whRes), 0, 180));
-                        @file_put_contents(
-                            BASE_PATH . 'webhook_debug.log',
-                            '[' . date('Y-m-d H:i:s') . '] Verify page webhook tx=' . $tx['reference']
-                            . ' url=' . $webhook_url . ' algo=sha256 http=' . $whCode . ' fee=' . $fee
-                            . ' settled=' . $settled . ($whErr !== '' ? ' err=' . $whErr : '') . PHP_EOL,
-                            FILE_APPEND
-                        );
-                        try {
-                            $stmtLog = $db->prepare("INSERT INTO webhook_logs (transaction_id, status, attempt_count, last_attempt_at, payload, response) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?)");
-                            $stmtLog->execute([
-                                $tx['id'],
-                                (($whCode >= 200 && $whCode < 300) ? 'success' : 'failed'),
-                                $webhook_body,
-                                'HTTP ' . $whCode . ($whErr !== '' ? ' | ' . $whErr : ($whResText !== '' ? ' | ' . $whResText : ''))
-                            ]);
-                        } catch (\Throwable $t) {
-                            error_log('[PayHub] verify webhook_logs write failed: ' . $t->getMessage());
-                        }
-                    }
-
                     $db->commit();
+                    $verifiedForDelivery = true;
                 } catch (AlreadyFulfilledException $e) {
                     // Another worker beat us to it. The payment really is
                     // successful - we simply must not credit it a second time.
@@ -331,6 +232,121 @@ if ($tx && $tx['status'] === 'success') {
                     $status = 'success';
                 } catch (Exception $e) {
                     $db->rollBack();
+                }
+
+                // Never contact the merchant until accounting is durably committed.
+                // Delivery errors are isolated: they cannot roll back a committed payment.
+                if ($verifiedForDelivery) {
+                    try {
+                        // Trigger Webhook if configured
+                        //
+                        // NOTE: this is a second, older sender that duplicates
+                        // includes/functions.php's trigger_merchant_webhook(). They differ, and the
+                        // difference is worth knowing:
+                        //
+                        //   * this one sent NO signature at all, so a merchant that follows the
+                        //     documented contract ("verify X-Payhub-Signature") saw a webhook it could
+                        //     not verify and had to either reject it - losing real payments - or fall
+                        //     back to re-verifying through the API. The header is now sent, which is
+                        //     additive: a merchant that ignores it is unaffected.
+                        //   * this one reports `amount` in NAIRA (the stored figure), while
+                        //     trigger_merchant_webhook() reports it in KOBO (`to_minor_units()`).
+                        //     That has deliberately NOT been changed here, because a live merchant
+                        //     parsing this webhook would suddenly read the amount as 100x its value.
+                        //     Unifying the two should be an announced change, not a silent one.
+                        $stmt = $db->prepare("SELECT webhook_url, secret_key, test_secret_key FROM users WHERE id = ?");
+                        $stmt->execute([$tx['user_id']]);
+                        $webhook_owner = $stmt->fetch();
+                        $webhook_url = $webhook_owner['webhook_url'] ?? '';
+
+                        if ($webhook_url) {
+                            $txMeta = normalize_metadata_array($tx['metadata'] ?? null);
+                            $resMeta = normalize_metadata_array($res['data']['metadata'] ?? null);
+                            $finalMeta = array_merge($resMeta, $txMeta);
+
+                            $payload = [
+                                'event' => 'charge.success',
+                                'data' => [
+                                    'id' => $tx['id'],
+                                    'reference' => $tx['reference'],
+                                    // Additive contract: preserve the legacy amount value and declare its meaning.
+                                    'money_contract_version' => 1,
+                                    'amount_unit' => 'major',
+                                    'amount_basis' => 'requested',
+                                    'amount' => $tx['amount'],
+                                    'amount_kobo' => to_minor_units($tx['amount']),
+                                    'currency' => $tx['currency'],
+                                    'requested_amount' => to_minor_units($tx['amount']),
+                                    'gateway_amount' => to_minor_units($gateway_amount),
+                                    'fee_amount' => to_minor_units($fee),
+                                    'settled_amount' => to_minor_units($settled),
+                                    'status' => 'success',
+                                    'channel' => $channel,
+                                    'paid_at' => $res['data']['paid_at'] ?? ($tx['created_at'] ?? date('c')),
+                                    // Lets the merchant's script refuse to credit a sandbox payment.
+                                    'domain' => ((int)$tx['is_test'] === 1) ? 'test' : 'live',
+                                    'customer' => [
+                                        'email' => $tx['customer_email'],
+                                        'name' => $tx['customer_name']
+                                    ],
+                                    'metadata' => $finalMeta
+                                ]
+                            ];
+
+                            // Signed the same way as trigger_merchant_webhook(): the merchant verifies it
+                            // with the same secret key it authenticates its API calls with.
+                            $webhook_body = json_encode($payload);
+                            $webhook_signature = payhub_merchant_webhook_signature($webhook_body, $webhook_owner, $tx['is_test'] ?? null);
+                            $webhook_headers = ['Content-Type: application/json'];
+                            if ($webhook_signature !== '') {
+                                $webhook_headers[] = 'X-Payhub-Signature: ' . $webhook_signature;
+                            }
+
+                            if ($webhook_signature === '') {
+                                $whRes = false; $whCode = 0;
+                                $whErr = 'Webhook signing refused: check mode-specific merchant key and payload domain.';
+                            } else {
+                                $deliveryQuery = $db->prepare('SELECT t.*,u.webhook_url,u.secret_key,u.test_secret_key FROM transactions t JOIN users u ON t.user_id=u.id WHERE t.id=?');
+                                $deliveryQuery->execute([(int)$tx['id']]);
+                                $deliverySnapshot = $deliveryQuery->fetch(PDO::FETCH_ASSOC);
+                                if (!payhub_verify_payload_matches($deliverySnapshot, $payload)) {
+                                    throw new RuntimeException('Committed verify-page evidence does not match payload.');
+                                }
+                                $verifyClaim = payhub_claim_initial_webhook($db, $deliverySnapshot, $webhook_body);
+                                $webhook_headers = ['Content-Type: application/json', 'X-Payhub-Signature: '.$verifyClaim['signature']];
+                                $ch = curl_init($deliverySnapshot['webhook_url']);
+                                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+                                curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+                                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+                                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                                curl_setopt($ch, CURLOPT_POST, true);
+                                curl_setopt($ch, CURLOPT_POSTFIELDS, $webhook_body);
+                                curl_setopt($ch, CURLOPT_HTTPHEADER, $webhook_headers);
+                                curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+                                $whRes = curl_exec($ch);
+                                $whCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                                $whErr = curl_error($ch);
+                                curl_close($ch);
+                                payhub_finish_webhook_retry($db, $verifyClaim, $whCode, $whRes !== false && $whErr === '');
+                            }
+
+                            $whResText = trim(substr(str_replace(["\r", "\n"], ' ', (string)$whRes), 0, 180));
+                            @file_put_contents(
+                                BASE_PATH . 'webhook_debug.log',
+                                '[' . date('Y-m-d H:i:s') . '] Verify page webhook tx=' . $tx['reference']
+                                . ' url=' . $webhook_url . ' algo=sha256 http=' . $whCode . ' fee=' . $fee
+                                . ' settled=' . $settled . ($whErr !== '' ? ' err=' . $whErr : '') . PHP_EOL,
+                                FILE_APPEND
+                            );
+                            // Exact body/log and claim were committed before HTTP.
+
+                        }
+
+                    } catch (Throwable $e) {
+                        error_log('[PayHub] Verify-page delivery unavailable; inspect required schema and durable claims. No automatic replay.');
+                    }
                 }
             }
         }
