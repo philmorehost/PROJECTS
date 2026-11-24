@@ -7,7 +7,12 @@ set_exception_handler(function($e){
     exit(1);
 });
 require __DIR__.'/../includes/webhook-retry.php';
-function retrymigration($db,$file){$stmt=$db->query(file_get_contents($file));do{if($stmt->columnCount())$stmt->fetchAll();}while($stmt->nextRowset());$stmt->closeCursor();}
+function retrymigration($db,$file){
+    // Multi-statement operator SQL must use direct execution, not a native prepared query.
+    $native=$db->getAttribute(PDO::ATTR_EMULATE_PREPARES);$db->setAttribute(PDO::ATTR_EMULATE_PREPARES,true);
+    try{$stmt=$db->query(file_get_contents($file));do{if($stmt->columnCount())$stmt->fetchAll();}while($stmt->nextRowset());$stmt->closeCursor();}
+    finally{$db->setAttribute(PDO::ATTR_EMULATE_PREPARES,$native);}
+}
 function retrydb($name='') {return new PDO('mysql:host=127.0.0.1;port=3306;dbname='.$name,'root','disposable-ci-only',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);}
 if (($argv[1]??'')==='worker') {
     $name=$argv[2]??'';if(!preg_match('/\Apayhub_retry_ci_[a-f0-9]{12}\z/',$name))exit(2);
