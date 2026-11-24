@@ -8,7 +8,9 @@ foreach(['get','verify','set','reset'] as $action){$input=bc_app_security_questi
 foreach(['developer-key',str_repeat('A',43),'sk_live_key','',[],null] as $key)stcheck(!isset(bc_app_security_question_input(['api_key'=>$key])['app_token']),'no developer/legacy API-key authentication');
 foreach(['',[],null,'invalid-explicit'] as $explicit){$p=bc_app_security_question_input(['app_token'=>$explicit,'api_key'=>$token]);stcheck($p['app_token']===$explicit,'explicit body credential never replaced');}
 $_SERVER['HTTP_AUTHORIZATION']='Bearer invalid-header';$input=bc_app_security_question_input(['api_key'=>$token]);stcheck(!isset($input['app_token']) && bc_app_token_from_request($input)==='invalid-header','invalid bearer cannot be overridden');
-unset($_SERVER['HTTP_AUTHORIZATION']);$_SERVER['HTTP_X_APP_TOKEN']=$token;stcheck(bc_app_token_from_request([])===$token,'FastCGI-compatible session header');unset($_SERVER['HTTP_X_APP_TOKEN']);
+unset($_SERVER['HTTP_AUTHORIZATION']);
+foreach(['HTTP_AUTHORIZATION','REDIRECT_HTTP_AUTHORIZATION','HTTP_X_APP_TOKEN'] as $header){foreach(['','Basic invalid'] as $value){$_SERVER[$header]=$value;stcheck(!isset(bc_app_security_question_input(['api_key'=>$token])['app_token']),'even empty or non-bearer explicit header blocks legacy normalization');unset($_SERVER[$header]);}}
+$_SERVER['HTTP_X_APP_TOKEN']=$token;stcheck(bc_app_token_from_request([])===$token,'FastCGI-compatible session header');unset($_SERVER['HTTP_X_APP_TOKEN']);
 $_SERVER['REDIRECT_HTTP_AUTHORIZATION']='Bearer '.$token;stcheck(bc_app_token_from_request([])===$token,'Apache forwarded bearer');$_SERVER=[];
 foreach(['DGV7.0-SAAS','DGV7.0-NON-SAAS'] as $ed){$b=__DIR__.'/../'.$ed;
  stcheck(file_get_contents($b.'/func/bc-app-request-compat.php')===file_get_contents(__DIR__.'/../DGV7.0-SAAS/func/bc-app-request-compat.php'),'edition parity');
