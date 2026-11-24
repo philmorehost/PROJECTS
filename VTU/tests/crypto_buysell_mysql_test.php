@@ -100,11 +100,16 @@ try {
     $cr2 = bc_cbs_settle_sell_deposit($db, 1, $final['deposit_id'], 8000000);
     cbs_chk($cr1['state'] === 'credited' && !$cr1['replayed'] && $cr2['replayed'], 'sell deposit credited once');
 
-    // 4b. Bridge hold check (503 when disabled) -> enabled signer worker confirms queued order
+    // 4b. Bridge init + hold check (503 when disabled) -> enabled signer worker confirms queued order -> order_status
+    $initResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'balance_ngn' => 50000, 'kyc_verified' => 1], ['action' => 'init']);
+    cbs_chk($initResp['http_code'] === 200 && $initResp['body']['execution_enabled'] === false && $initResp['body']['hold_code'] === 'CRYPTO_BUYSELL_HOLD', 'bridge init reports CRYPTO_BUYSELL_HOLD');
+
     $heldResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], ['action' => 'quote']);
     cbs_chk($heldResp['http_code'] === 503 && $heldResp['body']['code'] === 'CRYPTO_BUYSELL_HOLD', 'bridge returns 503 CRYPTO_BUYSELL_HOLD by default');
 
     putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED=1');
+    $kycFail = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 0], ['action' => 'quote']);
+    cbs_chk($kycFail['http_code'] === 403 && $kycFail['body']['code'] === 'KYC_REQUIRED', 'bridge rejects unverified KYC');
     $qResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
         'action' => 'quote', 'request_id' => 'q-bridge-01', 'side' => 'buy', 'asset' => 'USDT', 'network' => 'TRON',
         'fiat_currency' => 'NGN', 'crypto_units_1e8' => '1000000000', 'rate_fiat_minor' => 160000, 'margin_bps' => 50,
@@ -120,6 +125,10 @@ try {
         'outcome' => 'confirmed', 'provider_ref' => 'SIG_1', 'tx_hash' => 'tron_tx_hash_01',
     ]);
     cbs_chk($wRes['ok'] && $wRes['processed'] === 1 && $wRes['results'][0]['state'] === 'confirmed', 'signer worker confirmed queued order');
+    $stResp = bc_cbs_bridge_handle($db, ['vendor_id' => 1, 'user_id' => 10, 'kyc_verified' => 1], [
+        'action' => 'order_status', 'request_id' => 'ord-bridge-01',
+    ]);
+    cbs_chk($stResp['http_code'] === 200 && $stResp['body']['order']['state'] === 'confirmed' && $stResp['body']['order']['tx_hash'] === 'tron_tx_hash_01', 'order_status returns confirmed tx_hash');
     putenv('CRYPTO_BUYSELL_EXECUTION_ENABLED');
 
     // 5. MyISAM refusal on non-FK table
