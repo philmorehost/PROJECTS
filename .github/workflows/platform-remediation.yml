@@ -16,6 +16,8 @@ on:
       - 'VTU/migrations/20261118_giftcard_settlement.sql'
       - 'VTU/**/func/bc-virtualcard-settlement.php'
       - 'VTU/migrations/20261118_virtualcard_settlement.sql'
+      - 'VTU/**/func/bc-checkout-intents.php'
+      - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -159,7 +161,10 @@ on:
       - 'VTU/**/func/bc-giftcard-settlement.php'
       - 'VTU/migrations/20261118_giftcard_settlement.sql'
       - 'VTU/**/func/bc-virtualcard-settlement.php'
+      - 'VTU/**/func/bc-virtualcard-settlement.php'
       - 'VTU/migrations/20261118_virtualcard_settlement.sql'
+      - 'VTU/**/func/bc-checkout-intents.php'
+      - 'VTU/migrations/20261118_checkout_intent_lifecycle.sql'
       - 'VTU/**/func/bc-live-capture.php'
       - 'VTU/**/func/bc-video-evidence.php'
       - 'VTU/tests/run_video_evidence_native.sh'
@@ -351,6 +356,7 @@ jobs:
           php VTU/tests/payout_reservations_test.php
           php VTU/tests/giftcard_settlement_foundation_test.php
           php VTU/tests/virtualcard_settlement_foundation_test.php
+          php VTU/tests/checkout_intents_foundation_test.php
           php -l PAYHUB/includes/functions.php
           php -l PAYHUB/admin/webhooks.php
           php -l PAYHUB/webhook-paystack.php
@@ -584,6 +590,12 @@ jobs:
           BC_VIRTUALCARD_SETTLE_CI: '1'
           BC_TEST_EDITION: '${{ matrix.edition }}'
         run: php VTU/tests/virtualcard_settlement_mysql_test.php
+
+      - name: Held server-bound checkout intent lifecycle in disposable MySQL
+        env:
+          BC_CHECKOUT_INTENT_CI: '1'
+          BC_TEST_EDITION: '${{ matrix.edition }}'
+        run: php VTU/tests/checkout_intents_mysql_test.php
 
   video-evidence:
     runs-on: ubuntu-latest
