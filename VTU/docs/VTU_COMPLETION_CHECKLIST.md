@@ -62,3 +62,7 @@ There is no honest single "all done" number while major provider-backed financia
 ### Read-only monitoring follow-up
 
 A bounded operator CLI `PAYHUB/bin/monitor-webhook-outbox.php` now reports page-scoped state/age counts without payloads, network calls or evidence mutation. It is not installed as a cron/alert and does not establish recovery eligibility, global totals, downstream settlement or production health. External monitoring/alert integration, restricted operator operation and real endpoint acceptance remain. Sandbox token-race protection and the nine-surface regression inventory were merged in PR #287 after native CI passed.
+
+### Monitoring-agent contract follow-up
+
+`PAYHUB/bin/check-webhook-outbox.php` now provides JSON plus explicit monitoring exit statuses and a bounded multi-page traversal. Page caps/unavailable observations return UNKNOWN, never green. `PAYHUB/OUTBOX_MONITORING.md` defines restricted agent integration and investigation without replay. Source-level local alert integration is implemented; installing/routing an approved alert sink, validating actual notifications, establishing capacity/SLA thresholds and monitoring stale jobs remain operator acceptance. This does not complete provider acceptance or uncertain-event reconciliation.

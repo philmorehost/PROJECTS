@@ -71,6 +71,9 @@ jobs:
           php -l PAYHUB/includes/webhook-outbox.php
           php -l PAYHUB/includes/webhook-recovery.php
           php -l PAYHUB/includes/webhook-money.php
+          php -l PAYHUB/includes/webhook-alert.php
+          php -l PAYHUB/bin/check-webhook-outbox.php
+          php -l PAYHUB/tests/webhook_alert_policy_test.php
           php -l PAYHUB/includes/webhook-monitor.php
           php -l PAYHUB/bin/monitor-webhook-outbox.php
           php -l PAYHUB/bin/recover-webhook-outbox.php
@@ -87,6 +90,8 @@ jobs:
           php -l PAYHUB/api-reference.php
       - name: Exact-mode signing regression matrix (no network)
         run: php PAYHUB/tests/webhook_signing_test.php
+      - name: Bounded alert severity policy (no database or network)
+        run: php PAYHUB/tests/webhook_alert_policy_test.php
       - name: Reviewed fulfilment producer inventory (source only)
         run: php PAYHUB/tests/fulfilment_inventory_test.php
       - name: Recovery network and CLI policy (no DNS or HTTP)
