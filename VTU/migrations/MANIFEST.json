@@ -1,0 +1,157 @@
+{
+  "version": "2026.11.18-remediation-manifest-1",
+  "migrations": [
+    {
+      "path": "PAYHUB/install/20261118_deposit_evidence.sql",
+      "sha256": "183274bbaf069e5ce20f6c62d1984af5a5953108150d4d9a0d1868b1d43c0320"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_initial_claims.sql",
+      "sha256": "a502e7aff6c0c7b189c0203875d372e9286abf618d6964d7a17abde907cee160"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_log_compat.sql",
+      "sha256": "a05b464c698c31c8e3dcb143b96af14224e68cf5821a386e07745cee9d3ebc82"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_outbox.sql",
+      "sha256": "547c940d7db98bde8d78929b17505dcc494324b2621291813d85e84848195e51"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_reconciliations.sql",
+      "sha256": "53a6b3349580914a415a94ed1e5ed8e04437af10225341937d195c87d75652da"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_retry_claims.sql",
+      "sha256": "ae7ae5611619d239a13678fcce59cbb044963d6525d82a5261799385f14a3e65"
+    },
+    {
+      "path": "PAYHUB/install/20261118_webhook_reviews.sql",
+      "sha256": "4c30eb32cb5f8e6069b2a76d6f3997b0e534f476fbb90d0a0d2422c9cc6ee41f"
+    },
+    {
+      "path": "VTU/migrations/20261118_checkout_intent_lifecycle.sql",
+      "sha256": "7fe825cd1554c1a742040592681655a422a5400e9b177854999a6b4af400e9cd"
+    },
+    {
+      "path": "VTU/migrations/20261118_giftcard_settlement.sql",
+      "sha256": "9fd07fb3fcef12611ed47d598fef8d2d2a539a13207260f5d9690783898a0e88"
+    },
+    {
+      "path": "VTU/migrations/20261118_payhub_deposits.sql",
+      "sha256": "089772f80d02b805e44fa2f149f097b245679d2f77c77fe9a1a3193951121a94"
+    },
+    {
+      "path": "VTU/migrations/20261118_payout_reservations.sql",
+      "sha256": "1e588e9845da5f7f3392f40a4ee5514ed6472d771a6f977a04871e7f2cee8ae7"
+    },
+    {
+      "path": "VTU/migrations/20261118_personal_web_access.sql",
+      "sha256": "457e975112cd98a3ebd2ceccc26d1ce96b326905694bd3afa1b6cf95bc4c68ff"
+    },
+    {
+      "path": "VTU/migrations/20261118_service_attempt_journal.sql",
+      "sha256": "3d33f4164f54b3de07612eb3e73510f2928e854f657ca7c6c9d471db02a76303"
+    },
+    {
+      "path": "VTU/migrations/20261118_service_attempt_review_indexes.sql",
+      "sha256": "afd9d4c7c9ef6a94456318d7d9822f4f3360e3c15301345ba1d3ed0ddc7460c5"
+    },
+    {
+      "path": "VTU/migrations/20261118_service_dispatch_leases.sql",
+      "sha256": "12bda3987434b933771916955beded8c88a9c886bd4f5d2f514ff158b78f7073"
+    },
+    {
+      "path": "VTU/migrations/20261118_virtualcard_settlement.sql",
+      "sha256": "81837afe02f907cafb023d0a8e10499ce88cb8c019d1542db3ba2ef6817b7f4f"
+    }
+  ],
+  "paired_helpers": [
+    {
+      "name": "bc-payout-reservations.php",
+      "sha256": "115f93f470762ab5bb2f2da9228700adf09435bc94d7b60e5cbb8387441af088"
+    },
+    {
+      "name": "bc-giftcard-settlement.php",
+      "sha256": "691b3fb06f3ca471a5a7ecf01e473870a9b281597641db3f1cc1b0ce236e2c26"
+    },
+    {
+      "name": "bc-virtualcard-settlement.php",
+      "sha256": "e121934fcd7d80aadcc1e51f8e4313fe5b3b8524d265c52657059db5930754ff"
+    },
+    {
+      "name": "bc-checkout-intents.php",
+      "sha256": "ff62358d06a44f1007a6eb68fb9cbd23dc11710e0684d866c72a5edb2a2e87fc"
+    },
+    {
+      "name": "bc-service-dispatch-lease.php",
+      "sha256": "7f26358d5181ac5f4c57b0691aced97dd8f54a971185d4f212caacd303160d7f"
+    },
+    {
+      "name": "bc-service-attempt-journal.php",
+      "sha256": "56ccdb01d957dbaf1a27cf64c943c1ad08beb7b51b29ded71524004f85b9fbe9"
+    },
+    {
+      "name": "bc-service-attempt-review.php",
+      "sha256": "d515ffaa85680375688c227aade9bc75eb8b0839274136bf08eaea679a2c8332"
+    },
+    {
+      "name": "bc-service-request-idempotency.php",
+      "sha256": "098f444f59d07fc47550a1265b85c6addc76cfed85c55d9ed3b88e2f5d959ced"
+    },
+    {
+      "name": "bc-service-provider-routing.php",
+      "sha256": "9ce448b7c3fa012b76b626f9402780517ba17efd974c26435f6c68445981b704"
+    },
+    {
+      "name": "bc-payhub-deposits.php",
+      "sha256": "494742a018cf3f28327b7cf82e11244ab7dc2be3efc9c1a51f3fbffbbf8594d8"
+    },
+    {
+      "name": "bc-fintech-schema.php",
+      "sha256": "ac525a3d76bb5f950dd3dceb8eb5e816393b70eb4dd58c8b72d03225e1f614a9"
+    },
+    {
+      "name": "bc-fintech-ledger.php",
+      "sha256": "49f2c7c6a1d3e4323ae196d32225cc1bfb800646778cc3399330d7dce98c67ab"
+    },
+    {
+      "name": "bc-fintech-webhook.php",
+      "sha256": "3e44b5aceef963d3cfc417c988eaeeb7ab70566a8feb37f7a16651ccea79051f"
+    },
+    {
+      "name": "bc-incident-wallet.php",
+      "sha256": "b3cb42bcff52569a74c43b52e53c830373485e16a039be18befe143487a72195"
+    },
+    {
+      "name": "bc-giftcard-safety.php",
+      "sha256": "da4a9e4950fac307af0ca2eb293565296cb9ab968f3a03711d396da282aeb213"
+    }
+  ],
+  "required_innodb_tables": [
+    "sas_users",
+    "sas_vendors",
+    "sas_transactions",
+    "sas_wallet_mutation_events",
+    "sas_secure_payment_intents",
+    "sas_provider_settlement_claims",
+    "sas_fintech_ledger",
+    "sas_webhook_events",
+    "sas_payout_reservations",
+    "sas_payout_reservation_events",
+    "sas_giftcard_orders",
+    "sas_giftcard_order_events",
+    "sas_giftcard_escrows",
+    "sas_giftcard_escrow_events",
+    "sas_virtual_cards_v2",
+    "sas_virtualcard_orders",
+    "sas_virtualcard_order_events",
+    "sas_checkout_intents",
+    "sas_checkout_intent_events",
+    "sas_service_requests",
+    "sas_service_attempts",
+    "sas_service_attempt_events",
+    "sas_service_capability_matrix",
+    "sas_service_dispatch_leases"
+  ]
+}

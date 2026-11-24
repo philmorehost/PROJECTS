@@ -9,14 +9,18 @@ on:
       - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/tests/webhook_recovery_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_mysql_test.php'
       - 'PAYHUB/tests/fulfilment_inventory_test.php'
       - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
       - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/bin/reconcile-webhook-outbox.php'
       - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
       - 'PAYHUB/install/20261118_webhook_reviews.sql'
+      - 'PAYHUB/install/20261118_webhook_reconciliations.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -39,14 +43,18 @@ on:
       - 'PAYHUB/tests/webhook_log_schema_mysql_test.php'
       - 'PAYHUB/tests/webhook_retry_mysql_test.php'
       - 'PAYHUB/tests/webhook_recovery_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_policy_test.php'
+      - 'PAYHUB/tests/webhook_reconcile_mysql_test.php'
       - 'PAYHUB/tests/fulfilment_inventory_test.php'
       - 'PAYHUB/tests/payhub_dva_reconcile_contract_test.php'
       - 'PAYHUB/bin/recover-webhook-outbox.php'
+      - 'PAYHUB/bin/reconcile-webhook-outbox.php'
       - 'PAYHUB/install/20261118_deposit_evidence.sql'
       - 'PAYHUB/install/20261118_webhook_retry_claims.sql'
       - 'PAYHUB/install/20261118_webhook_initial_claims.sql'
       - 'PAYHUB/install/20261118_webhook_outbox.sql'
       - 'PAYHUB/install/20261118_webhook_reviews.sql'
+      - 'PAYHUB/install/20261118_webhook_reconciliations.sql'
       - 'PAYHUB/install/20261118_webhook_log_compat.sql'
       - 'PAYHUB/install/index.php'
       - 'PAYHUB/api-reference.php'
@@ -85,6 +93,10 @@ jobs:
           php -l PAYHUB/includes/webhook-money.php
           php -l PAYHUB/includes/webhook-review.php
           php -l PAYHUB/bin/review-webhook-outbox.php
+          php -l PAYHUB/includes/webhook-reconcile.php
+          php -l PAYHUB/bin/reconcile-webhook-outbox.php
+          php -l PAYHUB/tests/webhook_reconcile_policy_test.php
+          php -l PAYHUB/tests/webhook_reconcile_mysql_test.php
           php -l PAYHUB/includes/webhook-alert.php
           php -l PAYHUB/bin/check-webhook-outbox.php
           php -l PAYHUB/tests/webhook_alert_policy_test.php
@@ -110,6 +122,8 @@ jobs:
         run: php PAYHUB/tests/webhook_signing_test.php
       - name: Review input policy (no database or network)
         run: php PAYHUB/tests/webhook_review_policy_test.php
+      - name: Multi-party reconciliation policy (no database or network)
+        run: php PAYHUB/tests/webhook_reconcile_policy_test.php
       - name: Bounded alert severity policy (no database or network)
         run: php PAYHUB/tests/webhook_alert_policy_test.php
       - name: Reviewed fulfilment producer inventory (source only)
@@ -150,6 +164,10 @@ jobs:
         env:
           PAYHUB_LOG_SCHEMA_CI: '1'
         run: php PAYHUB/tests/webhook_retry_mysql_test.php
+      - name: Multi-party webhook reconciliation and evidence matching in disposable MySQL
+        env:
+          PAYHUB_LOG_SCHEMA_CI: '1'
+        run: php PAYHUB/tests/webhook_reconcile_mysql_test.php
       - name: Paired PayHub outbox/claims -> VTU SAAS deposits in disposable MySQL
         env:
           PAYHUB_PAIRED_CI: '1'
