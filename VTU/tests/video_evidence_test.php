@@ -15,4 +15,6 @@ $m=$valid;unset($m['format']['duration']);$m['format']['format_name']='matroska,
 $m['packets'][1]['pts_time']='60';ve(!bc_video_evidence_metadata_valid($m),'long packet clock refused');
 ve(!bc_video_evidence_inspect(__FILE__,'video/mp4'),'nonmedia unavailable inspector refused');ve(!bc_video_evidence_inspect(__FILE__,'application/pdf'),'bad mime refused');
 foreach(['SAAS','NON-SAAS'] as $ed){ve(file_get_contents(__DIR__.'/../DGV7.0-'.$ed.'/func/bc-video-evidence.php')===file_get_contents(__DIR__.'/../DGV7.0-SAAS/func/bc-video-evidence.php'),'edition parity');}
+ve(strpos(implode(' ',bc_video_evidence_command('/usr/bin/ffprobe','video/webm','/tmp/fixture')),'packet=')===false,'metadata probe cannot implicitly enumerate audio packets');
+ve(in_array('v:0',bc_video_evidence_command('/usr/bin/ffprobe','video/webm','/tmp/fixture',true),true),'clock probe selects video only');
 echo "$n video evidence checks passed\n";
