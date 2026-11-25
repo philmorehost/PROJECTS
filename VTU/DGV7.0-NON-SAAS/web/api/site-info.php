@@ -33,10 +33,15 @@ if ($get_vendor) {
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $sanitized_host = strtolower(preg_replace('/^www\./', '', explode(':', $host)[0]));
 
+    $site_title_api = trim((string)($get_site['site_title'] ?? ''));
+    if ($site_title_api === '') {
+        $site_title_api = 'FintechFlow';
+    }
+
     echo json_encode([
         "status" => "success",
         "data" => [
-            "site_title" => $get_site['site_title'] ?? "VTU Platform",
+            "site_title" => $site_title_api,
             "logo_url" => "https://" . $host . "/uploaded-image/" . str_replace([".", ":"], "-", $sanitized_host) . "_logo.png",
             "primary_color" => bc_theme_palette($get_style['primary_color'] ?? null)['primary_color'],
             "theme" => bc_theme_palette($get_style['primary_color'] ?? null),

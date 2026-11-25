@@ -76,7 +76,8 @@ async function mirror() {
     const isJs = f.rel.endsWith('.js') && (f.rel.includes('/jsfile/') || f.rel.endsWith('/asset/bc-admin-wallet.js'));
     const isCryptoPrototypeSource = f.rel.startsWith('cryptocurrency-idea/') && !f.rel.endsWith('/home-page.html') && /\.(js|json|html)$/.test(f.rel);
     const isIconCss = f.rel.endsWith('/assets-2/vendor/bootstrap-icons/bootstrap-icons.min.css') || f.rel.endsWith('/asset/bc-public-navigation.css');
-    if (!isPhp && !isDoc && !isHtaccess && !isJs && !isCryptoPrototypeSource && !isIconCss) continue;
+    const isMeridianAsset = f.rel.includes('/asset/meridian-1/') || f.rel.includes('/cssfile/template/');
+    if (!isPhp && !isDoc && !isHtaccess && !isJs && !isCryptoPrototypeSource && !isIconCss && !isMeridianAsset) continue;
     const dest = '/host/' + f.rel;
     // mkdir on an existing directory fails in this FS, so create each segment once.
     const parts = path.dirname(f.rel).split('/').filter((p) => p && p !== '.');

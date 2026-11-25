@@ -40,7 +40,9 @@ managers = []
 for name, subdir in [('DG7-iOS', 'DG6-iOS'), ('JIKABIZ-iOS', 'JIKABIZ'), ('MZEEVTU-iOS', 'MZEEVTU-iOS')]:
     base = root / name / subdir
     network = (base / 'Services/AppNetworkService.swift').read_text()
-    manager = network[network.index('// MARK: - Tenant branding'):]
+    start = network.index('// MARK: - Tenant branding')
+    end = network.index('// No redirects:', start) if '// No redirects:' in network[start:] else len(network)
+    manager = network[start:end]
     managers.append(manager)
     for token in ['@MainActor', '@Published', 'schema_version', 'contrast(', 'web/api/theme.php', 'cacheKey', 'httpShouldHandleCookies=false', 'http.url?.host==url.host', 'reloadIgnoringLocalCacheData', 'Last-known-good']:
         check(token in manager, name + ' ' + token)
