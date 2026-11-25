@@ -26,6 +26,10 @@ If you distribute a single APK for all vendors:
 
 ## 2. Authentication Endpoints
 
+### Access Model & Headers
+- **Mobile App Sessions (Personal accounts only):** Authenticate with `/web/api/login.php` (and `/web/api/login-otp.php` if OTP is required) to receive a revocable bearer `app_token`. Send `Authorization: Bearer <app_token>` (or `X-App-Token: <app_token>`) on every authenticated request. Business accounts are web-only (`403 BUSINESS_WEB_ONLY`), and raw `api_key` values are never issued to or accepted from Personal mobile sessions.
+- **Developer / Server Integrations (Business accounts only):** Require admin-approved `api_status = 1` and send `"api_key": "YOUR_BUSINESS_API_KEY"`.
+
 ### Login
 - **URL:** `/web/api/login.php`
 - **Method:** `POST`
@@ -41,11 +45,12 @@ If you distribute a single APK for all vendors:
   {
     "status": "success",
     "message": "Login successful",
+    "app_token": "BEARER_APP_TOKEN_HERE",
     "data": {
       "username": "johndoe",
       "firstname": "John",
       "lastname": "Doe",
-      "api_key": "SECURE_API_KEY_HERE",
+      "account_type": "personal",
       "balance": "5000.00",
       "account_level": "1",
       "email": "user@example.com",
@@ -304,7 +309,8 @@ The App should support standard JSON webhooks for payment notifications if using
 - **PayHub:** `/users-payhub.php`
 
 ## 5. Security Features
-- **Anti-BruteForce:** The API enforces strict account/IP locking on failed attempts.
-- **Transaction PIN:** While not mandatory for per-transaction API authorization, the 4-digit PIN is required for specific high-security actions (like Share Fund) and for account lockout resolution.
-- **KYC:** Identity verification is disabled/hardcoded as "Verified" across the platform. Developers should not implement KYC submission flows.
+- **Bearer App Token Authentication:** Mobile app sessions use revocable `app_token` bearer credentials (`Authorization: Bearer <app_token>`). Business accounts cannot sign into mobile app sessions, and Personal raw `api_key` values are rejected.
+- **Anti-BruteForce:** The API enforces strict account/IP rate limiting and lockout on failed attempts.
+- **Transaction PIN:** Authenticated mobile app users must provide their 4-digit Transaction PIN (`pin`) on purchase, transfer, virtual-card, gift-card, and withdrawal endpoints (when enabled/required by policy).
+- **KYC:** Identity verification is active and enforced via `/web/api/kyc.php` (GET/POST status & document submission). Unverified accounts subject to vendor KYC confinement are restricted until approved.
 - **SSL:** All requests must be over HTTPS.

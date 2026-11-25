@@ -6,7 +6,7 @@ $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credenti
 if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
 
 $vendor_id = resolveVendorID();
-$purchase_method = ((isset($api_post_info_from_app) && is_array($api_post_info_from_app)) || (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android')) ? "app" : "api";
+$purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
 $api_status_clause = ($purchase_method == "app") ? "" : "AND api_status=1";
 $user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' $api_status_clause AND status=1");
 $user = mysqli_fetch_assoc($user_q);

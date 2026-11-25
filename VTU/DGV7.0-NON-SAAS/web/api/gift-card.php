@@ -78,7 +78,7 @@ elseif ($action === 'purchase') {
     // WHO MUST PROVE THE PIN: the mobile app is a person and always sends one. An external api_key
     // integration serves that merchant's own customers, so there is no single PIN to ask for - the
     // requirement is skipped when the caller sends none. A supplied pin is still always validated.
-    $__pin_is_person = (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android') || isset($api_post_info_from_app);
+    $__pin_is_person = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app));
     $__pin_supplied  = ($pin !== '' && $pin !== null);
     if ($__pin_is_person || $__pin_supplied) {
         if (empty($pin)) {
@@ -161,7 +161,7 @@ elseif ($action === 'buy_p2p') {
 
     // See the note in the 'purchase' branch: a person (mobile app) must prove the PIN, an external
     // api_key integration must not be blocked by a PIN its customers cannot supply.
-    $__pin_is_person = (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android') || isset($api_post_info_from_app);
+    $__pin_is_person = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app));
     $__pin_supplied  = ($pin !== '' && $pin !== null);
     if ($__pin_is_person || $__pin_supplied) {
         if (empty($pin)) {

@@ -95,11 +95,17 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         $user_account_type_code = "1";
 
         $user_assoc_array = array();
-        $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username'");
-        if (mysqli_num_rows($checkuser) == 1) {
-            $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username' AND password = '$app_passkey'");
-            if (mysqli_num_rows($checkuser_pass) == 1) {
-                bc_enrollment_api_guard(mysqli_fetch_assoc($checkuser_pass));
+        if (!empty($app_username) && !empty($app_passkey)) {
+            $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username'");
+            if (mysqli_num_rows($checkuser) == 1) {
+                $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username' AND password = '$app_passkey'");
+                if (mysqli_num_rows($checkuser_pass) == 1) {
+                    $app_info_user = mysqli_fetch_assoc($checkuser_pass);
+                    bc_enrollment_api_guard($app_info_user);
+                    if ((int)($app_info_user['status'] ?? 0) !== 1 || !empty($app_info_user['is_blocked']) || (function_exists('bc_fintech_app_access') && empty(bc_fintech_app_access($app_info_user)['allowed']))) {
+                        echo json_encode(["status" => "failed", "status-msg" => "This account cannot use the mobile app."]);
+                        exit;
+                    }
 
                 //Transactions
                 $user_trans_ref_array = array();
@@ -227,6 +233,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                 }
 
             }
+        }
         }
 
 

@@ -48,6 +48,10 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_info = mysqli_fetch_array($checkuser_pass);
                     bc_enrollment_api_guard($get_user_info);
+                    if (!preg_match('/^[a-f0-9]{32}$/i', $password) || (int)($get_user_info["status"] ?? 0) !== 1 || !empty($get_user_info["is_blocked"]) || (function_exists('bc_fintech_app_access') && empty(bc_fintech_app_access($get_user_info)['allowed']))) {
+                        echo json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Please update your app to sign in with an active Personal account."));
+                        exit;
+                    }
                     $api_file_url = $_SERVER["DOCUMENT_ROOT"] . "/web/api/airtime.php";
                     if (file_exists($api_file_url)) {
                         $api_post_info_from_app = array("api_key" => $get_user_info["api_key"], "network" => $network, "phone_number" => $phone, "amount" => $amount);

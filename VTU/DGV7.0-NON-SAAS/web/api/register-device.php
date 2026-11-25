@@ -26,12 +26,17 @@ if (empty($input)) {
 $api_key   = trim(strip_tags($input["api_key"] ?? ""));
 $fcm_token = trim($input["fcm_token"] ?? "");
 
-if (empty($api_key) || empty($fcm_token)) {
-    echo json_encode(["status" => "error", "message" => "api_key and fcm_token are required"]);
+if (empty($fcm_token)) {
+    echo json_encode(["status" => "error", "message" => "fcm_token is required"]);
     exit;
 }
 
 $vendor_id = (int) resolveVendorID();
+$api_key = bc_fintech_api_credential($api_key, $vendor_id);
+if (empty($api_key)) {
+    echo json_encode(["status" => "error", "message" => "Unauthorized"]);
+    exit;
+}
 
 // Look up user by api_key using a prepared statement
 $stmt = $connection_server->prepare(

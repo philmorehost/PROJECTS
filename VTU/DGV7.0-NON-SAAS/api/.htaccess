@@ -1,0 +1,29 @@
+# DGV7.0 — /api directory hardening
+#
+# This tree contains legacy mobile-app endpoints. Historically several of them appended the raw
+# request/response JSON to sibling .txt/.json files (login.txt, app-json.json, email-msg.txt ...).
+# Those files were downloadable over HTTP and contained usernames, MD5 password hashes, API keys
+# and emailed passwords/OTPs. The logging code is gone; this denies the file types outright so a
+# stale copy on a server that has not been redeployed yet still cannot be fetched.
+
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(?:txt|json|log|sql|bak|old|orig|swp|swo|gz|zip|tar|ini|yml|yaml)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "\.(?:txt|json|log|sql|bak|old|orig|swp|swo|gz|zip|tar|ini|yml|yaml)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# Never execute uploaded/asset PHP here.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (?:^|/)(?:uploads?|uploaded-image|assets?|images?|img|media)/.*\.php$ - [F,NC,L]
+
+    # The clone/ tree is an old copy of this API that still expects the pre-SAAS schema
+    # (include /config.php, table `users`). It cannot run here and only adds attack surface.
+    RewriteRule ^app-backend/clone(?:/|$) - [F,NC,L]
+</IfModule>

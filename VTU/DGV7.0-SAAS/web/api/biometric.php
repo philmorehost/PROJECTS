@@ -12,6 +12,9 @@ if ($action === 'verify_mobile_login') {
 
     $username = mysqli_real_escape_string($connection_server, $input['username'] ?? '');
     $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($input['api_key'] ?? '', 0));
+    if (!bc_api_is_app_session()) {
+        bc_fintech_send_app_denial(['http' => 403, 'code' => 'APP_SESSION_REQUIRED', 'message' => 'Mobile app session token is required.']);
+    }
 
     if (empty($username) || empty($api_key)) {
         echo json_encode(["status" => "error", "message" => "Invalid parameters"]);
