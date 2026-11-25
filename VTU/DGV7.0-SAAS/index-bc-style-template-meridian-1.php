@@ -329,7 +329,7 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
             </div>
           </div>
           <div style="flex:0 0 auto;text-align:center">
-            <img src="/asset/meridian-1/images/spark.webp" alt="<?php echo $site_e; ?> assistant" width="180" height="180" loading="lazy" decoding="async" style="border-radius:24px">
+            <img src="/asset/meridian-1/images/spark.webp" alt="<?php echo $site_e; ?> assistant" width="200" height="200" loading="lazy" decoding="async" style="display:block;object-fit:contain;background:transparent">
           </div>
         </div>
       </div>
