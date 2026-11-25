@@ -1,0 +1,7 @@
+{
+  "name": "fintechflow-ui-demo",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}

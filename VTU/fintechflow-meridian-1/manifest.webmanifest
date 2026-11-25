@@ -1,0 +1,17 @@
+{
+  "name": "FintechFlow | Money, moving freely",
+  "short_name": "FintechFlow",
+  "description": "A FintechFlow interactive demo. Balances, rates and transactions are illustrative only.",
+  "lang": "en",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#fff",
+  "theme_color": "#fff",
+  "icons": [
+    {
+      "src": "/images/fintechflow-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
