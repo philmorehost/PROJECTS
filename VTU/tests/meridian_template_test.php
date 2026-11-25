@@ -35,6 +35,32 @@ m_check(strpos($personal_html, 'data-theme="dark"') !== false && strpos($persona
 m_check(strpos($personal_html, 'aria-label="Explore more"') !== false, 'personal page includes bc_public_directory_html');
 m_check(strpos($personal_html, 'Pending replacement integration') !== false, 'personal page puts retired crypto integration in Coming Soon');
 
+// 2.5 Homepage rearrangement, vault copy, removed duo card, shield, and zero-404 Personal feature catalogue links
+$hero_pos = strpos($personal_html, 'Everyday top-ups and bill payments, together.');
+$cross_pos = strpos($personal_html, 'Move and manage your money across borders with ease.');
+m_check($hero_pos !== false && $cross_pos !== false && $hero_pos < $cross_pos, 'Everyday top-ups hero appears before Move and manage your money across borders');
+m_check(strpos($personal_html, 'Real friends.<br>Real progress.') !== false, 'vault section uses Real friends. Real progress.');
+m_check(strpos($personal_html, 'Set savings goals and track rewards in one view.') === false, 'old savings card title removed');
+m_check(strpos($personal_html, 'Learn More') !== false && strpos($personal_html, 'About savings') === false && strpos($personal_html, 'id="vaultBtn"') === false, 'vault CTA updated to Learn More without manual preview button');
+m_check(preg_match('/<section class="chapter" id="vault-ch">.*?<div class="flags"/s', $personal_html) === 0, 'vault section country flags removed');
+m_check(strpos($personal_html, 'id="duo-ch"') === false && strpos($personal_html, 'Personal and business workflows, connected.') === false, 'duo interactive preview card removed');
+m_check(strpos($personal_html, 'm-shield-core') !== false && strpos($personal_html, 'class="shackle"') === false, 'trust section uses fintech shield instead of padlock/key');
+
+$personal_cat = bc_meridian_service_catalog('personal', 0);
+foreach ($personal_cat['categories'] as $cat) {
+    foreach ($cat['items'] as $item) {
+        $p = parse_url($item['href'], PHP_URL_PATH);
+        m_check(is_file($root . '/DGV7.0-SAAS' . $p) && is_file($root . '/DGV7.0-NON-SAAS' . $p), 'personal catalogue target exists in both editions: ' . $p);
+    }
+}
+foreach ($personal_cat['coming_soon'] as $cs) {
+    $p = parse_url($cs['href'], PHP_URL_PATH);
+    m_check(is_file($root . '/DGV7.0-SAAS' . $p) && is_file($root . '/DGV7.0-NON-SAAS' . $p), 'coming soon target exists in both editions: ' . $p);
+}
+foreach (array('/services/bank-transfer.php', '/services/share-fund.php', '/services/nin-card.php', '/services/bvn-verification.php', '/web/BankTransfer.php', '/web/BVNVerify.php') as $new_rel) {
+    m_check(is_file($root . '/DGV7.0-SAAS' . $new_rel) && is_file($root . '/DGV7.0-NON-SAAS' . $new_rel), 'new endpoint exists in both editions: ' . $new_rel);
+}
+
 // 3. Render Meridian-1 Business Dark page offline
 ob_start();
 bc_public_render(bc_landing_context(), 'business');

@@ -67,21 +67,16 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
   <section class="hero" id="hero">
     <div class="wrap split">
       <div class="hero-copy">
-        <p class="eyebrow"><i></i><?php echo $site_e; ?> · Personal &amp; Global Money</p>
-        <h1>Move and manage your money across borders with ease.</h1>
-        <p class="lede"><?php echo bc_meridian_e($ctx['site_desc']); ?></p>
-        <div class="flags" aria-hidden="true">
-          <svg class="flag"><use href="#fl-ng"/></svg>
-          <svg class="flag"><use href="#fl-us"/></svg>
-          <svg class="flag"><use href="#fl-gb"/></svg>
-          <svg class="flag"><use href="#fl-eu"/></svg>
-        </div>
+        <p class="eyebrow"><i></i><?php echo $site_e; ?> · Bills, Top-Ups &amp; Global Money</p>
+        <h1>Everyday top-ups and bill payments, together.</h1>
+        <p class="lede">Instant airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, betting funding, gift cards, and travel eSIMs in one place.</p>
         <div class="ctas" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
           <?php if ($ctx['registration_open']): ?>
             <a class="btn primary" href="/web/Register.php">Create free account</a>
           <?php else: ?>
             <a class="btn primary" href="/web/Login.php">Sign in to account</a>
           <?php endif; ?>
+          <a class="btn ghost" href="/BillsAndAirtime.php">Bills &amp; airtime</a>
           <a class="btn ghost" href="/Services.php">Explore services</a>
           <?php if ($app_badge !== ''): ?>
             <?php echo $app_badge; ?>
@@ -108,6 +103,39 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
             <div class="acts"><span>Swap</span><span>Send</span><span>Card</span><span>Bills</span></div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="cross-border-ch">
+    <div class="wrap split">
+      <div>
+        <div class="chap-head">
+          <h2>Move and manage your money across borders with ease.</h2>
+          <p class="lede"><?php echo bc_meridian_e($ctx['site_desc']); ?></p>
+        </div>
+        <div class="flags" aria-hidden="true">
+          <svg class="flag"><use href="#fl-ng"/></svg>
+          <svg class="flag"><use href="#fl-us"/></svg>
+          <svg class="flag"><use href="#fl-gb"/></svg>
+          <svg class="flag"><use href="#fl-eu"/></svg>
+        </div>
+        <div class="chips" style="margin-top:18px">
+          <a class="btn primary" href="/Services.php">Explore services</a>
+          <a class="btn ghost" href="/MultiCurrencyWallet.php">Multi-currency wallet</a>
+          <a class="btn ghost" href="/services/international-transfer.php">International transfers</a>
+        </div>
+      </div>
+      <div class="glass panel stack">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <span class="small" style="color:var(--text2)">Global Money Corridors</span>
+          <span class="tag demo">Multi-Currency</span>
+        </div>
+        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-ng"/></svg> Naira Wallet (NGN)</span><span class="num">Instant Bills &amp; Transfers</span></div>
+        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-us"/></svg> US Dollar (USD)</span><span class="num">Virtual Cards &amp; Wires</span></div>
+        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-gb"/></svg> British Pound (GBP)</span><span class="num">Remittance &amp; Tuition</span></div>
+        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-eu"/></svg> Euro (EUR)</span><span class="num">Cross-Border Settlement</span></div>
+        <p class="small" style="margin:0;color:var(--text3)">Confirmed FX quotes, recipient verification, and fees are displayed before you confirm in your <?php echo $site_e; ?> account.</p>
       </div>
     </div>
   </section>
@@ -197,8 +225,8 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
     <div class="wrap split flip">
       <div>
         <div class="chap-head">
-          <h2>Everyday top-ups and bill payments, together.</h2>
-          <p class="lede">Instant airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, betting funding, gift cards, and travel eSIMs in one place.</p>
+          <h2>Instant airtime &amp; mobile data preview.</h2>
+          <p class="lede">Pick a network, enter a Nigerian mobile number, and preview airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, and travel eSIMs.</p>
         </div>
         <div class="chips">
           <a class="btn primary" href="/BillsAndAirtime.php">Bills &amp; airtime</a>
@@ -221,16 +249,14 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
     <div class="wrap split">
       <div>
         <div class="chap-head">
-          <h2>Set savings goals and track rewards in one view.</h2>
+          <h2>Real friends.<br>Real progress.</h2>
           <p class="lede">Organize funds separately from daily spending and follow your progress alongside <?php echo $site_e; ?> referral and loyalty rewards.</p>
-          <div class="flags" aria-hidden="true"><svg class="flag"><use href="#fl-ng"/></svg><svg class="flag"><use href="#fl-gb"/></svg><svg class="flag"><use href="#fl-eu"/></svg><svg class="flag"><use href="#fl-us"/></svg></div>
         </div>
         <div class="chips">
-          <button type="button" class="btn primary" id="vaultBtn">Preview +₦50,000 goal</button>
-          <a class="btn ghost" href="/Savings.php">About savings</a>
+          <a class="btn primary" href="/Savings.php">Learn More</a>
         </div>
       </div>
-      <div class="jar glass" id="jar">
+      <div class="jar glass" id="jar" style="--fill:0.24">
         <div class="liquid">
           <svg class="wave" viewBox="0 0 1200 26" preserveAspectRatio="none" aria-hidden="true"><path d="M0 13 Q150 0 300 13 T600 13 T900 13 T1200 13 V26 H0Z" fill="currentColor"/></svg>
           <svg class="wave w2" viewBox="0 0 1200 26" preserveAspectRatio="none" aria-hidden="true"><path d="M0 13 Q150 26 300 13 T600 13 T900 13 T1200 13 V26 H0Z" fill="currentColor"/></svg>
@@ -251,36 +277,6 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
   );
   ?>
 
-  <section class="chapter duo-ch" id="duo-ch" aria-labelledby="duoTitle">
-    <div class="wrap duo-in">
-      <div class="duo-copy">
-        <span class="tag demo">Interactive preview</span>
-        <h2 id="duoTitle">Personal and business workflows, connected.</h2>
-        <p class="lede">Open the preview to see how a customer payment from <?php echo $site_e; ?> Personal settles cleanly into <?php echo $site_e; ?> Business.</p>
-        <ol class="duo-steps" aria-label="Demo steps">
-          <li><button type="button" data-app="personal" aria-current="step"><i>1</i><span><b>Pay</b><small><?php echo $site_e; ?></small></span></button></li>
-          <li><button type="button" data-app="business"><i>2</i><span><b>Get paid</b><small><?php echo $site_e; ?> Business</small></span></button></li>
-        </ol>
-      </div>
-      <div class="duo-stage">
-        <div class="duo-glow" aria-hidden="true"></div>
-        <div class="duo-tilt"><div class="duo-dev" id="duoDev" data-open="false">
-          <div class="duo-half duo-r"><div class="duo-shell"><div class="duo-scr" id="duoR" aria-live="polite"></div></div></div>
-          <div class="duo-half duo-l">
-            <div class="duo-face duo-front"><div class="duo-shell"><div class="duo-scr" id="duoL"></div></div></div>
-            <div class="duo-face duo-back"><div class="duo-shell"><button type="button" class="duo-cover" id="duoCover" aria-label="Open the phone">
-              <span class="dc-time">9:41</span><span class="dc-date">Today</span>
-              <span class="dc-note"><b><?php echo $site_e; ?></b><span>Ada’s Tailoring sent an invoice for ₦25,000.</span></span>
-              <span class="dc-hint">Tap to open</span></button></div></div>
-          </div>
-          <div class="duo-crease" aria-hidden="true"></div>
-        </div></div>
-        <div class="duo-shadow" aria-hidden="true"></div>
-        <button type="button" class="btn ghost duo-toggle" id="duoToggle" aria-controls="duoDev" aria-expanded="false">Open the phone</button>
-      </div>
-    </div>
-  </section>
-
   <section class="chapter" id="trust">
     <div class="wrap split">
       <div class="lockbox" aria-hidden="true">
@@ -289,7 +285,19 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
           <g class="ring r2" style="transform-origin:200px 200px"><circle cx="200" cy="200" r="160" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-dasharray="120 30 220 60" opacity=".4"/></g>
           <g class="ring r3" style="transform-origin:200px 200px"><circle cx="200" cy="200" r="130" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 10" opacity=".7"/></g>
         </svg>
-        <div class="core glass tint"><svg viewBox="0 0 48 56" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path class="shackle" d="M12 26V16a12 12 0 0 1 24 0v10"/><rect x="5" y="26" width="38" height="26" rx="7"/><circle cx="24" cy="38" r="3" fill="currentColor" stroke="none"/></svg></div>
+        <div class="core glass tint m-shield-core">
+          <svg viewBox="0 0 64 68" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="mShieldGrad" x1="10" y1="6" x2="54" y2="62" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="currentColor" stop-opacity="0.34"/>
+                <stop offset="100%" stop-color="currentColor" stop-opacity="0.08"/>
+              </linearGradient>
+            </defs>
+            <path d="M32 5L10 13.5V31.5C10 47.2 19.6 58.6 32 63.5C44.4 58.6 54 47.2 54 31.5V13.5L32 5Z" fill="url(#mShieldGrad)" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M32 11.5L16 17.8V31.2C16 43.3 23.1 52.3 32 56.5C40.9 52.3 48 43.3 48 31.2V17.8L32 11.5Z" stroke="currentColor" stroke-width="1.5" stroke-opacity="0.55" stroke-linejoin="round"/>
+            <path d="M23.5 33.5L29.2 39.2L41.5 26.8" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
       </div>
       <div>
         <div class="chap-head">
@@ -297,7 +305,7 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
           <p class="lede">Protect your <?php echo $site_e; ?> account with transaction PINs, authenticator / email OTP verification, KYC checks, and direct support channels.</p>
         </div>
         <ul class="feat">
-          <li class="glass"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg></div><div><b>Security PIN &amp; 2FA</b><span>Transaction PIN and configured Google Authenticator or email OTP protection.</span></div></li>
+          <li class="glass"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8.8-7 10-3.5-1.2-7-5-7-10V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg></div><div><b>Security PIN &amp; 2FA</b><span>Transaction PIN and configured Google Authenticator or email OTP protection.</span></div></li>
           <li class="glass"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg></div><div><b>Identity Verification</b><span>KYC tier checks to unlock higher limits and global corridors.</span></div></li>
           <li class="glass"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8.8-7 10-3.5-1.2-7-5-7-10V6z"/></svg></div><div><b>Account Recovery</b><span>Guided recovery and step-up checks when changing devices.</span></div></li>
           <li class="glass"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 20l1.1-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg></div><div><b>Responsive Support</b><span>Reach our team via support chat<?php if (!empty($ctx['whatsapp_url'])): ?> or WhatsApp<?php endif; ?>.</span></div></li>

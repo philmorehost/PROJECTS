@@ -280,6 +280,78 @@ if (!function_exists('bc_landing_services')) {
                     array('Do failed messages cost units?', 'Failed deliveries on refundable routes are credited back automatically.'),
                 ),
             ),
+            'bank-transfer' => array(
+                'name' => 'Local Bank Transfers', 'icon' => '🏦', 'app' => '/web/SendFund.php', 'tint' => '#b8f1cc',
+                'tagline' => 'Fast, reliable transfers from your wallet to any local bank account.',
+                'hero' => 'Send funds directly from your wallet to commercial and microfinance bank accounts across Nigeria with recipient name lookup and instant receipts.',
+                'features' => array(
+                    array('Recipient name verification', 'Confirm the destination account name before authorizing your transfer.'),
+                    array('Transaction PIN & OTP security', 'Every payout is protected by your transaction PIN and configured step-up security checks.'),
+                    array('Wide bank coverage', 'Transfer seamlessly to major commercial banks, digital banks, and MFBs.'),
+                    array('Traceable receipts', 'Download or share bank transfer receipts with session IDs and references anytime.'),
+                ),
+                'steps' => array('Choose destination bank and enter account number', 'Confirm verified recipient name and amount', 'Authorize with your security PIN — funds settle promptly.'),
+                'audience' => 'Individuals paying bills or family, freelancers withdrawing earnings, and merchants settling suppliers.',
+                'faqs' => array(
+                    array('How are transfer fees shown?', 'The exact fee and total debit are displayed before you confirm.'),
+                    array('Can I verify the recipient first?', 'Yes — account name lookup runs before you authorize payment.'),
+                    array('Where do receipts live?', 'Every transfer receipt is stored in your transaction history.'),
+                ),
+            ),
+            'share-fund' => array(
+                'name' => 'Share Funds (P2P)', 'icon' => '🤝', 'app' => '/web/ShareFund.php', 'tint' => '#d9d6fe',
+                'tagline' => 'Instant wallet-to-wallet transfers between platform users.',
+                'hero' => 'Move wallet funds to friends, family, teammates, or resellers on the platform in seconds — with recipient verification and full ledger records.',
+                'features' => array(
+                    array('Instant wallet settlement', 'Peer transfers reflect immediately in the recipient’s wallet.'),
+                    array('Recipient lookup', 'Verify the recipient username and profile details before sending.'),
+                    array('PIN-protected checkout', 'Transfers require your transaction PIN so your balance stays protected.'),
+                    array('Share history', 'Review every sent and received peer transfer in Share Fund History.'),
+                ),
+                'steps' => array('Enter the recipient username', 'Confirm their verified details and amount', 'Authorize with your PIN — the transfer arrives instantly.'),
+                'audience' => 'Friends splitting bills, families sharing allowances, and resellers funding sub-agents.',
+                'faqs' => array(
+                    array('Are P2P transfers instant?', 'Yes — wallet-to-wallet transfers settle immediately once confirmed.'),
+                    array('Can I reverse a sent transfer?', 'Confirmed transfers cannot be reversed automatically, so always verify the recipient name first.'),
+                    array('Is there a record?', 'Both sender and recipient see the entry in their Share Fund history.'),
+                ),
+            ),
+            'nin-card' => array(
+                'name' => 'Digital NIN Slip', 'icon' => '🪪', 'app' => '/web/NINCard.php', 'tint' => '#fde68a',
+                'tagline' => 'Verify and generate printable digital NIN slips securely.',
+                'hero' => 'Retrieve verified NIN identity details and generate standard, improved, or premium printable slip layouts directly from your account.',
+                'features' => array(
+                    array('Multiple slip layouts', 'Choose the format you need with crisp, print-ready output.'),
+                    array('Direct record verification', 'Queries authorized verification channels before rendering your slip.'),
+                    array('History & re-downloads', 'Access previously generated NIN slips from your NIN Card History.'),
+                    array('Transparent pricing', 'The applicable verification fee is displayed clearly before submission.'),
+                ),
+                'steps' => array('Enter the NIN or phone number as supported', 'Confirm the fee and layout option', 'Retrieve and print your verified digital NIN slip.'),
+                'audience' => 'Individuals needing a quick printable slip and authorized verification centres.',
+                'faqs' => array(
+                    array('Where can I re-download a slip?', 'Open NIN Card History in your account to view past verified slips.'),
+                    array('What if verification fails?', 'Failed lookups that do not return a record are handled according to provider status and refund rules.'),
+                    array('Is my data kept private?', 'Identity requests are restricted to your authenticated session.'),
+                ),
+            ),
+            'bvn-verification' => array(
+                'name' => 'BVN Verification', 'icon' => '🛡️', 'app' => '/web/BVNVerification.php', 'tint' => '#b8f1cc',
+                'tagline' => 'Fast identity verification for higher limits and compliance.',
+                'hero' => 'Verify Bank Verification Number (BVN) records securely to unlock higher wallet limits, virtual accounts, and regulated service tiers.',
+                'features' => array(
+                    array('Instant status check', 'Submit your verification details and receive real-time feedback.'),
+                    array('Higher tier access', 'Unlock eligible services, virtual accounts, and expanded transaction limits.'),
+                    array('Protected submission', 'Encrypted transport and authenticated session controls keep your details safe.'),
+                    array('Clear fee display', 'Any verification fee configured by the platform is shown upfront.'),
+                ),
+                'steps' => array('Sign in and open BVN Verification', 'Enter your BVN and required details', 'Submit to verify and upgrade your account status.'),
+                'audience' => 'Verified personal and business users unlocking full wallet and card capabilities.',
+                'faqs' => array(
+                    array('Why is BVN verification needed?', 'It helps confirm account ownership, prevent fraud, and enable higher limits and virtual bank accounts.'),
+                    array('Does verification share my bank balance?', 'No — identity verification only confirms matching identity records.'),
+                    array('Need help with a mismatch?', 'Contact support with your registered email and error details.'),
+                ),
+            ),
         );
     }
 }
@@ -412,10 +484,14 @@ if (!function_exists('bc_landing_service_control_key')) {
             'betting' => 'betting',
             'gift-cards' => 'gift_card',
             'crypto' => 'crypto_hub',
-            'international-transfer' => 'int_transfer',
+            'international-transfer' => 'intl_transfer',
             'virtual-cards' => 'virtual_card',
             'esim' => 'esim',
             'bulk-sms' => 'bulk_sms',
+            'bank-transfer' => 'bank_transfer',
+            'share-fund' => 'share_fund',
+            'nin-card' => 'nin_card',
+            'bvn-verification' => 'bvn_verify',
         );
         return $map[$slug] ?? $slug;
     }
