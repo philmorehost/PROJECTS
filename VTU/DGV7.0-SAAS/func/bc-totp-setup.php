@@ -48,6 +48,8 @@ function bc_totp_setup_process($table, $actor, $action, $input) {
 }
 function bc_totp_setup_handle($table,$actor) {
     if (!isset($_POST['totp-setup']) && !isset($_POST['totp-begin']) && !isset($_POST['totp-confirm'])) return;
+    @ini_set('display_errors', '0');
+    @ini_set('html_errors', '0');
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
     header('X-Content-Type-Options: nosniff');

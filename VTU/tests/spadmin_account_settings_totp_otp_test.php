@@ -140,5 +140,56 @@ sp_chk($err !== '', 'bc_stepup_send_email_otp surfaces failure when email sender
 $err = bc_stepup_send_email_otp(0, 'sp', 'not-an-email', 'action_channel_policy', 'Change action verification policy');
 sp_chk($err !== '', 'bc_stepup_send_email_otp rejects invalid email address');
 
+// 5. PHP 8.2+ / 8.4 dynamic property & JSON purity checks across SAAS and NON-SAAS
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $mailer_src = file_get_contents($ed . '/func/bc-mailer.php');
+    token_get_all($mailer_src, TOKEN_PARSE);
+    sp_chk(strpos($mailer_src, '$smtpMAIL->Timelimit') === false, "$ed/func/bc-mailer.php does not set undeclared PHPMailer::\$Timelimit dynamic property");
+    sp_chk(strpos($mailer_src, '$smtpMAIL->getSMTPInstance()->Timelimit') !== false, "$ed/func/bc-mailer.php configures Timelimit on SMTP instance");
+
+    $conn_src = file_get_contents($ed . '/func/bc-connect.php');
+    token_get_all($conn_src, TOKEN_PARSE);
+    sp_chk(strpos($conn_src, 'HTTP_X_REQUESTED_WITH') !== false && strpos($conn_src, "ini_set('display_errors', '0')") !== false, "$ed/func/bc-connect.php suppresses display_errors on XMLHttpRequest/JSON requests");
+
+    $compat_src = file_get_contents($ed . '/func/bc-php-compat.php');
+    token_get_all($compat_src, TOKEN_PARSE);
+    sp_chk(strpos($compat_src, 'E_STRICT') === false, "$ed/func/bc-php-compat.php avoids deprecated E_STRICT constant");
+
+    foreach (['bc-totp-setup.php', 'bc-action-policy-settings.php', 'bc-security-question-settings.php', 'bc-action-settings-unlock.php'] as $json_handler) {
+        $jh_src = file_get_contents($ed . '/func/' . $json_handler);
+        sp_chk(strpos($jh_src, "ini_set('display_errors', '0')") !== false, "$ed/func/$json_handler suppresses display_errors for JSON responses");
+    }
+}
+
+// Verify PHPMailer configuration matching bc_deliver_prepared_mail emits zero PHP 8.x warnings/deprecations
+require_once 'DGV7.0-SAAS/func/bc-mailer.php';
+$captured_php_issues = [];
+set_error_handler(function ($errno, $errstr, $errfile, $errline) use (&$captured_php_issues) {
+    $captured_php_issues[] = "$errno: $errstr ($errfile:$errline)";
+    return true;
+}, E_ALL);
+$pm = new PHPMailer\PHPMailer\PHPMailer(true);
+$pm->isSMTP();
+$pm->Host = 'mail.example.com';
+$pm->SMTPAuth = true;
+$pm->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+$pm->Port = 465;
+$pm->CharSet = 'UTF-8';
+$pm->Timeout = 5;
+$pm->getSMTPInstance()->Timelimit = 8;
+$pm->Username = 'noreply@example.com';
+$pm->Password = 'secret';
+$pm->setFrom('noreply@example.com', 'Platform');
+$pm->addAddress('spadmin@example.com');
+$pm->addReplyTo('noreply@example.com');
+$pm->IsHTML(true);
+$pm->Encoding = 'base64';
+$pm->Subject = '123456 is your Set up Google Authenticator code';
+$pm->Body = '<p>Code 123456</p>';
+$pm->AltBody = 'Code 123456';
+$pm->preSend();
+restore_error_handler();
+sp_chk($captured_php_issues === [], 'PHPMailer configuration matching bc_deliver_prepared_mail emits zero PHP warnings/deprecations: ' . implode('; ', $captured_php_issues));
+
 echo PHP_EOL . ($fail === 0 ? 'spadmin_account_settings_totp_otp: all checks passed' : "spadmin_account_settings_totp_otp: $fail FAILURES") . PHP_EOL;
 exit($fail === 0 ? 0 : 1);
