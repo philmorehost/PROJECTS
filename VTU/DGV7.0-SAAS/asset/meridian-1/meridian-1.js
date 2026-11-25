@@ -103,7 +103,15 @@
     window.location.href = world === "business" ? businessUrl : personalUrl;
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
+  var onReady = function (fn) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", fn);
+    } else {
+      fn();
+    }
+  };
+
+  onReady(function () {
     var world = document.documentElement.dataset.world;
     document.querySelectorAll('#pswitch [role="radio"][data-w]').forEach(function (choice) {
       var selected = choice.dataset.w === world;
@@ -149,20 +157,40 @@
       });
     }
 
-    // Vault jar interactive preview
-    var vaultBtn = document.getElementById("vaultBtn");
+    // Vault jar scroll-driven Goal progress (scroll down increases, scroll up decreases)
+    var vaultSection = document.getElementById("vault-ch");
     var vaultJar = document.getElementById("jar");
     var vaultBal = document.getElementById("jarAmt");
-    if (vaultBtn && vaultJar && vaultBal) {
-      var vaultSaved = 62000;
-      var vaultTarget = 400000;
-      vaultBtn.addEventListener("click", function () {
-        vaultSaved += 50000;
-        if (vaultSaved > vaultTarget) vaultSaved = 62000;
-        var pct = Math.min(0.92, Math.max(0.24, vaultSaved / vaultTarget));
-        vaultJar.style.setProperty("--fill", pct.toFixed(2));
-        vaultBal.textContent = "₦" + vaultSaved.toLocaleString("en-NG");
-      });
+    if (vaultSection && vaultJar && vaultBal) {
+      var minSaved = 62000;
+      var maxSaved = 400000;
+      var minFill = 0.24;
+      var maxFill = 0.92;
+
+      var syncVaultProgress = function () {
+        var rect = vaultSection.getBoundingClientRect();
+        var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+        var startTop = vh * 0.9;
+        var endTop = vh * 0.15;
+        var span = Math.max(120, startTop - endTop);
+        var progress = Math.max(0, Math.min(1, (startTop - rect.top) / span));
+        var curAmt = minSaved + Math.round((progress * (maxSaved - minSaved)) / 1000) * 1000;
+        var curFill = minFill + progress * (maxFill - minFill);
+        vaultJar.style.setProperty("--fill", curFill.toFixed(3));
+        vaultJar.dataset.progress = progress.toFixed(3);
+        vaultBal.textContent = "₦" + curAmt.toLocaleString("en-NG");
+      };
+
+      syncVaultProgress();
+      window.addEventListener("scroll", syncVaultProgress, { passive: true });
+      document.addEventListener("scroll", syncVaultProgress, { passive: true });
+      window.addEventListener("resize", syncVaultProgress, { passive: true });
+      if ("IntersectionObserver" in window) {
+        var vaultThresholds = [];
+        for (var vt = 0; vt <= 20; vt++) vaultThresholds.push(vt / 20);
+        var vaultObs = new IntersectionObserver(syncVaultProgress, { threshold: vaultThresholds });
+        vaultObs.observe(vaultSection);
+      }
     }
 
     // Business chapter rail switcher

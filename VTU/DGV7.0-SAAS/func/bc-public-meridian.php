@@ -284,8 +284,8 @@ if (!function_exists('bc_meridian_service_catalog')) {
                     'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
                     'items' => array(
                         array('title' => 'International Transfers', 'note' => 'Send abroad with locked FX quotes', 'href' => '/services/international-transfer.php', 'key' => 'intl_transfer'),
-                        array('title' => 'Local Bank Transfers', 'note' => 'Fast transfers to local bank accounts', 'href' => '/web/BankTransfer.php', 'key' => 'bank_transfer'),
-                        array('title' => 'Share Funds (P2P)', 'note' => 'Instant wallet-to-wallet transfers', 'href' => '/web/ShareFund.php', 'key' => 'share_fund'),
+                        array('title' => 'Local Bank Transfers', 'note' => 'Fast transfers to local bank accounts', 'href' => '/services/bank-transfer.php', 'key' => 'bank_transfer'),
+                        array('title' => 'Share Funds (P2P)', 'note' => 'Instant wallet-to-wallet transfers', 'href' => '/services/share-fund.php', 'key' => 'share_fund'),
                         array('title' => 'Multi-Currency & FX', 'note' => 'Convert across NGN, USD, GBP & EUR', 'href' => '/MultiCurrencyWallet.php', 'key' => 'currency_conversion'),
                     ),
                 ),
@@ -332,8 +332,8 @@ if (!function_exists('bc_meridian_service_catalog')) {
                     'items' => array(
                         array('title' => 'Refer & Earn', 'note' => 'Earn locked coins that unlock after $100 volume', 'href' => '/ReferAndEarn.php', 'key' => 'referral'),
                         array('title' => 'Loyalty Coin Conversion', 'note' => 'Convert unlocked coins into wallet value', 'href' => '/services/CoinConversion.php', 'key' => 'vtu_coins'),
-                        array('title' => 'Digital NIN Slip', 'note' => 'Verified identity slip retrieval', 'href' => '/web/NINCard.php', 'key' => 'nin_card'),
-                        array('title' => 'BVN Verification', 'note' => 'Fast identity verification for higher limits', 'href' => '/web/BVNVerify.php', 'key' => 'bvn_verify'),
+                        array('title' => 'Digital NIN Slip', 'note' => 'Verified identity slip retrieval', 'href' => '/services/nin-card.php', 'key' => 'nin_card'),
+                        array('title' => 'BVN Verification', 'note' => 'Fast identity verification for higher limits', 'href' => '/services/bvn-verification.php', 'key' => 'bvn_verify'),
                     ),
                 ),
             );
@@ -457,11 +457,19 @@ if (!function_exists('bc_meridian_render_catalog_section')) {
                     <p class="small" style="margin-top:4px">Items turned off in the Site Owner Service Control Center or awaiting replacement provider integration appear here until activated.</p>
                     <div class="m-cs-grid">
                         <?php foreach ($cat_data['coming_soon'] as $cs): ?>
+                        <?php if (!empty($cs['href'])): ?>
+                        <a class="m-cs-item" href="<?php echo bc_meridian_e($cs['href']); ?>">
+                            <span class="m-cs-pill"><?php echo bc_meridian_e($cs['reason']); ?></span>
+                            <h4><?php echo bc_meridian_e($cs['title']); ?></h4>
+                            <p><?php echo bc_meridian_e($cs['category']); ?> · <?php echo bc_meridian_e($cs['note']); ?></p>
+                        </a>
+                        <?php else: ?>
                         <div class="m-cs-item">
                             <span class="m-cs-pill"><?php echo bc_meridian_e($cs['reason']); ?></span>
                             <h4><?php echo bc_meridian_e($cs['title']); ?></h4>
                             <p><?php echo bc_meridian_e($cs['category']); ?> · <?php echo bc_meridian_e($cs['note']); ?></p>
                         </div>
+                        <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>

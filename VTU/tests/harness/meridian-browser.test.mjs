@@ -133,14 +133,27 @@ try {
 
   // Interactive JS checks on Personal landing page
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(baseUrl + '/', { waitUntil: 'domcontentloaded' });
+  await page.goto(baseUrl + '/', { waitUntil: 'load' });
+  await page.waitForTimeout(150);
   await page.click('#flipBtn');
   assert.equal(await page.locator('#card3d').evaluate((el) => el.classList.contains('is-flipped')), true, 'card flip toggles .is-flipped');
-  const beforeJar = await page.locator('#jarAmt').textContent();
-  await page.click('#vaultBtn');
-  const afterJar = await page.locator('#jarAmt').textContent();
-  assert.notEqual(beforeJar, afterJar, 'savings jar updates amount on Add ₦5,000');
-  checks += 2;
+
+  // Scroll-driven Goal progress on #vault-ch: scrolling down increases, scrolling up decreases
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForFunction(() => document.getElementById('jarAmt')?.textContent === '₦62,000', null, { timeout: 2000 });
+  const initialJarAmt = await page.locator('#jarAmt').textContent();
+  assert.equal(initialJarAmt, '₦62,000', 'vault starts at ₦62,000 before scrolling into section');
+  const vaultTop = await page.locator('#vault-ch').evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  await page.evaluate((y) => window.scrollTo(0, y), Math.max(0, vaultTop - 150));
+  await page.waitForFunction((prev) => document.getElementById('jarAmt')?.textContent !== prev, initialJarAmt, { timeout: 2000 });
+  const scrolledDownJarAmt = await page.locator('#jarAmt').textContent();
+  const numOf = (t) => Number(String(t).replace(/[^\d]/g, ''));
+  assert.equal(numOf(scrolledDownJarAmt) > numOf(initialJarAmt), true, `scrolling down to #vault-ch increases goal progress (${initialJarAmt} -> ${scrolledDownJarAmt})`);
+  await page.evaluate((y) => window.scrollTo(0, y), Math.max(0, vaultTop - 650));
+  await page.waitForFunction((prev) => document.getElementById('jarAmt')?.textContent !== prev, scrolledDownJarAmt, { timeout: 2000 });
+  const scrolledUpJarAmt = await page.locator('#jarAmt').textContent();
+  assert.equal(numOf(scrolledUpJarAmt) < numOf(scrolledDownJarAmt), true, `scrolling up reduces goal progress (${scrolledDownJarAmt} -> ${scrolledUpJarAmt})`);
+  checks += 4;
 
   // Interactive chapter switch on Business Dark page
   await page.goto(baseUrl + '/Business.php', { waitUntil: 'domcontentloaded' });
