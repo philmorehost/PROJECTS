@@ -865,17 +865,21 @@ if (!function_exists('bc_adm_widgets')) {
         $details = isset($GLOBALS['get_logged_admin_details']) && is_array($GLOBALS['get_logged_admin_details'])
             ? $GLOBALS['get_logged_admin_details'] : null;
 
-        if ($details && isset($details['ai_status']) && (int)$details['ai_status'] === 1):
-            $ai_token_bal = (int)($details['ai_token_balance'] ?? 0);
+        $current_page = basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '');
+        if ($details && !empty($details['username']) && $current_page !== 'SupportChat.php'):
+            $adm_base = rtrim(bc_adm_base(), '/');
+            $admin_name = trim((string)($details['username'] ?? $details['email'] ?? 'Support Agent'));
+            $chat_cfg = array(
+                'endpoint'    => $adm_base . '/bc-admin/ajax-support-chat.php',
+                'consoleUrl'  => $adm_base . '/bc-admin/SupportChat.php',
+                'settingsUrl' => $adm_base . '/bc-admin/ChatSettings.php',
+                'adminName'   => $admin_name,
+            );
             ?>
 <script>
-  window.__ai_enabled     = true;
-  window.__ai_page_slug   = '<?php echo preg_replace('/[^a-z0-9_]/', '_', strtolower(basename(isset($_SERVER['PHP_SELF']) ? (string)$_SERVER['PHP_SELF'] : '', '.php'))); ?>';
-  window.__ai_handler_url = '/web/ai-handler.php?context=admin';
-  window.__ai_guide_url   = '/web/ai-guide-cache.php?context=admin';
-  window.__ai_tokens      = <?php echo $ai_token_bal; ?>;
+  window.__bc_admin_chat = <?php echo json_encode($chat_cfg, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 </script>
-<script src="<?php echo htmlspecialchars(bc_adm_base(), ENT_QUOTES, 'UTF-8'); ?>/jsfile/ai-assistant.js" defer></script>
+<script src="<?php echo htmlspecialchars($adm_base, ENT_QUOTES, 'UTF-8'); ?>/jsfile/ai-assistant.js" defer></script>
             <?php
         endif;
 

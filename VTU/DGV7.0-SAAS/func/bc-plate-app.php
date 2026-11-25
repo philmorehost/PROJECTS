@@ -213,9 +213,8 @@ if (!function_exists('bc_app_menu')) {
             ),
             array(
                 'label' => 'Tools & API', 'icon' => 'building', 'id' => 'tools-api',
-                'match' => array('AI-Assistant.php', 'Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'handle_upgrade.php', 'BusinessUpgrade.php', 'APIDocs.php'),
+                'match' => array('Referral.php', 'BulkSMS.php', 'SubmitSenderID.php', 'Pricing.php', 'handle_upgrade.php', 'BusinessUpgrade.php', 'APIDocs.php'),
                 'items' => array(
-                    array('label' => 'Support', 'href' => 'AI-Assistant.php', 'icon' => 'chat-dots'),
                     array('label' => 'Refer & Earn', 'href' => 'Referral.php', 'icon' => 'gift', 'badge' => 'NEW', 'service' => 'referral'),
                     array('label' => 'Bulk SMS', 'href' => 'BulkSMS.php', 'icon' => 'chat-square-text', 'service' => 'bulk_sms'),
                     array('label' => 'Submit SMS ID', 'href' => 'SubmitSenderID.php', 'icon' => 'send-check', 'service' => 'bulk_sms'),
@@ -249,6 +248,7 @@ if (!function_exists('bc_app_menu')) {
                 'match' => array('AccountSettings.php', 'SiteMap.php', 'APIDocs.php'),
                 'items' => array(
                     array('label' => 'Account Settings', 'href' => 'AccountSettings.php', 'icon' => 'person-gear'),
+                    array('label' => 'Support', 'href' => 'Hub.php?g=settings-help#bcSupportSection', 'icon' => 'chat-dots'),
                     array('label' => 'Platform Guide', 'href' => 'SiteMap.php', 'icon' => 'map'),
                     array('label' => 'Developer API', 'href' => 'APIDocs.php', 'icon' => 'braces', 'tier' => 'developer_api'),
                 ),
@@ -1283,8 +1283,9 @@ if (!function_exists('bc_app_sidebar')) {
                 if (bc_app_item_visible($item, $user)) $items[] = $item;
             }
             if (!$items) continue;
-            $group_active = !empty($group['match']) && in_array($active, (array)$group['match'], true);
             $group_id = isset($group['id']) ? (string)$group['id'] : '';
+            $group_active = (!empty($group['match']) && in_array($active, (array)$group['match'], true))
+                || ($active === 'Hub.php' && isset($_GET['g']) && (string)$_GET['g'] === $group_id);
             $group_label = isset($group['label']) ? (string)$group['label'] : '';
             $group_icon = isset($group['icon']) ? (string)$group['icon'] : 'circle';
             ?>
@@ -1499,6 +1500,7 @@ if (!function_exists('bc_app_widgets')) {
      *  - the support chat widget, which self-gates on tenant settings and session.
      */
     function bc_app_widgets() {
+        global $get_logged_user_details, $connection_server;
         $user = isset($GLOBALS['get_logged_user_details']) && is_array($GLOBALS['get_logged_user_details'])
             ? $GLOBALS['get_logged_user_details'] : null;
         $host = isset($GLOBALS['web_http_host']) && $GLOBALS['web_http_host'] !== ''

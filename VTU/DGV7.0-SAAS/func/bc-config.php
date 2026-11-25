@@ -31,7 +31,7 @@ include_once(__DIR__ . "/bc-security.php"); // DGV6.90 AI Edition — Security u
 include_once(__DIR__ . "/bc-url.php");      // DGV6.90 v7.0 — Clean URL helper (bc_url())
 
 if (!$connection_server) {
-	if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/index.php", "/web/AI-Assistant.php"))) {
+	if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/index.php"))) {
 		header("Location: /index.php");
 		exit();
 	}
@@ -580,7 +580,7 @@ if ($connection_server) {
 						if($needs_bvn) $fields[] = "BVN";
 						if($needs_nin) $fields[] = "NIN";
 						$_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_user_details["firstname"]) . ", please provide your " . implode(" and ", $fields) . " securely to comply with regulations.";
-						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/AccountSettings.php", "/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php", "/web/SecurityQuest.php"))) {
+						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/AccountSettings.php", "/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/SecurityQuest.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 							header("Location: /web/AccountSettings.php");
 							exit();
 						}
@@ -667,7 +667,7 @@ if ($connection_server) {
 
 								if ($config_user_total_funding < $min_funding && empty($sec29_confined)) {
 									$_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_user_details["firstname"]) . ", kindly fund your wallet with minimum of N" . number_format($min_funding - $config_user_total_funding) . " to unlock features.";
-									if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/Dashboard.php", "/web/AISuite.php", "/web/AI-Assistant.php", "/web/SecurityQuest.php"))) {
+									if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/Dashboard.php", "/web/AISuite.php", "/web/SecurityQuest.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 										header("Location: /web/Fund.php");
 										exit();
 									}
@@ -678,7 +678,7 @@ if ($connection_server) {
 
 					// Security Question Check
 					if (bc_security_question_policy((int)$get_logged_user_details["vendor_id"])["web"] && empty($sec29_confined) && (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"])) {
-						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php"))) {
+						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 							header("Location: /web/SecurityQuest.php");
 							exit();
 						}
@@ -701,7 +701,7 @@ if ($connection_server) {
 		} else {
 			// Not logged in
 		$current_uri = explode("?", trim($_SERVER["REQUEST_URI"]))[0];
-		$public_pages = array("/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/Inactive.php", "/web/LockoutResolution.php", "/web/APIDocs.php", "/blog.php", "/single-post.php", "/web/biometric-ajax.php", "/manifest.php", "/web/ViewCryptoInvoice.php", "/web/AI-Assistant.php", "/web/Pricing.php");
+		$public_pages = array("/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/Inactive.php", "/web/LockoutResolution.php", "/web/APIDocs.php", "/blog.php", "/single-post.php", "/web/biometric-ajax.php", "/manifest.php", "/web/ViewCryptoInvoice.php", "/web/Pricing.php");
 
 		$is_public_page = false;
 		foreach($public_pages as $page) {
@@ -732,7 +732,7 @@ if ($connection_server) {
 	}
 } else {
 	//If Database Is Having Issue
-	if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/index.php", "/web/AI-Assistant.php"))) {
+	if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/index.php"))) {
 		header("Location: /index.php");
 		exit();
 	}

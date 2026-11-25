@@ -40,6 +40,9 @@ $bc_chat_vendor_id = (int)($get_logged_user_details['vendor_id'] ?? 0);
 $bc_chat_user_id   = (int)$get_logged_user_details['id'];
 $bc_chat_username  = (string)($get_logged_user_details['username'] ?? '');
 
+if (function_exists('bc_chat_schema_ready') && !bc_chat_schema_ready() && function_exists('bc_chat_ensure_schema')) {
+    bc_chat_ensure_schema();
+}
 if ($bc_chat_vendor_id <= 0 || !bc_chat_widget_enabled($bc_chat_vendor_id)) {
     bc_chat_json(['ok' => false, 'error' => 'Chat is not available.'], 404);
 }
