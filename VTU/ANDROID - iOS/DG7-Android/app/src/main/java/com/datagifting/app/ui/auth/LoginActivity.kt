@@ -97,9 +97,10 @@ class LoginActivity : AppCompatActivity() {
         }
 
         val biometricPrompt = BiometricPrompt(this, executor, callback)
+        val appTitle = prefs.getString(Constants.KEY_SITE_TITLE).ifBlank { getString(R.string.app_name) }
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Biometric Login")
-            .setSubtitle("Authenticate to access DataGifting")
+            .setSubtitle("Authenticate to access $appTitle")
             .setAllowedAuthenticators(
                 BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
             )

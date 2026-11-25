@@ -62,44 +62,62 @@
             $posts_result = mysqli_stmt_get_result($posts_stmt);
         }
     }
+    require_once __DIR__ . '/func/bc-public-meridian.php';
+    $m_ctx = bc_meridian_context();
+    $site_title_blog = trim((string)($get_site_details['site_title'] ?? ''));
+    if ($site_title_blog === '') $site_title_blog = $m_ctx['site_name'];
+    $js_config_blog = array(
+        'siteName' => $site_title_blog,
+        'appUrl' => $m_ctx['app_url'] ?? '',
+        'downloadPageUrl' => '/DownloadApp.php',
+        'businessUrl' => '/Business.php',
+        'personalUrl' => '/',
+        'registerUrl' => '/web/Register.php',
+        'loginUrl' => '/web/Login.php',
+        'rates' => $m_ctx['rates'] ?? array(),
+    );
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-world="business">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Blog & Insights | <?php echo htmlspecialchars($get_site_details['site_title'] ?? 'Our Website'); ?></title>
+    <title>Blog &amp; Insights | <?php echo htmlspecialchars($site_title_blog); ?></title>
 
+    <link rel="stylesheet" href="/asset/meridian-1/meridian-1.css">
+    <link rel="stylesheet" href="/asset/meridian-1/meridian-theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+    <script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config_blog, JSON_UNESCAPED_SLASHES); ?>;</script>
 
     <style>
         :root {
-            --accent-color: #287bff;
-            --dark-bg: #0f172a;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
+            --accent-color: #FFFFFF;
+            --dark-bg: #050507;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
         }
 
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #f8fafc;
+            font-family: 'Figtree', system-ui, sans-serif;
+            background-color: #050507;
             color: var(--text-main);
+            padding-top: 78px;
         }
 
         /* Hero / Featured Style */
         .featured-hero {
             position: relative;
-            background-color: var(--dark-bg);
-            border-radius: 30px;
+            background-color: #0B0D14;
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 26px;
             overflow: hidden;
-            margin-top: 40px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-            min-height: 500px;
+            margin-top: 32px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+            min-height: 460px;
             display: flex;
             align-items: flex-end;
         }
@@ -107,47 +125,48 @@
             position: absolute;
             top:0; left:0; width:100%; height:100%;
             object-fit: cover;
-            opacity: 0.6;
+            opacity: 0.48;
             transition: transform 0.5s ease;
         }
-        .featured-hero:hover .featured-img-bg { transform: scale(1.05); }
+        .featured-hero:hover .featured-img-bg { transform: scale(1.04); }
         .featured-overlay {
             position: relative;
             z-index: 2;
-            padding: 60px;
-            background: linear-gradient(transparent, rgba(15, 23, 42, 0.9));
+            padding: 48px;
+            background: linear-gradient(transparent, rgba(5, 5, 7, 0.94));
             width: 100%;
         }
         .category-badge {
             display: inline-block;
-            background-color: var(--accent-color);
-            color: white;
+            background-color: rgba(255,255,255,.12);
+            border: 1px solid rgba(255,255,255,.24);
+            color: #FFFFFF;
             padding: 5px 15px;
             border-radius: 50px;
             font-size: 12px;
             font-weight: 700;
             text-transform: uppercase;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         /* Grid Cards */
         .blog-card {
-            border: none;
+            border: 1px solid rgba(255,255,255,.14);
             border-radius: 20px;
-            background: white;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255,255,255,.04);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             height: 100%;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
         }
         .blog-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            transform: translateY(-6px);
+            border-color: rgba(255,255,255,.32);
         }
         .card-img-wrapper {
             position: relative;
-            border-radius: 20px;
+            border-radius: 20px 20px 0 0;
             overflow: hidden;
             aspect-ratio: 16/10;
         }
@@ -155,66 +174,62 @@
             width: 100%; height: 100%; object-fit: cover;
             transition: transform 0.5s ease;
         }
-        .blog-card:hover .card-img-wrapper img { transform: scale(1.1); }
+        .blog-card:hover .card-img-wrapper img { transform: scale(1.06); }
 
-        .card-body { padding: 25px; flex-grow: 1; }
+        .card-body { padding: 24px; flex-grow: 1; }
         .post-title {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: 700;
             line-height: 1.4;
-            margin-bottom: 15px;
-            color: var(--text-main);
+            margin-bottom: 12px;
+            color: #FFFFFF;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        .post-title a { color: #FFFFFF !important; }
         .post-excerpt {
             color: var(--text-muted);
             font-size: 0.95rem;
             line-height: 1.6;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         .meta-info {
             display: flex;
             align-items: center;
             font-size: 0.85rem;
-            color: var(--text-muted);
+            color: #94A3B8;
             gap: 15px;
         }
 
         /* Section Header */
         .section-header {
-            margin-bottom: 40px;
+            margin-bottom: 34px;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
         }
         .section-title {
             font-weight: 800;
-            font-size: 2.5rem;
+            font-size: 2.2rem;
+            color: #FFFFFF;
             position: relative;
         }
         .section-title::after {
             content: '';
             position: absolute;
             bottom: -10px; left: 0;
-            width: 60px; height: 5px;
-            background-color: var(--accent-color);
+            width: 60px; height: 4px;
+            background-color: rgba(255,255,255,.45);
             border-radius: 10px;
         }
 
-        .navbar {
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 15px 0;
-        }
-        .navbar-brand img { height: 40px; }
-
         .pagination .page-link {
-            border: none;
-            color: var(--text-main);
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(255,255,255,.05);
+            color: #F8FAFC;
             font-weight: 600;
             width: 40px; height: 40px;
             display: flex; align-items: center; justify-content: center;
@@ -222,48 +237,27 @@
             margin: 0 5px;
         }
         .pagination .page-item.active .page-link {
-            background-color: var(--accent-color);
-            color: white;
+            background-color: #FFFFFF;
+            color: #09090B;
         }
-
-        footer {
-            background-color: var(--dark-bg);
-            color: white;
-            padding: 80px 0 40px;
-            margin-top: 100px;
+        .blog-empty {
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.14);
+            color: #F8FAFC;
         }
+        .blog-empty p { color: #CBD5E1; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="index.php">
-                <img src="/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" alt="Logo">
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link" href="index.php">Home</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="blog.php">Insights</a></li>
-                    <li class="nav-item"><a class="nav-link" href="web/APIDocs.php">API Docs</a></li>
-                </ul>
-                <div class="ms-lg-4">
-                    <a href="web/Login.php" class="btn btn-outline-primary rounded-pill px-4 me-2">Login</a>
-                    <a href="web/Register.php" class="btn btn-primary rounded-pill px-4">Get Started</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+    <?php echo bc_meridian_header_and_menu($m_ctx, 'business'); ?>
 
     <div class="container py-5">
 
         <?php if ($page == 1 && $featured_post): ?>
         <div class="section-header">
             <div>
-                <span class="text-uppercase fw-bold text-primary small">Trending Stories</span>
+                <span class="text-uppercase fw-bold small" style="color:#94A3B8">Trending Stories</span>
                 <h2 class="section-title">Latest Insight</h2>
             </div>
         </div>
@@ -285,7 +279,7 @@
 
         <div class="section-header mt-5">
             <div>
-                <span class="text-uppercase fw-bold text-primary small">Explore More</span>
+                <span class="text-uppercase fw-bold small" style="color:#94A3B8">Explore More</span>
                 <h2 class="section-title">Recent Articles</h2>
             </div>
         </div>
@@ -306,7 +300,7 @@
                                     <span><i class="bi bi-clock me-2"></i>5 min read</span>
                                 </div>
                                 <h3 class="post-title">
-                                    <a href="single-post.php?id=<?php echo $post['id']; ?>" class="text-decoration-none text-dark"><?php echo htmlspecialchars($post['title']); ?></a>
+                                    <a href="single-post.php?id=<?php echo $post['id']; ?>" class="text-decoration-none"><?php echo htmlspecialchars($post['title']); ?></a>
                                 </h3>
                                 <p class="post-excerpt">
                                     <?php
@@ -314,7 +308,7 @@
                                         echo substr($content_plain, 0, 120) . '...';
                                     ?>
                                 </p>
-                                <a href="single-post.php?id=<?php echo $post['id']; ?>" class="btn btn-link p-0 text-primary fw-bold text-decoration-none">
+                                <a href="single-post.php?id=<?php echo $post['id']; ?>" class="btn btn-link p-0 fw-bold text-decoration-none" style="color:#FFFFFF">
                                     Read Article <i class="bi bi-arrow-right ms-2"></i>
                                 </a>
                             </div>
@@ -323,10 +317,10 @@
                 <?php endwhile; ?>
             <?php else: ?>
                 <div class="col-12 text-center py-5">
-                    <div class="bg-white p-5 rounded-4 shadow-sm">
-                        <i class="bi bi-journal-x display-1 text-muted"></i>
-                        <h3 class="mt-3">No more articles yet.</h3>
-                        <p class="text-muted">Stay tuned for more updates and insights.</p>
+                    <div class="blog-empty p-5 rounded-4">
+                        <i class="bi bi-journal-x display-1" style="color:#94A3B8"></i>
+                        <h3 class="mt-3 text-white">No more articles yet.</h3>
+                        <p>Stay tuned for more updates and insights.</p>
                     </div>
                 </div>
             <?php endif; ?>
@@ -348,36 +342,9 @@
 
     </div>
 
-    <footer>
-        <div class="container">
-            <div class="row g-4">
-                <div class="col-lg-4">
-                    <h5 class="fw-bold mb-4"><?php echo htmlspecialchars($get_site_details['site_title'] ?? 'Our Platform'); ?></h5>
-                    <p class="text-white-50"><?php echo htmlspecialchars($get_site_details['site_desc'] ?? ''); ?></p>
-                </div>
-                <div class="col-lg-2 ms-auto">
-                    <h6 class="fw-bold mb-4">Quick Links</h6>
-                    <ul class="list-unstyled text-white-50 small">
-                        <li class="mb-2"><a href="index.php" class="text-white-50 text-decoration-none">Home</a></li>
-                        <li class="mb-2"><a href="web/APIDocs.php" class="text-white-50 text-decoration-none">API Documentation</a></li>
-                        <li class="mb-2"><a href="web/Pricing.php" class="text-white-50 text-decoration-none">Pricing</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-3">
-                    <h6 class="fw-bold mb-4">Support</h6>
-                    <ul class="list-unstyled text-white-50 small">
-                        <li class="mb-2"><i class="bi bi-envelope me-2"></i> <?php echo htmlspecialchars($vendor_account_details['email'] ?? ''); ?></li>
-                        <li class="mb-2"><i class="bi bi-telephone me-2"></i> <?php echo htmlspecialchars($vendor_account_details['phone_number'] ?? ''); ?></li>
-                    </ul>
-                </div>
-            </div>
-            <hr class="mt-5 border-white-50 opacity-25">
-            <div class="text-center text-white-50 small pt-3">
-                <p>&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($_SERVER['HTTP_HOST']); ?>. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
+    <?php echo bc_meridian_footer($m_ctx); ?>
 
     <script src="assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/asset/meridian-1/meridian-1.js"></script>
 </body>
 </html>

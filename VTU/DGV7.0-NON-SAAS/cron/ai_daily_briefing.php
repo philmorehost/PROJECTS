@@ -38,13 +38,14 @@ if (!$ai_online) {
 // Query active vendors
 $vendors_q = mysqli_query($connection_server, "SELECT id, firstname, lastname, email, site_name FROM sas_vendors WHERE status=1 AND email != ''");
 
+if ($vendors_q instanceof mysqli_result) {
 while ($vendor = mysqli_fetch_assoc($vendors_q)) {
     $vid   = (int)$vendor['id'];
     $vname = $vendor['site_name'] ?: ($vendor['firstname'].' '.$vendor['lastname']);
 
     // Pull stats
     $stats_q = mysqli_query($connection_server, "SELECT COUNT(*) total_tx, SUM(CASE WHEN status=1 THEN 1 ELSE 0 END) successful, SUM(CASE WHEN status=1 THEN discounted_amount ELSE 0 END) revenue FROM sas_transactions WHERE vendor_id='$vid' AND DATE(date)='$yesterday'");
-    $stats = mysqli_fetch_assoc($stats_q);
+    $stats = ($stats_q instanceof mysqli_result) ? mysqli_fetch_assoc($stats_q) : null;
     if (!$stats || $stats['total_tx'] == 0) continue;
 
     $rev_fmt = '₦' . number_format($stats['revenue'], 2);
@@ -59,6 +60,7 @@ while ($vendor = mysqli_fetch_assoc($vendors_q)) {
     bc_notify_user($connection_server, $vid, '', "Daily Business Report", "Yesterday: {$stats['successful']} successful, revenue $rev_fmt", "");
     $sent++;
     echo "  ✅ Briefing sent to $vname\n";
+}
 }
 
 echo "\n[DAILY-BRIEFING] Done. Sent: $sent\n";

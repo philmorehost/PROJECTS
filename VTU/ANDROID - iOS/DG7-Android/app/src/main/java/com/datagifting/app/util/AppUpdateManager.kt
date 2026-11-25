@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.core.content.FileProvider
+import com.datagifting.app.R
 import com.datagifting.app.api.RetrofitClient
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.CoroutineScope
@@ -60,8 +61,9 @@ class AppUpdateManager(private val context: Context) {
         // Remove any previous partial download
         if (destFile.exists()) destFile.delete()
 
+        val brandName = PreferenceManager(context).getString(Constants.KEY_SITE_TITLE).ifBlank { context.getString(R.string.app_name) }
         val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
-            setTitle("DataGifting Update")
+            setTitle("$brandName Update")
             setDescription("Downloading version $versionName…")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationUri(Uri.fromFile(destFile))

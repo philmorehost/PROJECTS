@@ -32,12 +32,14 @@ echo "[DORMANT-ALERT] " . date('Y-m-d H:i:s') . " — Sweep started\n";
 
 $vendors_q = mysqli_query($connection_server, "SELECT id, firstname, site_name FROM sas_vendors WHERE status=1");
 
+if ($vendors_q instanceof mysqli_result) {
 while ($vendor = mysqli_fetch_assoc($vendors_q)) {
     $vid   = (int)$vendor['id'];
-    $vname = $vendor['site_name'] ?: $vendor['firstname'] ?: 'VTU Platform';
+    $vname = $vendor['site_name'] ?: $vendor['firstname'] ?: 'FintechFlow';
 
     $dormant_q = mysqli_query($connection_server, "SELECT u.id, u.firstname, u.username, u.email, MAX(t.date) as last_tx FROM sas_users u LEFT JOIN sas_transactions t ON t.vendor_id=u.vendor_id AND t.username=u.username AND t.status=1 WHERE u.vendor_id='$vid' AND u.status=1 AND u.email != '' GROUP BY u.id HAVING (last_tx < DATE_SUB(NOW(), INTERVAL 14 DAY)) LIMIT 50");
 
+    if ($dormant_q instanceof mysqli_result) {
     while ($user = mysqli_fetch_assoc($dormant_q)) {
         $name = $user['firstname'] ?: 'Customer';
 
@@ -56,6 +58,8 @@ while ($vendor = mysqli_fetch_assoc($vendors_q)) {
         $sent++;
         echo "  ✅ Sent to $name\n";
     }
+    }
+}
 }
 
 $elapsed = round(microtime(true) - $start, 2);

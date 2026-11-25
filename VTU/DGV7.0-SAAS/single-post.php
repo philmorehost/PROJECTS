@@ -44,143 +44,137 @@
     while($rel = mysqli_fetch_assoc($related_posts_res)) $related_posts[] = $rel;
 
     $get_site_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id='$current_vendor_id' LIMIT 1"));
+    require_once __DIR__ . '/func/bc-public-meridian.php';
+    $m_ctx = bc_meridian_context();
+    $site_title_post = trim((string)($get_site_details['site_title'] ?? ''));
+    if ($site_title_post === '') $site_title_post = $m_ctx['site_name'];
+    $js_config_post = array(
+        'siteName' => $site_title_post,
+        'appUrl' => $m_ctx['app_url'] ?? '',
+        'downloadPageUrl' => '/DownloadApp.php',
+        'businessUrl' => '/Business.php',
+        'personalUrl' => '/',
+        'registerUrl' => '/web/Register.php',
+        'loginUrl' => '/web/Login.php',
+        'rates' => $m_ctx['rates'] ?? array(),
+    );
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-world="business">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title><?php echo htmlspecialchars($post['title']); ?> | Blog</title>
+    <title><?php echo htmlspecialchars($post['title']); ?> | <?php echo htmlspecialchars($site_title_post); ?></title>
 
+    <link rel="stylesheet" href="/asset/meridian-1/meridian-1.css">
+    <link rel="stylesheet" href="/asset/meridian-1/meridian-theme.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <link href="assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+    <script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config_post, JSON_UNESCAPED_SLASHES); ?>;</script>
 
     <!-- ShareThis -->
     <script type='text/javascript' src='https://platform-api.sharethis.com/js/sharethis.js#property=65c490a071c82a001275d46a&product=inline-share-buttons' async='async'></script>
 
     <style>
         :root {
-            --accent-color: #287bff;
-            --dark-bg: #0f172a;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
+            --accent-color: #FFFFFF;
+            --dark-bg: #050507;
+            --text-main: #F8FAFC;
+            --text-muted: #CBD5E1;
         }
 
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #f8fafc;
+            font-family: 'Figtree', system-ui, sans-serif;
+            background-color: #050507;
             color: var(--text-main);
             line-height: 1.7;
+            padding-top: 78px;
         }
-
-        .navbar {
-            background-color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 15px 0;
-        }
-        .navbar-brand img { height: 40px; }
 
         .article-header {
-            padding: 60px 0;
+            padding: 52px 0 36px;
             text-align: center;
         }
         .article-title {
             font-weight: 800;
-            font-size: 3rem;
-            margin-bottom: 25px;
-            color: var(--dark-bg);
+            font-size: clamp(2rem, 4.4vw, 3rem);
+            margin-bottom: 20px;
+            color: #FFFFFF;
         }
         .article-meta {
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-wrap: wrap;
             gap: 20px;
-            color: var(--text-muted);
+            color: #94A3B8;
             font-weight: 600;
         }
 
         .featured-image-container {
-            border-radius: 30px;
+            border-radius: 26px;
             overflow: hidden;
-            box-shadow: 0 30px 60px -12px rgba(50, 50, 93, 0.25);
-            margin-bottom: 50px;
+            border: 1px solid rgba(255,255,255,.14);
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+            margin-bottom: 40px;
         }
         .featured-image-container img {
             width: 100%;
             height: auto;
-            max-height: 600px;
+            max-height: 580px;
             object-fit: cover;
         }
 
         .content-card {
-            background: white;
-            padding: 50px;
-            border-radius: 30px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.14);
+            padding: 46px;
+            border-radius: 26px;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.3);
             margin-bottom: 50px;
         }
 
         .post-body {
-            font-size: 1.15rem;
-            color: #334155;
+            font-size: 1.1rem;
+            color: #E2E8F0;
         }
-        .post-body p { margin-bottom: 25px; }
-        .post-body h2, .post-body h3 { font-weight: 700; margin: 40px 0 20px; color: var(--dark-bg); }
-        
+        .post-body p { margin-bottom: 22px; }
+        .post-body h2, .post-body h3 { font-weight: 700; margin: 36px 0 18px; color: #FFFFFF; }
+        .post-body a { color: #93C5FD; }
+
         .share-section {
-            border-top: 1px solid #e2e8f0;
-            padding-top: 30px;
-            margin-top: 50px;
+            border-top: 1px solid rgba(255,255,255,.14);
+            padding-top: 26px;
+            margin-top: 44px;
         }
 
         .related-card {
-            border: none;
+            border: 1px solid rgba(255,255,255,.14);
             border-radius: 20px;
-            background: white;
+            background: rgba(255,255,255,.04);
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.3s ease;
+            transition: transform 0.25s ease, border-color 0.25s ease;
         }
-        .related-card:hover { transform: translateY(-5px); }
+        .related-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.32); }
         .related-card img { height: 180px; object-fit: cover; }
-
-        footer {
-            background-color: var(--dark-bg);
-            color: white;
-            padding: 80px 0 40px;
-            margin-top: 100px;
-        }
+        .related-card a { color: #FFFFFF !important; }
 
         @media (max-width: 768px) {
-            .article-title { font-size: 2rem; }
-            .content-card { padding: 25px; }
+            .article-title { font-size: 1.9rem; }
+            .content-card { padding: 24px; }
         }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="index.php">
-                <img src="/uploaded-image/<?php echo str_replace(['.',':'],'-',$_SERVER['HTTP_HOST']).'_'; ?>logo.png" alt="Logo">
-            </a>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="index.php">Home</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="blog.php">Insights</a></li>
-                    <li class="nav-item"><a class="nav-link" href="web/APIDocs.php">API Docs</a></li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <?php echo bc_meridian_header_and_menu($m_ctx, 'business'); ?>
 
     <article class="container">
         <header class="article-header">
-            <span class="text-primary fw-bold text-uppercase small mb-2 d-block">Article Insight</span>
+            <span class="fw-bold text-uppercase small mb-2 d-block" style="color:#94A3B8">Article Insight</span>
             <h1 class="article-title"><?php echo htmlspecialchars($post['title']); ?></h1>
             <div class="article-meta">
                 <span><i class="bi bi-person-circle me-2"></i><?php echo htmlspecialchars($post['firstname']); ?></span>
@@ -203,7 +197,7 @@
                     </div>
 
                     <div class="share-section">
-                        <h6 class="fw-bold mb-3">Share this story</h6>
+                        <h6 class="fw-bold mb-3 text-white">Share this story</h6>
                         <!-- ShareThis Inline Buttons -->
                         <div class="sharethis-inline-share-buttons"></div>
                     </div>
@@ -211,8 +205,8 @@
 
                 <!-- Related Posts -->
                 <?php if(!empty($related_posts)): ?>
-                <div class="mt-5">
-                    <h4 class="fw-bold mb-4">You might also like</h4>
+                <div class="mt-5 mb-5">
+                    <h4 class="fw-bold mb-4 text-white">You might also like</h4>
                     <div class="row g-4">
                         <?php foreach($related_posts as $rel): ?>
                         <div class="col-md-4">
@@ -222,7 +216,7 @@
                                 </a>
                                 <div class="p-3">
                                     <h6 class="fw-bold mb-0">
-                                        <a href="single-post.php?id=<?php echo $rel['id']; ?>" class="text-decoration-none text-dark"><?php echo htmlspecialchars($rel['title']); ?></a>
+                                        <a href="single-post.php?id=<?php echo $rel['id']; ?>" class="text-decoration-none"><?php echo htmlspecialchars($rel['title']); ?></a>
                                     </h6>
                                 </div>
                             </div>
@@ -235,18 +229,9 @@
         </div>
     </article>
 
-    <footer>
-        <div class="container text-center">
-            <h5 class="fw-bold mb-4"><?php echo htmlspecialchars($get_site_details['site_title'] ?? 'Our Platform'); ?></h5>
-            <div class="d-flex justify-content-center gap-4 mb-4">
-                <a href="index.php" class="text-white-50 text-decoration-none">Home</a>
-                <a href="blog.php" class="text-white-50 text-decoration-none">Insights</a>
-                <a href="web/APIDocs.php" class="text-white-50 text-decoration-none">API Docs</a>
-            </div>
-            <p class="text-white-50 small">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($_SERVER['HTTP_HOST']); ?>. All rights reserved.</p>
-        </div>
-    </footer>
+    <?php echo bc_meridian_footer($m_ctx); ?>
 
     <script src="assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/asset/meridian-1/meridian-1.js"></script>
 </body>
 </html>

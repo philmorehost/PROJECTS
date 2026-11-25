@@ -33,6 +33,8 @@ $real_helper = substr($bcFunc, $start, $end - $start + 1);
 $src = file_get_contents($api_file);
 if ($src === false) { fwrite(STDERR, "cannot read $api_file\n"); exit(1); }
 $src = preg_replace('#include_once\("\.\./\.\./func/bc-connect\.php"\);#', '', $src, 1);
+$val_file = var_export(realpath(__DIR__ . '/../func/bc-app-update-validation.php'), true);
+$src = str_replace("__DIR__ . '/../../func/bc-app-update-validation.php'", $val_file, $src);
 $src = str_replace('header("Content-Type: application/json");', '', $src);
 $src = str_replace('exit;', 'return;', $src);
 $src = preg_replace('#^<\?php#', '', $src, 1);

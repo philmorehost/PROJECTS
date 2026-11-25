@@ -16,6 +16,8 @@ import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import com.datagifting.app.R
 import com.datagifting.app.data.model.Transaction
+import com.datagifting.app.util.Constants
+import com.datagifting.app.util.PreferenceManager
 import com.datagifting.app.util.toNaira
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.File
@@ -199,9 +201,10 @@ object ReceiptHelper {
             var y = 60f
             val lx = 40f
             val rx = (pageWidth - 40).toFloat()
+            val brandName = PreferenceManager(context).getString(Constants.KEY_SITE_TITLE).ifBlank { context.getString(R.string.app_name) }
 
             canvas.drawText("Transaction Receipt", lx, y, paintTitle); y += 24f
-            canvas.drawText("DataGifting", lx, y, paintLabel); y += 20f
+            canvas.drawText(brandName, lx, y, paintLabel); y += 20f
             canvas.drawLine(lx, y, rx, y, paintDivider); y += 24f
 
             val statusText = "${statusEmoji(tx.status)} ${statusLabel(tx.status)}"
@@ -219,7 +222,7 @@ object ReceiptHelper {
 
             y += 10f
             canvas.drawLine(lx, y, rx, y, paintDivider); y += 20f
-            canvas.drawText("Thank you for using DataGifting", lx, y, paintLabel)
+            canvas.drawText("Thank you for using $brandName", lx, y, paintLabel)
 
             pdfDoc.finishPage(page)
 

@@ -19,46 +19,23 @@ if (!function_exists('bc_landing_context')) {
     /** Resolve the vendor + programme terms for the public pages. */
     function bc_landing_context() {
         global $connection_server;
+        require_once __DIR__ . '/bc-public-meridian.php';
+        $m = bc_meridian_context();
         $ctx = array(
-            'vendor_id' => 0, 'site_name' => 'Our Platform', 'logo' => '',
-            'brand' => '#5a31f4', 'reward_usd' => 0.0, 'qualifying_usd' => 100.0,
+            'vendor_id' => $m['vendor_id'], 'site_name' => $m['site_name'], 'short_brand' => $m['short_brand'],
+            'logo' => $m['logo_url'], 'logo_url' => $m['logo_url'], 'site_desc' => $m['site_desc'],
+            'brand' => $m['primary_color'], 'primary_color' => $m['primary_color'],
+            'app_url' => $m['app_url'], 'app_badge_html' => $m['app_badge_html'],
+            'email' => $m['email'], 'phone' => $m['phone'], 'address' => $m['address'],
+            'whatsapp' => $m['whatsapp'], 'whatsapp_url' => $m['whatsapp_url'],
+            'rates' => $m['rates'], 'registration_open' => $m['registration_open'],
+            'reward_usd' => 0.0, 'qualifying_usd' => 100.0,
             'bonus_coins' => 1000, 'coin_rate' => 500.0, 'coin_min' => 100,
-            'usd_rate' => 0.0,
+            'usd_rate' => (float)($m['rates']['USD'] ?? 0.0),
         );
-        if (!($connection_server instanceof mysqli)) return $ctx;
+        if (!($connection_server instanceof mysqli) || $ctx['vendor_id'] <= 0) return $ctx;
 
-        $host = strtolower(trim(explode(':', (string)($_SERVER['HTTP_HOST'] ?? ''))[0]));
-        $vendor = null;
-        foreach (array_unique(array($host, preg_replace('/^www\./', '', $host))) as $h) {
-            if ($h === '') continue;
-            $stmt = mysqli_prepare($connection_server, "SELECT * FROM sas_vendors WHERE website_url = ? AND status = 1 LIMIT 1");
-            if (!$stmt) break;
-            mysqli_stmt_bind_param($stmt, 's', $h);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            if ($res && ($row = mysqli_fetch_assoc($res))) { $vendor = $row; mysqli_stmt_close($stmt); break; }
-            mysqli_stmt_close($stmt);
-        }
-        if (!$vendor) {
-            $q = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE status = 1 ORDER BY id ASC LIMIT 1");
-            if ($q) $vendor = mysqli_fetch_assoc($q);
-        }
-        if (!$vendor) return $ctx;
-        $ctx['vendor_id'] = (int)$vendor['id'];
-
-        $vid = (int)$vendor['id'];
-        $q = mysqli_query($connection_server, "SELECT site_title, site_logo FROM sas_site_details WHERE vendor_id='$vid' LIMIT 1");
-        if ($q && ($sd = mysqli_fetch_assoc($q))) {
-            if (!empty($sd['site_title'])) $ctx['site_name'] = (string)$sd['site_title'];
-            if (!empty($sd['site_logo'])) $ctx['logo'] = (string)$sd['site_logo'];
-        }
-        if ($ctx['site_name'] === 'Our Platform' && !empty($vendor['business_name'])) $ctx['site_name'] = (string)$vendor['business_name'];
-
-        $q = mysqli_query($connection_server, "SELECT primary_color FROM sas_vendor_style_templates WHERE vendor_id='$vid' LIMIT 1");
-        if ($q && ($r = mysqli_fetch_assoc($q)) && !empty($r['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$r['primary_color'])) {
-            $ctx['brand'] = (string)$r['primary_color'];
-        }
-
+        $vid = (int)$ctx['vendor_id'];
         if (!function_exists('bc_referral_settings') && is_file(__DIR__ . '/bc-fintech-services.php')) {
             include_once __DIR__ . '/bc-fintech-services.php';
         }
@@ -73,7 +50,7 @@ if (!function_exists('bc_landing_context')) {
             $ctx['coin_rate'] = (float)($cs['points_conversion_rate'] ?? 500);
             $ctx['coin_min'] = (int)($cs['min_points_conversion'] ?? 100);
         }
-        if (function_exists('getLiveExchangeRate')) {
+        if (function_exists('getLiveExchangeRate') && $ctx['usd_rate'] <= 0) {
             $rate = (float)getLiveExchangeRate('USD', 'NGN', $vid);
             if ($rate > 0) $ctx['usd_rate'] = $rate;
         }
@@ -311,80 +288,77 @@ if (!function_exists('bc_landing_head')) {
     function bc_landing_e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
     function bc_landing_head($ctx, $title, $desc) {
-        $brand = $ctx['brand'];
-        require_once __DIR__ . '/bc-theme.php';
-        $theme = bc_theme_palette($brand)['modes']['light'];
+        require_once __DIR__ . '/bc-public-meridian.php';
+        $js_config = array(
+            'siteName' => $ctx['site_name'],
+            'appUrl' => $ctx['app_url'] ?? '',
+            'downloadPageUrl' => '/DownloadApp.php',
+            'businessUrl' => '/Business.php',
+            'personalUrl' => '/',
+            'registerUrl' => '/web/Register.php',
+            'loginUrl' => '/web/Login.php',
+            'rates' => $ctx['rates'] ?? array(),
+        );
         ?><!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-world="business">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?php echo bc_landing_e($title); ?> | <?php echo bc_landing_e($ctx['site_name']); ?></title>
 <meta name="description" content="<?php echo bc_landing_e($desc); ?>">
+<link rel="stylesheet" href="/asset/meridian-1/meridian-1.css">
+<link rel="stylesheet" href="/asset/meridian-1/meridian-theme.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES); ?>;</script>
 <style>
-:root{--brand:<?php echo bc_landing_e($brand); ?>;--brand-fg:<?php echo $theme['on_primary']; ?>;--brand-ink:<?php echo $theme['primary_text']; ?>;--ink:#101828;--cream:#f6f3ec;--card:#ffffff;--muted:#5b6472;--line:#e7e2d6}
+:root{--ink:#F8FAFC;--cream:#050507;--card:rgba(255,255,255,.04);--muted:#CBD5E1;--line:rgba(255,255,255,.14)}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font-family:'Inter',system-ui,sans-serif;background:var(--cream);color:var(--ink)}
-h1,h2,h3,.disp{font-family:'Archivo',sans-serif;letter-spacing:-.02em}
+body{margin:0;padding-top:78px;font-family:'Figtree',system-ui,sans-serif;background:#050507;color:#F8FAFC}
+h1,h2,h3,.disp{font-family:'Figtree',sans-serif;letter-spacing:-.025em;color:#FFFFFF}
 a{color:inherit}
-.wrap{max-width:1140px;margin:0 auto;padding:0 20px}
-.nav{position:sticky;top:14px;z-index:50;display:flex;justify-content:center;padding:0 12px}
-.nav-in{background:rgba(16,24,40,.94);color:#fff;border-radius:999px;padding:10px 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;box-shadow:0 12px 32px rgba(16,24,40,.25)}
-.nav-in a{padding:9px 15px;border-radius:999px;font-weight:600;font-size:14px;text-decoration:none}
-.nav-in a:hover{background:rgba(255,255,255,.12)}
-.nav-in a.on{background:var(--brand)}
-.nav-in .cta{background:#fff;color:var(--ink)}
-.hero{padding:72px 0 30px;text-align:center}
-.kick{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
-.hero h1{font-size:clamp(42px,7.2vw,84px);line-height:.98;margin:22px 0 14px;font-weight:900;text-transform:uppercase}
-.hero h1 .hl{color:var(--brand-ink)}
-.hero p{max-width:640px;margin:0 auto;color:var(--muted);font-size:19px;line-height:1.55}
-.btn{display:inline-block;border-radius:999px;padding:15px 30px;font-weight:700;text-decoration:none;font-size:16px}
-.btn-dark{background:var(--ink);color:#fff}.btn-brand{background:var(--brand);color:var(--brand-fg);border:1px solid var(--brand-ink)}
-.hero-cta{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:38px 0 8px}
-.stat{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 22px;text-align:left;min-width:170px}
-.stat b{font-family:'Archivo';font-size:24px;display:block}
-.stat span{color:var(--muted);font-size:13px}
-.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:34px 0}
-.step{border-radius:26px;padding:28px;min-height:230px}
-.step .n{font-family:'Archivo';font-weight:900;font-size:15px;text-transform:uppercase;opacity:.65}
-.step h3{font-size:28px;margin:10px 0 8px}
-.step p{margin:0;line-height:1.55}
-section.blk{padding:56px 0}
-.blk h2{font-size:clamp(30px,4.4vw,48px);text-transform:uppercase;margin:0 0 10px}
-.blk .sub{color:var(--muted);max-width:620px;line-height:1.6}
-.feat{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:28px}
-.feat .f{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px}
-.feat .f b{display:block;font-size:17px;margin-bottom:6px}
-.feat .f p{margin:0;color:var(--muted);line-height:1.55}
-.calc{background:var(--ink);color:#fff;border-radius:30px;padding:34px;margin:20px 0}
-.calc h2{color:#fff}
-.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:18px}
-.calc label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.75;display:block;margin-bottom:8px}
-.calc input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:14px;padding:14px;font-size:18px;font-weight:700}
-.calc .out{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:20px}
-.calc .out b{font-family:'Archivo';font-size:30px;display:block;color:#b8f1cc}
-.calc .out span{opacity:.75;font-size:14px;line-height:1.5;display:block}
-details{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:10px 0}
-summary{font-weight:700;cursor:pointer}
-details p{color:var(--muted);line-height:1.6;margin:10px 0 0}
-.grid-svc{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
-.svc{background:#fff;border:1px solid var(--line);border-radius:24px;padding:26px;text-decoration:none;display:block;transition:transform .15s}
-.svc:hover{transform:translateY(-4px)}
-.svc .ic{font-size:34px}
-.svc h3{margin:12px 0 6px;font-size:22px}
-.svc p{color:var(--muted);margin:0;line-height:1.55}
-.svc .go{margin-top:14px;font-weight:700;color:var(--brand-ink)}
-.cta-band{background:var(--brand);color:#fff;border-radius:30px;padding:44px 30px;text-align:center;margin:30px 0 60px}
-.cta-band h2{color:#fff;margin:0 0 8px}
-footer{border-top:1px solid var(--line);padding:34px 0 44px;color:var(--muted);font-size:14px}
-footer .cols{display:flex;gap:34px;flex-wrap:wrap;justify-content:space-between}
-footer a{display:block;margin:7px 0;text-decoration:none}
-footer b{color:var(--ink)}
-@media(max-width:860px){.cards3,.grid-svc{grid-template-columns:1fr}.feat,.calc-grid{grid-template-columns:1fr}.hero{padding:48px 0 20px}}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+.hero{padding:64px 0 30px;text-align:center}
+.kick,.eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#E2E8F0;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.hero h1{font-size:clamp(34px,5.6vw,64px);line-height:1.04;margin:20px 0 14px;font-weight:900}
+.hero h1 .hl{color:#E2E8F0;text-decoration:underline;text-decoration-color:rgba(255,255,255,.35);text-underline-offset:6px}
+.hero p{max-width:660px;margin:0 auto 12px;color:#CBD5E1;font-size:18px;line-height:1.6}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 26px;font-weight:700;text-decoration:none;font-size:15px}
+.btn-dark{background:#FFFFFF;color:#09090B;border:1px solid rgba(255,255,255,.22)}
+.btn-brand{background:rgba(255,255,255,.08);color:#FFFFFF;border:1px solid rgba(255,255,255,.22)}
+.btn-dark:hover{background:#E2E8F0}.btn-brand:hover{background:rgba(255,255,255,.15)}
+.hero-cta{margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:34px 0 8px}
+.stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:16px 22px;text-align:left;min-width:170px}
+.stat b{font-size:22px;display:block;color:#FFFFFF}
+.stat span{color:#94A3B8;font-size:13px}
+.cards3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:32px 0}
+.step,.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:26px;color:#F8FAFC}
+.step .n{font-weight:800;font-size:13px;text-transform:uppercase;color:#94A3B8;letter-spacing:.08em}
+.step h3,.card h3{font-size:22px;margin:10px 0 8px}
+.step p,.card p{margin:0;color:#CBD5E1;line-height:1.55}
+section.blk,section.section{padding:44px 0}
+.blk h2,.section h2{font-size:clamp(26px,3.8vw,40px);margin:0 0 10px}
+.blk .sub{color:#CBD5E1;max-width:620px;line-height:1.6}
+.feat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
+.feat .f{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:22px}
+.feat .f b{display:block;font-size:17px;margin-bottom:6px;color:#FFFFFF}
+.feat .f p{margin:0;color:#CBD5E1;line-height:1.55}
+details{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px 20px;margin:10px 0}
+summary{font-weight:700;cursor:pointer;color:#FFFFFF}
+details p{color:#CBD5E1;line-height:1.6;margin:10px 0 0}
+.grid-svc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px}
+.svc{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px;text-decoration:none;display:block;transition:transform .15s,border-color .15s}
+.svc:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.32)}
+.svc .ic{font-size:32px}
+.svc h3{margin:12px 0 6px;font-size:21px;color:#FFFFFF}
+.svc p{color:#CBD5E1;margin:0;line-height:1.55}
+.svc .go{margin-top:14px;font-weight:700;color:#FFFFFF}
+.cta-band{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#FFFFFF;border-radius:26px;padding:40px 28px;text-align:center;margin:32px 0 54px}
+.cta-band h2{color:#FFFFFF;margin:0 0 8px}
+.cta-band p{color:#CBD5E1}
+@media(max-width:860px){.cards3,.grid-svc,.feat{grid-template-columns:1fr}.hero{padding:40px 0 20px}}
 </style>
 </head>
 <body>
@@ -392,51 +366,18 @@ footer b{color:var(--ink)}
     }
 
     function bc_landing_nav($ctx, $active = '') {
-        $items = array(
-            'home' => array('/', 'Home'),
-            'services' => array('/Services.php', 'Services'),
-            'freelancers' => array('/Freelancers.php', 'Freelancers'),
-            'refer' => array('/ReferAndEarn.php', 'Refer & Earn'),
-            'login' => array('/web/Login.php', 'Log in'),
-        );
-        ?>
-<div class="nav"><nav class="nav-in">
-    <?php foreach ($items as $key => $it): ?>
-        <a href="<?php echo bc_landing_e($it[0]); ?>"<?php echo $active === $key ? ' class="on"' : ''; ?>><?php echo bc_landing_e($it[1]); ?></a>
-    <?php endforeach; ?>
-    <a class="cta" href="/web/Register.php">Start free</a>
-</nav></div>
-<?php
+        require_once __DIR__ . '/bc-public-meridian.php';
+        echo bc_meridian_header_and_menu($ctx, 'business');
     }
 
     function bc_landing_foot($ctx) {
-        ?>
-<footer><div class="wrap"><div class="cols">
-    <div><b><?php echo bc_landing_e($ctx['site_name']); ?></b><br>Everyday bills, global money — one wallet.</div>
-    <div><b>Services</b>
-        <a href="/Services.php">All services</a>
-        <?php foreach (array_slice(bc_landing_services(), 0, 5, true) as $slug => $s): ?><a href="/services/<?php echo bc_landing_e($slug); ?>.php"><?php echo bc_landing_e($s['name']); ?></a><?php endforeach; ?>
-    </div>
-    <div><b>Earn</b>
-        <a href="/ReferAndEarn.php">Refer &amp; Earn</a>
-        <a href="/ReferAndEarn.php">My referral dashboard</a>
-        <a href="/services/CoinConversion.php">Convert coins</a>
-    </div>
-    <div><b>Account</b>
-        <a href="/web/Register.php">Create account</a>
-        <a href="/web/Login.php">Log in</a>
-        <a href="/blog.php">Blog</a>
-        <a href="/Privacy.php">Privacy Policy</a>
-        <a href="/Terms.php">Terms of Service</a>
-        <a href="/web/DeleteAccount.php">Delete my account</a>
-    </div>
-<?php require_once __DIR__ . '/bc-public-pages.php'; bc_public_directory_html(); ?>
-</div>
-<p style="margin-top:26px">© <?php echo date('Y'); ?> <?php echo bc_landing_e($ctx['site_name']); ?>. Virtual assets and international transfers carry risk — only transact what you understand and can afford.</p>
-</div></footer>
-</body>
-</html>
-<?php
+        require_once __DIR__ . '/bc-public-meridian.php';
+        require_once __DIR__ . '/bc-public-pages.php';
+        ob_start();
+        bc_public_directory_html();
+        $directory_html = ob_get_clean();
+        echo bc_meridian_footer($ctx, $directory_html);
+        echo '<script src="/asset/meridian-1/meridian-1.js"></script></body></html>';
     }
 }
 
@@ -451,28 +392,64 @@ if (!function_exists('bc_landing_render_referral')) {
 <div class="wrap"><div class="hero"><span class="kick">Grow together</span>
 <h1>Real friends.<br><span class="hl">Real progress.</span></h1>
 <p>Earn <strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong> when a friend you refer completes <strong>$100</strong> in verified Crypto or International Transfers. Referral coins stay locked until the conditions are met.</p>
-<div class="hero-cta"><a class="btn btn-brand" href="/ReferAndEarn.php">See my referral growth</a><a class="btn btn-dark" href="#how">How it works</a></div>
+<div class="hero-cta"><a class="btn btn-dark" href="/ReferAndEarn.php">See my referral growth</a><a class="btn btn-brand" href="#how">How it works</a></div>
 <div class="stats"><div class="stat"><b><?php echo number_format($coins); ?> coins</b><span>current reward per qualified friend</span></div><div class="stat"><b>$100</b><span>minimum verified transaction volume</span></div><div class="stat"><b>0 spendable</b><span>until your friend qualifies</span></div><div class="stat"><b>One reward</b><span>per genuine referred friend</span></div></div></div>
-<div class="cards3" id="how"><div class="step" style="background:#b8f1cc"><div class="n">01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></div><div class="step" style="background:#d9d6fe"><div class="n">02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed and amount remaining toward $100. Pending requests and quotes do not count.</p></div><div class="step" style="background:#fde68a"><div class="n">03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, the referrer's coins unlock for conversion. No separate cash reward is paid to either wallet.</p></div></div>
+<div class="cards3" id="how"><div class="step"><div class="n">01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></div><div class="step"><div class="n">02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed and amount remaining toward $100. Pending requests and quotes do not count.</p></div><div class="step"><div class="n">03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, the referrer's coins unlock for conversion. No separate cash reward is paid to either wallet.</p></div></div>
 <section class="blk"><h2>Understand your reward</h2><div class="feat"><div class="f"><b>Only settled activity</b><p>Completed Crypto trades and International Transfers count after provider confirmation. Deposits, funding, internal transfers, fees, failed transactions, requests and quotes do not count.</p></div><div class="f"><b>Locked means locked</b><p>Pending referral coins cannot be spent, converted or withdrawn. A reversal that brings qualifying volume below $100 revokes the reward.</p></div><div class="f"><b>Coins to wallet funds</b><p>The current conversion rate is <?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins per ₦1. Conversion requests require at least <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins and admin approval. Bank withdrawals remain subject to wallet limits.</p></div><div class="f"><b>Genuine referrals only</b><p>Self-referrals do not qualify. Active accounts, distinct contact details, verified emails and settlement review are required. Rewards cannot be earned repeatedly by reversing and repeating a transaction.</p></div></div></section>
 <div class="cta-band"><h2>Your next milestone starts with a friend.</h2><p>See who joined, what remains and which rewards are unlocked.</p><a class="btn btn-dark" href="/ReferAndEarn.php">Open referral dashboard</a></div></div>
 <?php bc_landing_foot($ctx);
     }
 }
 
+if (!function_exists('bc_landing_service_control_key')) {
+    function bc_landing_service_control_key($slug) {
+        $map = array(
+            'airtime' => 'airtime',
+            'data' => 'data',
+            'cable-tv' => 'cable',
+            'electricity' => 'electric',
+            'exam-pins' => 'exam',
+            'betting' => 'betting',
+            'gift-cards' => 'gift_card',
+            'crypto' => 'crypto_hub',
+            'international-transfer' => 'int_transfer',
+            'virtual-cards' => 'virtual_card',
+            'esim' => 'esim',
+            'bulk-sms' => 'bulk_sms',
+        );
+        return $map[$slug] ?? $slug;
+    }
+}
+
 if (!function_exists('bc_landing_render_services_index')) {
     function bc_landing_render_services_index($ctx) {
-        bc_landing_head($ctx, 'Services', 'Every service on ' . $ctx['site_name'] . ' — bills, data, crypto, transfers, cards and more, explained.');
+        require_once __DIR__ . '/bc-public-meridian.php';
+        $vid = (int)($ctx['vendor_id'] ?? 0);
+        $live = array();
+        $coming_soon = array();
+        foreach (bc_landing_services() as $slug => $s) {
+            $ctrl = bc_landing_service_control_key($slug);
+            if (bc_meridian_service_enabled($ctrl, $vid)) {
+                $live[$slug] = $s;
+            } else {
+                $coming_soon[$slug] = array(
+                    'service' => $s,
+                    'reason' => ($ctrl === 'crypto_hub') ? 'Pending replacement integration' : 'Coming Soon',
+                );
+            }
+        }
+        bc_landing_head($ctx, 'Services', 'Every service on ' . $ctx['site_name'] . ' — bills, data, transfers, cards and more, explained.');
         bc_landing_nav($ctx, 'services');
         ?>
 <div class="wrap">
     <div class="hero">
         <span class="kick">Services</span>
         <h1>Everything your<br><span class="hl">wallet can do.</span></h1>
-        <p>One account for everyday bills and global money. Pick a service to see exactly how it works, what it costs, and how fast it delivers.</p>
+        <p>One account for everyday bills and global money. Pick an active service below to see how it works, or check Coming Soon for services awaiting activation.</p>
     </div>
+    <?php if (!empty($live)): ?>
     <div class="grid-svc">
-        <?php foreach (bc_landing_services() as $slug => $s): ?>
+        <?php foreach ($live as $slug => $s): ?>
         <a class="svc" href="/services/<?php echo bc_landing_e($slug); ?>.php">
             <div class="ic"><?php echo $s['icon']; ?></div>
             <h3><?php echo bc_landing_e($s['name']); ?></h3>
@@ -481,9 +458,26 @@ if (!function_exists('bc_landing_render_services_index')) {
         </a>
         <?php endforeach; ?>
     </div>
+    <?php endif; ?>
+    <?php if (!empty($coming_soon)): ?>
+    <div class="m-cs-band" id="coming-soon">
+        <p class="eyebrow"><i></i>Coming Soon &amp; Service Rollout</p>
+        <h3 style="margin-top:8px">Services currently paused or pending integration</h3>
+        <p class="small" style="margin-top:4px">Services turned off in the Site Owner Service Control Center or awaiting replacement provider integration appear here until activated.</p>
+        <div class="m-cs-grid">
+            <?php foreach ($coming_soon as $slug => $cs): $s = $cs['service']; ?>
+            <a class="m-cs-item" href="/services/<?php echo bc_landing_e($slug); ?>.php" style="text-decoration:none;display:block">
+                <span class="m-cs-pill"><?php echo bc_landing_e($cs['reason']); ?></span>
+                <h4><?php echo bc_landing_e($s['name']); ?></h4>
+                <p><?php echo bc_landing_e($s['tagline']); ?></p>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
     <div class="cta-band">
         <h2>One wallet. Every service.</h2>
-        <p style="opacity:.9">Fund once and spend across bills, crypto, transfers and cards — earning coins as you go.</p>
+        <p style="opacity:.9">Fund once and spend across active bills, transfers and cards — earning coins as you go.</p>
         <a class="btn btn-dark" href="/web/Register.php">Create free account</a>
     </div>
 </div>
@@ -494,19 +488,31 @@ if (!function_exists('bc_landing_render_services_index')) {
 
 if (!function_exists('bc_landing_render_service')) {
     function bc_landing_render_service($ctx, $slug) {
+        require_once __DIR__ . '/bc-public-meridian.php';
         $all = bc_landing_services();
         if (!isset($all[$slug])) { $slug = 'airtime'; }
         $s = $all[$slug];
+        $vid = (int)($ctx['vendor_id'] ?? 0);
+        $ctrl = bc_landing_service_control_key($slug);
+        $is_live = bc_meridian_service_enabled($ctrl, $vid);
+        $status_label = ($ctrl === 'crypto_hub') ? 'Coming Soon — Pending replacement integration' : 'Coming Soon — Currently paused by platform operator';
         bc_landing_head($ctx, $s['name'], $s['tagline'] . ' — on ' . $ctx['site_name'] . '.');
         bc_landing_nav($ctx, 'services');
         ?>
 <div class="wrap">
     <div class="hero">
         <span class="kick"><?php echo $s['icon']; ?> <?php echo bc_landing_e($s['name']); ?></span>
+        <?php if (!$is_live): ?>
+        <div style="margin-top:14px"><span class="m-cs-pill"><?php echo bc_landing_e($status_label); ?></span></div>
+        <?php endif; ?>
         <h1><?php echo bc_landing_e($s['tagline']); ?></h1>
         <p><?php echo bc_landing_e($s['hero']); ?></p>
         <div class="hero-cta">
+            <?php if ($is_live): ?>
             <a class="btn btn-dark" href="<?php echo bc_landing_e($s['app']); ?>">Use <?php echo bc_landing_e($s['name']); ?></a>
+            <?php else: ?>
+            <a class="btn btn-dark" href="/Services.php">Browse active services</a>
+            <?php endif; ?>
             <a class="btn btn-brand" href="/Services.php">All services</a>
         </div>
     </div>
@@ -521,8 +527,8 @@ if (!function_exists('bc_landing_render_service')) {
     </section>
 
     <div class="cards3">
-        <?php $tints = array('#b8f1cc', '#d9d6fe', '#fde68a'); foreach ($s['steps'] as $i => $step): ?>
-        <div class="step" style="background:<?php echo $tints[$i % 3]; ?>"><div class="n">Step <?php echo $i + 1; ?></div><h3><?php echo $i === 0 ? 'Start' : ($i === 1 ? 'Confirm' : 'Done'); ?></h3><p><?php echo bc_landing_e($step); ?></p></div>
+        <?php foreach ($s['steps'] as $i => $step): ?>
+        <div class="step"><div class="n">Step <?php echo $i + 1; ?></div><h3><?php echo $i === 0 ? 'Start' : ($i === 1 ? 'Confirm' : 'Done'); ?></h3><p><?php echo bc_landing_e($step); ?></p></div>
         <?php endforeach; ?>
     </div>
 

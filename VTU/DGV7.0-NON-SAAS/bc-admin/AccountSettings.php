@@ -272,7 +272,7 @@ if (mysqli_num_rows($check_col) == 0) {
 // Only templates that have a real index-bc-style-template-N.php page are offered: index.php falls back
 // to template 1 when the file is missing, so listing 4 and 5 would look like a working choice and
 // silently do nothing.
-$style_templates = array("bc-style-template-1.css", "bc-style-template-2.css", "bc-style-template-3.css", "bc-style-template-6.css");
+$style_templates = array("bc-style-template-meridian-1.css", "bc-style-template-1.css", "bc-style-template-2.css", "bc-style-template-3.css", "bc-style-template-6.css");
 
 if (isset($_POST["update-theme"])) {
     bc_demo_guard_edit($connection_server);
@@ -304,17 +304,14 @@ if (isset($_POST["update-theme"])) {
         }
         $json_response_encode = json_encode($json_response_array, true);
     } else {
-        if (empty($color_scheme)) {
-            //Theme Field Empty
-            $json_response_array = array("desc" => "Theme Field Empty");
-            $json_response_encode = json_encode($json_response_array, true);
+        if (empty($template)) {
+            $json_response_array = array("desc" => "Template Selection Empty");
+        } elseif (!in_array($template, $style_templates, true)) {
+            $json_response_array = array("desc" => "Invalid Template Selected");
         } else {
-            if (!in_array($color_scheme, $color_schemes)) {
-                //Invalid Theme Type
-                $json_response_array = array("desc" => "Invalid Theme Type");
-                $json_response_encode = json_encode($json_response_array, true);
-            }
+            $json_response_array = array("desc" => "Invalid Primary Color (use #RRGGBB)");
         }
+        $json_response_encode = json_encode($json_response_array, true);
     }
 
     $_SESSION["product_purchase_response"] = $json_response_array["desc"] ?? "Settings saved";
@@ -1508,16 +1505,19 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                     <div class="col-md-8">
                                         <label class="form-label small fw-bold text-muted">SELECT LANDING PAGE TEMPLATE</label>
                                         <select name="template-name" class="form-select rounded-3 mb-3">
-                                            <?php foreach($style_templates as $tmpl):
-                                                $selected = (($current_theme['template_name'] ?? '') == $tmpl) ? 'selected' : '';
+                                            <?php $active_tmpl = !empty($current_theme['template_name']) ? $current_theme['template_name'] : 'bc-style-template-meridian-1.css';
+                                            foreach($style_templates as $tmpl):
+                                                $selected = ($active_tmpl == $tmpl) ? 'selected' : '';
+                                                $suffix = ($tmpl === "bc-style-template-meridian-1.css") ? " &#8212; MERIDIAN-1 (DEFAULT)" : (($tmpl === "bc-style-template-6.css") ? " &#8212; PLATE" : "");
                                             ?>
-                                                <option value="<?php echo $tmpl; ?>" <?php echo $selected; ?>><?php echo str_replace(".css", "", strtoupper($tmpl)); ?><?php echo ($tmpl === "bc-style-template-6.css") ? " &#8212; PLATE" : ""; ?></option>
+                                                <option value="<?php echo $tmpl; ?>" <?php echo $selected; ?>><?php echo str_replace(".css", "", strtoupper($tmpl)) . $suffix; ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small fw-bold text-muted">PRIMARY THEME COLOR</label>
-                                        <input type="color" name="primary-color" value="<?php echo $current_theme['primary_color'] ?? '#287bff'; ?>" class="form-control form-control-color w-100 rounded-3 mb-3" title="Choose your primary color">
+                                        <input type="color" name="primary-color" value="<?php echo $current_theme['primary_color'] ?? '#287bff'; ?>" class="form-control form-control-color w-100 rounded-3 mb-1" title="Choose your primary color">
+                                        <div class="form-text small text-muted">Controls Meridian-1 Personal glassmorphism &amp; mobile apps.</div>
                                     </div>
                                 </div>
                                 <button name="update-theme" class="btn btn-primary px-5 rounded-pill fw-bold">Save Custom Branding</button>
