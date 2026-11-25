@@ -388,8 +388,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        let activeStep = 1;
         try {
             // STEP 1: DOWNLOAD PACKAGE
+            activeStep = 1;
             setStepStatus(1, 'active');
             let formData = new FormData();
             formData.append('expected_hash', expectedHash);
@@ -409,6 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
             let backupData = { status: 'success', backup_zip: '', backup_sql: '' };
 
             if (performBackup) {
+                activeStep = 2;
                 setStepStatus(2, 'active');
                 let backupResponse = await fetch('ajax_backup.php', { method: 'POST' });
                 backupData = await backupResponse.json();
@@ -423,6 +426,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // STEP 3: EXTRACT AND EXECUTE MIGRATIONS
+            activeStep = 3;
             setStepStatus(3, 'active');
             let executeFormData = new FormData();
             executeFormData.append('backup_zip', backupData.backup_zip || '');
@@ -457,9 +461,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             // ERROR FLOW
-            setStepStatus(1, 'error');
-            setStepStatus(2, 'error');
-            setStepStatus(3, 'error');
+            setStepStatus(activeStep, 'error');
             
             alertBox.className = 'alert alert-danger mt-4 rounded-3 shadow-sm border-0 p-4';
             alertBox.innerHTML = '<h5 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Installation Failed</h5><p class="mb-0 small">' + error.message + '</p>';

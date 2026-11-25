@@ -280,6 +280,8 @@ foreach (array('.transition-hover:hover', '.balance-hero {', 'linear-gradient(13
     chk(strpos($app_src, $marker) !== false, 'visual pass covers ' . $marker);
 }
 chk(strpos($html, 'linear-gradient(135deg, var(--brand)') !== false, 'visual pass CSS reaches the rendered head');
+chk(strpos($app_src, '.pk-app__wrap [hidden] { display: none !important; }') !== false, 'hidden attribute CSS override protection is present');
+chk(file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-plate-app.php') === $app_src, 'SAAS and NON-SAAS bc-plate-app.php match');
 
 // ---------------------------------------------------------------- legacy widgets
 // The retired bc-header/bc-footer injected the AI assistant, the referral modal and

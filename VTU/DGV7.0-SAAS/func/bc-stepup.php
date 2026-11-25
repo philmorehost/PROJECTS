@@ -533,6 +533,7 @@ if (!function_exists('bc_auth_epoch_bump')) {
             return 0;
         }
         @mysqli_query($connection_server, "UPDATE sas_app_tokens SET revoked_at = NOW(), revoke_reason = 'platform_logout_all' WHERE revoked_at IS NULL");
+        @mysqli_query($connection_server, "UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = 'platform_logout_all' WHERE ended_at IS NULL");
         unset($GLOBALS['bc_auth_epoch_cache']);
         return bc_auth_epoch();
     }
@@ -543,6 +544,7 @@ if (!function_exists('bc_auth_epoch_stamp')) {
     function bc_auth_epoch_stamp() {
         if (session_status() === PHP_SESSION_ACTIVE) {
             $_SESSION['bc_auth_epoch'] = bc_auth_epoch();
+            unset($_SESSION['bc_web_session_token'], $_SESSION['bc_web_session_touch_ts']);
         }
     }
 }
@@ -566,6 +568,174 @@ if (!function_exists('bc_auth_epoch_session_ok')) {
             return true;
         }
         return false;
+    }
+}
+
+// ───────────────────── web session registry & live/history tracking ─────────────────────
+
+if (!function_exists('bc_web_sessions_ensure_schema')) {
+    function bc_web_sessions_ensure_schema() {
+        static $done = false;
+        if ($done) return true;
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return false;
+        $ok = @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_web_sessions (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            session_token_hash CHAR(64) NOT NULL,
+            role ENUM('user','vendor','spadmin') NOT NULL,
+            vendor_id INT UNSIGNED NOT NULL DEFAULT 0,
+            actor_id INT UNSIGNED NOT NULL DEFAULT 0,
+            actor_ref VARCHAR(190) NOT NULL DEFAULT '',
+            ip_address VARCHAR(64) NOT NULL DEFAULT '',
+            user_agent VARCHAR(255) NOT NULL DEFAULT '',
+            epoch INT UNSIGNED NOT NULL DEFAULT 1,
+            started_at DATETIME NOT NULL,
+            last_seen_at DATETIME NOT NULL,
+            ended_at DATETIME NULL DEFAULT NULL,
+            end_reason VARCHAR(64) NULL DEFAULT NULL,
+            UNIQUE KEY uq_web_session_hash (session_token_hash),
+            KEY idx_live_role (ended_at, role, last_seen_at),
+            KEY idx_actor (role, vendor_id, actor_id, ended_at),
+            KEY idx_started (started_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        if ($ok) $done = true;
+        return (bool)$ok;
+    }
+}
+
+if (!function_exists('bc_web_session_current_hash')) {
+    function bc_web_session_current_hash() {
+        if (session_status() !== PHP_SESSION_ACTIVE) return '';
+        $tok = $_SESSION['bc_web_session_token'] ?? '';
+        if (!is_string($tok) || $tok === '') return '';
+        return hash('sha256', $tok);
+    }
+}
+
+if (!function_exists('bc_web_session_touch_and_check')) {
+    /**
+     * Registers/touches the active browser session in sas_web_sessions and verifies
+     * it has not been individually revoked by an administrator.
+     * Returns true if allowed to continue, false if explicitly ended/revoked.
+     */
+    function bc_web_session_touch_and_check($role, $actor_row) {
+        if (session_status() !== PHP_SESSION_ACTIVE) return true;
+        if (!in_array($role, array('user', 'vendor', 'spadmin'), true) || !is_array($actor_row)) return true;
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return true;
+        if (!bc_web_sessions_ensure_schema()) return true;
+
+        $actor_id = (int)($actor_row['id'] ?? 0);
+        $vendor_id = ($role === 'user') ? (int)($actor_row['vendor_id'] ?? 0) : (($role === 'vendor') ? $actor_id : 0);
+        $actor_ref = ($role === 'user')
+            ? (string)($actor_row['username'] ?? ($actor_row['email'] ?? ''))
+            : (string)($actor_row['email'] ?? '');
+        $ip = substr((string)($_SERVER['REMOTE_ADDR'] ?? ''), 0, 64);
+        $ua = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+        $epoch = bc_auth_epoch();
+
+        $hash = bc_web_session_current_hash();
+        if ($hash !== '') {
+            $row = bc_q_row("SELECT id, ended_at FROM sas_web_sessions WHERE session_token_hash = ? LIMIT 1", array($hash));
+            if (is_array($row)) {
+                if (!empty($row['ended_at'])) {
+                    return false;
+                }
+                $last_ts = (int)($_SESSION['bc_web_session_touch_ts'] ?? 0);
+                if (time() - $last_ts >= 60) {
+                    bc_q("UPDATE sas_web_sessions SET last_seen_at = NOW(), ip_address = ?, user_agent = ?, epoch = ? WHERE id = ?", array($ip, $ua, $epoch, (int)$row['id']));
+                    $_SESSION['bc_web_session_touch_ts'] = time();
+                }
+                return true;
+            }
+        }
+
+        try {
+            $token = bin2hex(random_bytes(16));
+        } catch (Throwable $e) {
+            $token = hash('sha256', uniqid((string)$actor_id, true));
+        }
+        $_SESSION['bc_web_session_token'] = $token;
+        $_SESSION['bc_web_session_touch_ts'] = time();
+        $new_hash = hash('sha256', $token);
+        bc_q("INSERT INTO sas_web_sessions (session_token_hash, role, vendor_id, actor_id, actor_ref, ip_address, user_agent, epoch, started_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE last_seen_at = NOW()", array(
+            $new_hash, $role, $vendor_id, $actor_id, substr($actor_ref, 0, 190), $ip, $ua, $epoch
+        ));
+        return true;
+    }
+}
+
+if (!function_exists('bc_web_session_end_current')) {
+    function bc_web_session_end_current($reason = 'logout') {
+        $hash = bc_web_session_current_hash();
+        if ($hash === '') return false;
+        global $connection_server;
+        if (!($connection_server instanceof mysqli)) return false;
+        if (!bc_web_sessions_ensure_schema()) return false;
+        $affected = 0;
+        bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = ? WHERE session_token_hash = ? AND ended_at IS NULL", array(
+            substr((string)$reason, 0, 64), $hash
+        ), $affected);
+        return $affected > 0;
+    }
+}
+
+if (!function_exists('bc_web_session_revoke_one')) {
+    function bc_web_session_revoke_one($session_id, $reason = 'spadmin_revoked', $exclude_hash = '') {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli) || !bc_web_sessions_ensure_schema()) return false;
+        $session_id = (int)$session_id;
+        if ($session_id <= 0) return false;
+        $affected = 0;
+        if ($exclude_hash !== '') {
+            bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = ? WHERE id = ? AND ended_at IS NULL AND session_token_hash <> ?", array(
+                substr((string)$reason, 0, 64), $session_id, $exclude_hash
+            ), $affected);
+        } else {
+            bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = ? WHERE id = ? AND ended_at IS NULL", array(
+                substr((string)$reason, 0, 64), $session_id
+            ), $affected);
+        }
+        return $affected > 0;
+    }
+}
+
+if (!function_exists('bc_web_session_revoke_actor')) {
+    function bc_web_session_revoke_actor($role, $vendor_id, $actor_id, $reason = 'spadmin_revoked', $exclude_hash = '') {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli) || !bc_web_sessions_ensure_schema()) return 0;
+        if (!in_array($role, array('user', 'vendor', 'spadmin'), true)) return 0;
+        $vendor_id = (int)$vendor_id;
+        $actor_id = (int)$actor_id;
+        if ($actor_id <= 0) return 0;
+        $affected = 0;
+        if ($exclude_hash !== '') {
+            bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = ? WHERE role = ? AND vendor_id = ? AND actor_id = ? AND ended_at IS NULL AND session_token_hash <> ?", array(
+                substr((string)$reason, 0, 64), $role, $vendor_id, $actor_id, $exclude_hash
+            ), $affected);
+        } else {
+            bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = ? WHERE role = ? AND vendor_id = ? AND actor_id = ? AND ended_at IS NULL", array(
+                substr((string)$reason, 0, 64), $role, $vendor_id, $actor_id
+            ), $affected);
+        }
+        if ($role === 'user' && $vendor_id > 0) {
+            @mysqli_query($connection_server, "UPDATE sas_app_tokens SET revoked_at = NOW(), revoke_reason = '" . mysqli_real_escape_string($connection_server, substr((string)$reason, 0, 60)) . "' WHERE user_id = '$actor_id' AND vendor_id = '$vendor_id' AND revoked_at IS NULL");
+            $affected += max(0, (int)mysqli_affected_rows($connection_server));
+        }
+        return (int)$affected;
+    }
+}
+
+if (!function_exists('bc_web_sessions_expire_stale')) {
+    function bc_web_sessions_expire_stale($ttl_seconds = 86400) {
+        global $connection_server;
+        if (!($connection_server instanceof mysqli) || !bc_web_sessions_ensure_schema()) return 0;
+        $ttl = max(300, (int)$ttl_seconds);
+        $affected = 0;
+        bc_q("UPDATE sas_web_sessions SET ended_at = NOW(), end_reason = 'expired' WHERE ended_at IS NULL AND last_seen_at < DATE_SUB(NOW(), INTERVAL ? SECOND)", array($ttl), $affected);
+        return (int)$affected;
     }
 }
 
