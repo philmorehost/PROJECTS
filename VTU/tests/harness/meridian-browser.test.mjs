@@ -37,6 +37,9 @@ const routes = {
   '/ReferAndEarn.php': fixture.refer,
   '/Services.php': fixture.services,
   '/Contact.php': fixture.contact,
+  '/Developers.php': fixture.developers,
+  '/services/airtime.php': fixture.service_airtime,
+  '/Privacy.php': fixture.privacy,
 };
 
 const server = http.createServer((req, res) => {
@@ -81,7 +84,7 @@ try {
   const pageErrors = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));
 
-  for (const route of ['/', '/yellow', '/Business.php', '/ReferAndEarn.php', '/Services.php', '/Contact.php']) {
+  for (const route of ['/', '/yellow', '/Business.php', '/ReferAndEarn.php', '/Services.php', '/Contact.php', '/Developers.php', '/services/airtime.php', '/Privacy.php']) {
     for (const width of [1440, 375]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(baseUrl + route, { waitUntil: 'domcontentloaded' });
@@ -155,12 +158,55 @@ try {
   assert.equal(numOf(scrolledUpJarAmt) < numOf(scrolledDownJarAmt), true, `scrolling up reduces goal progress (${scrolledDownJarAmt} -> ${scrolledUpJarAmt})`);
   checks += 4;
 
-  // Interactive chapter switch on Business Dark page
+  // Hero order & #topupForm placement + active Personal switcher & Home nav link
+  const homeChecks = await page.evaluate(() => {
+    const hero = document.getElementById('hero');
+    const topup = document.getElementById('topupForm');
+    const cross = document.getElementById('cross-border-ch');
+    const thumb = document.getElementById('pthumb')?.getBoundingClientRect();
+    const pBtn = document.querySelector('#pswitch button[data-w="personal"]')?.getBoundingClientRect();
+    const bBtn = document.querySelector('#pswitch button[data-w="business"]')?.getBoundingClientRect();
+    const activeNav = document.querySelector('#links a.is-active')?.textContent.trim();
+    return {
+      world: document.documentElement.getAttribute('data-world'),
+      topupInHero: Boolean(hero && topup && hero.contains(topup)),
+      heroBeforeCross: Boolean(hero && cross && hero.getBoundingClientRect().top < cross.getBoundingClientRect().top),
+      thumbOverPersonal: Boolean(thumb && pBtn && bBtn && Math.abs(thumb.left - pBtn.left) < Math.abs(thumb.left - bBtn.left)),
+      activeNav,
+    };
+  });
+  assert.equal(homeChecks.world, 'personal', 'home uses personal world');
+  assert.equal(homeChecks.topupInHero, true, '#topupForm is inside #hero');
+  assert.equal(homeChecks.heroBeforeCross, true, '#hero renders above #cross-border-ch');
+  assert.equal(homeChecks.thumbOverPersonal, true, '#pthumb sits over Personal button on /');
+  assert.equal(homeChecks.activeNav, 'Home', 'Home nav link is active on /');
+  checks += 5;
+
+  // Interactive chapter switch & Business switcher pill/nav active state on Business Dark page
   await page.goto(baseUrl + '/Business.php', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(400);
+  const bizChecks = await page.evaluate(() => {
+    const thumb = document.getElementById('pthumb')?.getBoundingClientRect();
+    const pBtn = document.querySelector('#pswitch button[data-w="personal"]')?.getBoundingClientRect();
+    const bBtn = document.querySelector('#pswitch button[data-w="business"]')?.getBoundingClientRect();
+    const activeNav = document.querySelector('#links a.is-active')?.textContent.trim();
+    const bizChecked = document.querySelector('#pswitch button[data-w="business"]')?.getAttribute('aria-checked');
+    return {
+      world: document.documentElement.getAttribute('data-world'),
+      bizChecked,
+      thumbOverBusiness: Boolean(thumb && pBtn && bBtn && Math.abs(thumb.left - bBtn.left) < Math.abs(thumb.left - pBtn.left)),
+      activeNav,
+    };
+  });
+  assert.equal(bizChecks.world, 'business', 'Business.php uses business world');
+  assert.equal(bizChecks.bizChecked, 'true', 'Business switcher radio is checked');
+  assert.equal(bizChecks.thumbOverBusiness, true, '#pthumb slides over Business button on Business.php');
+  assert.equal(bizChecks.activeNav, 'Business', 'Business nav link is active on Business.php');
+
   await page.locator('#bstory .bs-rail button').nth(2).click();
   const thirdActive = await page.locator('#bstory .bs-ch').nth(2).evaluate((el) => el.classList.contains('is-active'));
   assert.equal(thirdActive, true, 'business chapter rail activates clicked chapter');
-  checks += 1;
+  checks += 5;
 
   // Mobile sheet menu check
   await page.setViewportSize({ width: 375, height: 812 });

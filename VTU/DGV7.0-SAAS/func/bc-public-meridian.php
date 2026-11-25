@@ -481,11 +481,56 @@ if (!function_exists('bc_meridian_render_catalog_section')) {
     }
 }
 
+if (!function_exists('bc_meridian_current_path')) {
+    function bc_meridian_current_path() {
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? $_SERVER['SCRIPT_NAME'] ?? '/');
+        $path = parse_url($uri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') $path = '/';
+        if ($path === '/index.php' || $path === '/index-bc-style-template-meridian-1.php') $path = '/';
+        return $path;
+    }
+}
+
 if (!function_exists('bc_meridian_header_and_menu')) {
-    function bc_meridian_header_and_menu($ctx, $world = 'personal') {
+    function bc_meridian_header_and_menu($ctx, $world = 'personal', $active_path = null) {
         $is_biz = ($world === 'business');
         $name = bc_meridian_e($ctx['site_name']);
         $initial = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $ctx['site_name']) ?: 'F', 0, 1));
+        $cur = $active_path !== null ? (string)$active_path : bc_meridian_current_path();
+        $is_service_route = ($cur === '/Services.php' || strpos($cur, '/services/') === 0);
+        $is_biz_route = in_array($cur, array('/Business.php', '/PaymentLinks.php', '/Invoices.php', '/Payouts.php', '/POSTerminals.php'), true);
+
+        if ($is_biz) {
+            $nav_items = array(
+                array('href' => '/', 'label' => 'Personal', 'active' => ($cur === '/')),
+                array('href' => '/Business.php', 'label' => 'Business', 'active' => $is_biz_route),
+                array('href' => '/Developers.php', 'label' => 'Developers', 'active' => ($cur === '/Developers.php')),
+                array('href' => '/Resellers.php', 'label' => 'Resellers', 'active' => ($cur === '/Resellers.php')),
+                array('href' => '/Services.php', 'label' => 'Services', 'active' => $is_service_route),
+                array('href' => '/Contact.php', 'label' => 'Support', 'active' => ($cur === '/Contact.php')),
+            );
+        } else {
+            $nav_items = array(
+                array('href' => '/', 'label' => 'Home', 'active' => ($cur === '/')),
+                array('href' => '/Services.php', 'label' => 'Services', 'active' => $is_service_route),
+                array('href' => '/Business.php', 'label' => 'Business', 'active' => $is_biz_route),
+                array('href' => '/ReferAndEarn.php', 'label' => 'Refer & Earn', 'active' => ($cur === '/ReferAndEarn.php')),
+                array('href' => '/Security.php', 'label' => 'Security', 'active' => ($cur === '/Security.php')),
+                array('href' => '/Contact.php', 'label' => 'Support', 'active' => ($cur === '/Contact.php')),
+            );
+        }
+
+        $mobile_items = array(
+            array('href' => '/', 'label' => 'Personal Home', 'active' => ($cur === '/')),
+            array('href' => '/Business.php', 'label' => 'Business', 'active' => $is_biz_route),
+            array('href' => '/Services.php', 'label' => 'All Services', 'active' => $is_service_route),
+            array('href' => '/Developers.php', 'label' => 'Developers & API', 'active' => ($cur === '/Developers.php')),
+            array('href' => '/Resellers.php', 'label' => 'Merchant & Resellers', 'active' => ($cur === '/Resellers.php')),
+            array('href' => '/ReferAndEarn.php', 'label' => 'Refer & Earn', 'active' => ($cur === '/ReferAndEarn.php')),
+            array('href' => '/Security.php', 'label' => 'Security', 'active' => ($cur === '/Security.php')),
+            array('href' => '/DownloadApp.php', 'label' => 'Get the App', 'active' => ($cur === '/DownloadApp.php')),
+            array('href' => '/Contact.php', 'label' => 'Support', 'active' => ($cur === '/Contact.php')),
+        );
         ob_start();
         ?>
         <header class="nav" id="nav">
@@ -506,20 +551,9 @@ if (!function_exists('bc_meridian_header_and_menu')) {
                     <button type="button" role="radio" aria-checked="<?php echo $is_biz ? 'true' : 'false'; ?>" tabindex="<?php echo $is_biz ? '0' : '-1'; ?>" data-w="business"><span>Business</span></button>
                 </div>
                 <nav class="links" id="links" aria-label="Main">
-                    <?php if ($is_biz): ?>
-                        <a href="/">Personal</a>
-                        <a href="/Business.php">Business</a>
-                        <a href="/Developers.php">Developers</a>
-                        <a href="/Resellers.php">Resellers</a>
-                        <a href="/Services.php">Services</a>
-                        <a href="/Contact.php">Support</a>
-                    <?php else: ?>
-                        <a href="/Services.php">Services</a>
-                        <a href="/Business.php">Business</a>
-                        <a href="/ReferAndEarn.php">Refer &amp; Earn</a>
-                        <a href="/Security.php">Security</a>
-                        <a href="/Contact.php">Support</a>
-                    <?php endif; ?>
+                    <?php foreach ($nav_items as $ni): ?>
+                        <a href="<?php echo bc_meridian_e($ni['href']); ?>"<?php echo $ni['active'] ? ' class="is-active" aria-current="page"' : ''; ?>><?php echo bc_meridian_e($ni['label']); ?></a>
+                    <?php endforeach; ?>
                 </nav>
                 <div class="nav-r">
                     <a class="btn ghost" href="/web/Login.php">Log in</a>
@@ -544,15 +578,9 @@ if (!function_exists('bc_meridian_header_and_menu')) {
                     </button>
                 </div>
                 <div class="mlinks" id="mlinks">
-                    <a href="/">Personal Home</a>
-                    <a href="/Business.php">Business</a>
-                    <a href="/Services.php">All Services</a>
-                    <a href="/Developers.php">Developers &amp; API</a>
-                    <a href="/Resellers.php">Merchant &amp; Resellers</a>
-                    <a href="/ReferAndEarn.php">Refer &amp; Earn</a>
-                    <a href="/Security.php">Security</a>
-                    <a href="/DownloadApp.php">Get the App</a>
-                    <a href="/Contact.php">Support</a>
+                    <?php foreach ($mobile_items as $mi): ?>
+                        <a href="<?php echo bc_meridian_e($mi['href']); ?>"<?php echo $mi['active'] ? ' class="is-active" aria-current="page"' : ''; ?>><?php echo bc_meridian_e($mi['label']); ?></a>
+                    <?php endforeach; ?>
                 </div>
                 <div class="row">
                     <a class="btn ghost" href="/web/Login.php" style="flex:1">Log in</a>

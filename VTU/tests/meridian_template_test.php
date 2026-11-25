@@ -35,10 +35,13 @@ m_check(strpos($personal_html, 'data-theme="dark"') !== false && strpos($persona
 m_check(strpos($personal_html, 'aria-label="Explore more"') !== false, 'personal page includes bc_public_directory_html');
 m_check(strpos($personal_html, 'Pending replacement integration') !== false, 'personal page puts retired crypto integration in Coming Soon');
 
-// 2.5 Homepage rearrangement, vault copy, removed duo card, shield, and zero-404 Personal feature catalogue links
+// 2.5 Homepage rearrangement, #topupForm inside #hero, vault copy, removed duo card, shield, and zero-404 Personal feature catalogue links
 $hero_pos = strpos($personal_html, 'Everyday top-ups and bill payments, together.');
+$topup_pos = strpos($personal_html, 'id="topupForm"');
 $cross_pos = strpos($personal_html, 'Move and manage your money across borders with ease.');
-m_check($hero_pos !== false && $cross_pos !== false && $hero_pos < $cross_pos, 'Everyday top-ups hero appears before Move and manage your money across borders');
+m_check($hero_pos !== false && $topup_pos !== false && $cross_pos !== false && $hero_pos < $topup_pos && $topup_pos < $cross_pos, 'Everyday top-ups hero and #topupForm appear before Move and manage your money across borders');
+m_check(strpos($personal_html, 'Pick a network, enter a Nigerian mobile number, and preview airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, and travel eSIMs.') !== false, 'hero includes interactive bills & topup lede');
+m_check(strpos($personal_html, 'id="bills-ch"') === false, 'duplicate #bills-ch removed after moving #topupForm into #hero');
 m_check(strpos($personal_html, 'Real friends.<br>Real progress.') !== false, 'vault section uses Real friends. Real progress.');
 m_check(strpos($personal_html, 'Set savings goals and track rewards in one view.') === false, 'old savings card title removed');
 m_check(strpos($personal_html, 'Learn More') !== false && strpos($personal_html, 'About savings') === false && strpos($personal_html, 'id="vaultBtn"') === false, 'vault CTA updated to Learn More without manual preview button');
@@ -61,14 +64,30 @@ foreach (array('/services/bank-transfer.php', '/services/share-fund.php', '/serv
     m_check(is_file($root . '/DGV7.0-SAAS' . $new_rel) && is_file($root . '/DGV7.0-NON-SAAS' . $new_rel), 'new endpoint exists in both editions: ' . $new_rel);
 }
 
-// 3. Render Meridian-1 Business Dark page offline
+// 3. Render Meridian-1 Business Dark & Personal subpages offline with active switcher & nav state
+$_SERVER['REQUEST_URI'] = '/Business.php';
 ob_start();
 bc_public_render(bc_landing_context(), 'business');
 $business_html = ob_get_clean();
 m_check(strpos($business_html, 'data-theme="dark"') !== false && strpos($business_html, 'data-world="business"') !== false, 'business page uses Meridian-1 dark theme');
+m_check(strpos($business_html, 'aria-checked="true" tabindex="0" data-w="business"') !== false, 'business page marks Business active in switcher');
+m_check(strpos($business_html, 'href="/Business.php" class="is-active" aria-current="page"') !== false, 'business page marks Business nav link active');
 m_check(strpos($business_html, 'id="bstory"') !== false, 'business page includes interactive story workspace');
 m_check(strpos($business_html, 'id="vtu-api"') !== false, 'business page includes VTU & API guide');
 m_check(strpos($business_html, '/Developers.php') !== false && strpos($business_html, '/Resellers.php') !== false, 'business page links developers & resellers');
+
+$_SERVER['REQUEST_URI'] = '/Developers.php';
+ob_start();
+bc_public_render(bc_landing_context(), 'developers');
+$dev_html = ob_get_clean();
+m_check(strpos($dev_html, 'data-world="business"') !== false && strpos($dev_html, 'href="/Developers.php" class="is-active" aria-current="page"') !== false, 'Developers page activates business world and Developers nav link');
+
+$_SERVER['REQUEST_URI'] = '/Contact.php';
+ob_start();
+bc_public_render(bc_landing_context(), 'contact');
+$contact_html = ob_get_clean();
+m_check(strpos($contact_html, 'data-world="personal"') !== false && strpos($contact_html, 'aria-checked="true" tabindex="0" data-w="personal"') !== false, 'Contact page stays in Personal world with Personal switcher active');
+m_check(strpos($contact_html, 'href="/Contact.php" class="is-active" aria-current="page"') !== false, 'Contact page marks Support nav link active');
 
 // 4. ServiceControl gating + Coming Soon + empty-category omission
 $crypto_cat = bc_meridian_service_catalog('personal', 0);
@@ -132,7 +151,9 @@ foreach (array('DGV7.0-SAAS', 'DGV7.0-NON-SAAS') as $ed) {
     $si = file_get_contents($root . '/' . $ed . '/web/api/site-info.php');
     m_check(strpos($si, "'FintechFlow'") !== false, $ed . ' site-info falls back to FintechFlow');
     $sp = file_get_contents($root . '/' . $ed . '/single-post.php');
-    m_check(strpos($sp, 'data-theme="dark" data-world="business"') !== false && strpos($sp, 'bc_meridian_footer(') !== false, $ed . ' single-post uses Meridian dark theme');
+    m_check(strpos($sp, 'data-theme="dark" data-world="personal"') !== false && strpos($sp, 'bc_meridian_footer(') !== false && strpos($sp, 'bootstrap.min.css') === false, $ed . ' single-post uses Meridian personal dark theme without bootstrap CSS conflicts');
+    $bl = file_get_contents($root . '/' . $ed . '/blog.php');
+    m_check(strpos($bl, 'data-theme="dark" data-world="personal"') !== false && strpos($bl, 'bootstrap.min.css') === false, $ed . ' blog uses Meridian personal dark theme without bootstrap CSS conflicts');
     foreach (array('dormant_user_alert.php', 'ai_daily_briefing.php') as $cron_file) {
         $cron_src = file_get_contents($root . '/' . $ed . '/cron/' . $cron_file);
         m_check(strpos($cron_src, 'instanceof mysqli_result') !== false, $ed . ' cron/' . $cron_file . ' guards mysqli_fetch_assoc');
