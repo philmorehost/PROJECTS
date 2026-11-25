@@ -35,7 +35,7 @@ bc_adm_head("User Transactions | Super Admin", array("area" => "spadmin"));
 
                 if(!empty($searchq)){
                     $search_esc = mysqli_real_escape_string($connection_server, $searchq);
-                    $search_statement .= " AND (t.product_unique_id LIKE '%$search_esc%' OR t.reference LIKE '%$search_esc%' OR t.description LIKE '%$search_esc%' OR t.username LIKE '%$search_esc%' OR v.email LIKE '%$search_esc%' OR v.firstname LIKE '%$search_esc%' OR v.lastname LIKE '%$search_esc%' OR v.website_url LIKE '%$search_esc%' OR v.business_name LIKE '%$search_esc%')";
+                    $search_statement .= " AND (t.product_unique_id LIKE '%$search_esc%' OR t.reference LIKE '%$search_esc%' OR t.description LIKE '%$search_esc%' OR t.username LIKE '%$search_esc%' OR v.email LIKE '%$search_esc%' OR v.firstname LIKE '%$search_esc%' OR v.lastname LIKE '%$search_esc%' OR v.website_url LIKE '%$search_esc%')";
                     $search_parameter .= "searchq=".urlencode($searchq)."&";
                 }
 
@@ -45,7 +45,7 @@ bc_adm_head("User Transactions | Super Admin", array("area" => "spadmin"));
                     $search_parameter .= "category=$cat&";
                 }
 
-                $user_tx_sql = "SELECT t.*, p.product_name, a.api_type, TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name, v.business_name AS vendor_business_name, v.email AS vendor_email, v.website_url AS vendor_website FROM sas_transactions t LEFT JOIN sas_vendors v ON v.id = t.vendor_id LEFT JOIN sas_products p ON p.vendor_id = t.vendor_id AND p.id = t.product_id LEFT JOIN sas_apis a ON a.vendor_id = t.vendor_id AND a.id = t.api_id WHERE 1=1 $search_statement ORDER BY t.date DESC LIMIT $limit OFFSET $offset";
+                $user_tx_sql = "SELECT t.*, p.product_name, a.api_type, TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name, '' AS vendor_business_name, v.email AS vendor_email, v.website_url AS vendor_website FROM sas_transactions t LEFT JOIN sas_vendors v ON v.id = t.vendor_id LEFT JOIN sas_products p ON p.vendor_id = t.vendor_id AND p.id = t.product_id LEFT JOIN sas_apis a ON a.vendor_id = t.vendor_id AND a.id = t.api_id WHERE 1=1 $search_statement ORDER BY t.date DESC LIMIT $limit OFFSET $offset";
                 $get_user_transaction_details = mysqli_query($connection_server, $user_tx_sql);
                 
                 if (!$get_user_transaction_details) {

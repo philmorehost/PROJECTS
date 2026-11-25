@@ -506,6 +506,12 @@ if ($connection_server) {
             header('Location: /web/Login.php');
             exit();
         }
+        if (!isset($_SESSION["admin_session"]) && function_exists('bc_web_session_touch_and_check') && !bc_web_session_touch_and_check('user', $get_logged_user_details)) {
+            $_SESSION = array();
+            if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
+            header('Location: /web/Login.php');
+            exit();
+        }
 
         // §35: URL probe inspection for signed-in customers (abuse guard);
         // an actor whose probes just earned a 24h IP block is cut off here.
@@ -578,7 +584,7 @@ if ($connection_server) {
 						if($needs_bvn) $fields[] = "BVN";
 						if($needs_nin) $fields[] = "NIN";
 						$_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_user_details["firstname"]) . ", please provide your " . implode(" and ", $fields) . " securely to comply with regulations.";
-						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/AccountSettings.php", "/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php", "/web/SecurityQuest.php"))) {
+						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/AccountSettings.php", "/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/SecurityQuest.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 							header("Location: /web/AccountSettings.php");
 							exit();
 						}
@@ -659,7 +665,7 @@ if ($connection_server) {
 
 								if ($config_user_total_funding < $min_funding && empty($sec29_confined)) {
 									$_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_user_details["firstname"]) . ", kindly fund your wallet with minimum of N" . number_format($min_funding - $config_user_total_funding) . " to unlock features.";
-									if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/Dashboard.php", "/web/AISuite.php", "/web/AI-Assistant.php", "/web/SecurityQuest.php"))) {
+									if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/Fund.php", "/web/SubmitPayment.php", "/web/PaymentOrders.php", "/web/Dashboard.php", "/web/AISuite.php", "/web/SecurityQuest.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 										header("Location: /web/Fund.php");
 										exit();
 									}
@@ -670,7 +676,7 @@ if ($connection_server) {
 
 					// Security Question Check
 					if (bc_security_question_policy((int)$get_logged_user_details["vendor_id"])["web"] && empty($sec29_confined) && (!isset($_COOKIE["security_answer"]) || $_COOKIE["security_answer"] != $get_logged_user_details["security_answer"])) {
-						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php", "/web/AI-Assistant.php"))) {
+						if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/web/SecurityQuest.php", "/web/Login.php", "/web/Register.php", "/web/PasswordRecovery.php", "/web/PayRequest.php", "/web/ajax-unblock-request.php", "/web/LockoutResolution.php", "/web/KYCVerification.php", "/web/AISuite.php")) && !(explode("?", trim($_SERVER["REQUEST_URI"]))[0] === "/web/Hub.php" && ($_GET["g"] ?? "") === "settings-help")) {
 							header("Location: /web/SecurityQuest.php");
 							exit();
 						}

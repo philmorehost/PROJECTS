@@ -470,11 +470,17 @@ if (isset($_POST["update-verification"])) {
 // §29: admin Google Authenticator (TOTP) enrolment.
 
 // §33: enhanced vendor KYC — document submission for platform review.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $_SESSION["product_purchase_response"] = "Error: Your upload exceeded the server's maximum request size (" . ini_get('post_max_size') . "). Please upload smaller files or submit one document at a time.";
+    header("Location: AccountSettings.php#tab-kyc");
+    exit;
+}
+
 if (isset($_POST["upload-vendor-kyc-doc"])) {
     bc_validate_csrf();
     if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema();
     $vid = (int)$get_logged_admin_details["id"];
-    $upload_dir = $_SERVER['DOCUMENT_ROOT'] . "/uploads/kyc-vendor/";
+    $upload_dir = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyc-vendor/";
     if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
     $htaccess_file = $upload_dir . '.htaccess';
     if (is_dir($upload_dir) && !file_exists($htaccess_file)) {
@@ -484,30 +490,76 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         'business_registration' => [['jpg','jpeg','png','webp','pdf'], 8],
         'beneficial_ownership' => [['jpg','jpeg','png','webp','pdf'], 8],
         'govt_id'          => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
-        'selfie'           => [['jpg'], 0.5],
+        'selfie'           => [['jpg', 'jpeg'], 0.5],
         'proof_of_address' => [['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
         'liveliness_video' => [['mp4', 'webm'], 3],
     ];
+    $field_labels = [
+        'business_registration' => 'Business registration / CAC',
+        'beneficial_ownership'  => 'Beneficial ownership document',
+        'govt_id'               => 'Government ID',
+        'selfie'                => 'Live photo',
+        'proof_of_address'      => 'Proof of address',
+        'liveliness_video'      => 'Liveliness video',
+    ];
     $saved = [];
-    if (!empty($_FILES['liveliness_video']['name']) && (($_FILES['liveliness_video']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file($_FILES['liveliness_video']['tmp_name']??'') || !bc_live_media_prepare($_FILES['liveliness_video']['tmp_name'], 'liveliness_video'))) {
-        $_SESSION['product_purchase_response']='Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';header('Location: AccountSettings.php#tab-kyc');exit;
+    $upload_errors = [];
+    if (!empty($_FILES['liveliness_video']['name'])) {
+        $v_err = $_FILES['liveliness_video']['error'] ?? UPLOAD_ERR_NO_FILE;
+        $v_tmp = $_FILES['liveliness_video']['tmp_name'] ?? '';
+        if ($v_err === UPLOAD_ERR_INI_SIZE || $v_err === UPLOAD_ERR_FORM_SIZE) {
+            $_SESSION['product_purchase_response'] = 'Error: Liveliness video exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Record a shorter video (max 3 MB).';
+            header('Location: AccountSettings.php#tab-kyc');
+            exit;
+        }
+        if ($v_err !== UPLOAD_ERR_OK || !is_uploaded_file($v_tmp) || !bc_live_media_prepare($v_tmp, 'liveliness_video')) {
+            $_SESSION['product_purchase_response']='Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';header('Location: AccountSettings.php#tab-kyc');exit;
+        }
     }
     foreach ($kinds as $input_name => $spec) {
         list($exts, $max_mb) = $spec;
+        $label = $field_labels[$input_name] ?? $input_name;
         if (empty($_FILES[$input_name]['name'])) continue;
-        if (($_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) continue;
+        $err = $_FILES[$input_name]['error'] ?? UPLOAD_ERR_NO_FILE;
+        if ($err !== UPLOAD_ERR_OK) {
+            if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+                $upload_errors[] = "$label exceeds the server upload limit (" . ini_get('upload_max_filesize') . "). Please upload a smaller file.";
+            } elseif ($err === UPLOAD_ERR_PARTIAL) {
+                $upload_errors[] = "$label was only partially uploaded. Please try again.";
+            } else {
+                $upload_errors[] = "$label failed to upload (error code $err).";
+            }
+            continue;
+        }
         $tmp = $_FILES[$input_name]['tmp_name'];
-        if (!is_uploaded_file($tmp)) continue;
-        if ($input_name === 'selfie' && !bc_live_media_prepare($tmp, $input_name)) continue;
-        if (filesize($tmp) > $max_mb * 1024 * 1024) continue;
+        if (!is_uploaded_file($tmp)) {
+            $upload_errors[] = "$label upload could not be verified.";
+            continue;
+        }
+        if ($input_name === 'selfie' && !bc_live_media_prepare($tmp, $input_name)) {
+            $upload_errors[] = "Live photo could not be validated (must be a live camera JPEG between 160px and 960px, max 512 KB).";
+            continue;
+        }
+        if (filesize($tmp) > $max_mb * 1024 * 1024) {
+            $upload_errors[] = "$label exceeds the {$max_mb} MB size limit.";
+            continue;
+        }
         $ext = strtolower(pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, $exts, true)) continue;
-        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) && @getimagesize($tmp) === false) continue;
+        if (!in_array($ext, $exts, true)) {
+            $upload_errors[] = "$label has an unsupported file type (." . ($ext !== '' ? $ext : 'unknown') . "). Allowed: " . implode(', ', $exts) . ".";
+            continue;
+        }
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) && @getimagesize($tmp) === false) {
+            $upload_errors[] = "$label is not a valid image file.";
+            continue;
+        }
         $filename = 'vkyc_' . $vid . '_' . $input_name . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
         if (move_uploaded_file($tmp, $upload_dir . $filename)) {
             $fn_esc = mysqli_real_escape_string($connection_server, $filename);
             mysqli_query($connection_server, "INSERT INTO sas_vendor_kyc_documents (vendor_id, doc_type, file_name, status) VALUES ('$vid', '$input_name', '$fn_esc', 'pending')");
             $saved[] = $input_name;
+        } else {
+            $upload_errors[] = "$label could not be saved on the server. Please contact support.";
         }
     }
     if ($saved) {
@@ -523,8 +575,15 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
             $names = array_map(function ($c) use ($labels) { return $labels[$c] ?? $c; }, $pending);
             $_SESSION["product_purchase_response"] = "Documents saved. Still needed before review: " . implode(', ', $names) . ".";
         }
+        if (!empty($upload_errors)) {
+            $_SESSION["product_purchase_response"] .= " Note: " . implode(' ', $upload_errors);
+        }
     } else {
-        $_SESSION["product_purchase_response"] = "Error: no valid document received. Check the file type and size limit.";
+        if (!empty($upload_errors)) {
+            $_SESSION["product_purchase_response"] = "Error: " . implode(' ', $upload_errors);
+        } else {
+            $_SESSION["product_purchase_response"] = "Error: no document was selected or captured. Please attach a document or capture your live photo/video before submitting.";
+        }
     }
     header("Location: AccountSettings.php#tab-kyc");
     exit;

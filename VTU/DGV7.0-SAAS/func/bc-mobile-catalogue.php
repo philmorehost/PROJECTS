@@ -32,12 +32,14 @@ function bc_mobile_catalogue() {
         'pin'=>array('Account','Security PIN','SecurityPIN.php',''),
         'settings'=>array('Account','Account settings','AccountSettings.php',''),
         'history'=>array('Account','Transaction history','Transactions.php',''),
-        'assistant'=>array('Support','AI assistant','AI-Assistant.php','')
+        'assistant'=>array('Support','Support','Hub.php?g=settings-help','')
     );
 }
 function bc_mobile_destination($slug, $vid) {
     $row = bc_mobile_catalogue()[$slug] ?? null;
-    if (!$row || !is_file(__DIR__ . '/../web/' . $row[2])) return null;
+    if (!$row) return null;
+    $target_file = explode('?', (string)$row[2], 2)[0];
+    if ($target_file === '' || !is_file(__DIR__ . '/../web/' . $target_file)) return null;
     if ($row[3] !== '' && !isServiceEnabled($row[3], (int)$vid)) return null;
     return '/web/' . $row[2];
 }

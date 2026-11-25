@@ -2,14 +2,24 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-admin-config.php");
+
+    // Gate UserEdit behind the vendor-admin security unlock (Google Authenticator
+    // or configured Action Verification Policy: Security PIN / Email OTP, 10-minute window).
+    $user_edit_scope = 'bc_admin_user_edit';
+    if (function_exists('bc_gauth_settings_gate')) {
+        bc_gauth_settings_gate($user_edit_scope, 'sas_vendors', $get_logged_admin_details, array('gauth-unlock', 'gauth-lock', 'send_settings_code'));
+    }
+    $user_edit_unlocked = function_exists('bc_gauth_unlocked_until') && bc_gauth_unlocked_until($user_edit_scope) > 0;
     
-    $user_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_GET["userID"]))));
+    $user_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags((string)($_GET["userID"] ?? "")))));
     $select_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='$user_id_number'");
-    if(mysqli_num_rows($select_user) > 0){
+    if($select_user && mysqli_num_rows($select_user) > 0){
         $get_user_details = mysqli_fetch_array($select_user);
     }
 
-    if(isset($_POST["update-profile"])){
+    if($user_edit_unlocked && isset($_POST["update-profile"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (function_exists('bc_demo_guard_edit')) bc_demo_guard_edit($connection_server);
         $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
     	$last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
         $other = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["other"]))));
@@ -141,30 +151,104 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit;
     }
     
-    if(isset($_POST["change-password"])){
-        $new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new-pass"])));
-        $con_new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["con-new-pass"])));
+    if($user_edit_unlocked && isset($_POST["reset-security-pin"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (function_exists('bc_demo_guard_edit')) bc_demo_guard_edit($connection_server);
+        $new_pin = trim((string)($_POST["new-pin"] ?? ""));
+        $con_new_pin = trim((string)($_POST["con-new-pin"] ?? ""));
+
+        if ($new_pin === "" || $con_new_pin === "") {
+            $_SESSION["product_purchase_response"] = ($new_pin === "") ? "New Security PIN Field Empty" : "Confirm Security PIN Field Empty";
+        } elseif (!preg_match('/\A[0-9]{4}\z/D', $new_pin)) {
+            $_SESSION["product_purchase_response"] = "Security PIN must be exactly 4 digits";
+        } elseif (in_array($new_pin, array('0000','1111','2222','3333','4444','5555','6666','7777','8888','9999','1234','4321'), true)) {
+            $_SESSION["product_purchase_response"] = "That PIN is too easy to guess. Please choose another.";
+        } elseif (!hash_equals($new_pin, $con_new_pin)) {
+            $_SESSION["product_purchase_response"] = "New & Confirm Security PIN Not Match";
+        } else {
+            $vendor_id = (int)$get_logged_admin_details["id"];
+            $check_user_details = mysqli_query($connection_server, "SELECT id, username, email FROM sas_users WHERE vendor_id='$vendor_id' && id='".$user_id_number."' LIMIT 1");
+            if ($check_user_details && mysqli_num_rows($check_user_details) == 1) {
+                $target_user = mysqli_fetch_assoc($check_user_details);
+                $new_pin_hash = password_hash($new_pin, PASSWORD_DEFAULT);
+                $new_pin_int = (int)$new_pin;
+                $saved = function_exists('bc_q')
+                    ? bc_q("UPDATE sas_users SET security_pin=?, transaction_pin=?, failed_pin_count=0, last_failed_pin=NULL WHERE vendor_id=? AND id=?", array($new_pin_hash, $new_pin_int, $vendor_id, (int)$user_id_number))
+                    : mysqli_query($connection_server, "UPDATE sas_users SET security_pin='".mysqli_real_escape_string($connection_server, $new_pin_hash)."', transaction_pin='$new_pin_int', failed_pin_count=0, last_failed_pin=NULL WHERE vendor_id='$vendor_id' && id='".$user_id_number."'");
+                if ($saved) {
+                    if (function_exists('bc_web_session_revoke_actor')) {
+                        bc_web_session_revoke_actor('user', $vendor_id, (int)$user_id_number, 'admin_pin_reset');
+                    }
+                    if (function_exists('bc_sec_audit')) {
+                        bc_sec_audit($vendor_id, 'admin', (string)($get_logged_admin_details['email'] ?? ''), 'user_security_pin_reset', 'user#' . (int)$user_id_number, 'Vendor admin reset user security PIN for ' . (string)($target_user['username'] ?? $target_user['email'] ?? ''));
+                    }
+                    $_SESSION["product_purchase_response"] = "User Security PIN Updated Successfully";
+                } else {
+                    $_SESSION["product_purchase_response"] = "Could not update User Security PIN. Please try again.";
+                }
+            } else {
+                $_SESSION["product_purchase_response"] = "User Not Exists";
+            }
+        }
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit;
+    }
+
+    if($user_edit_unlocked && isset($_POST["clear-security-pin"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (function_exists('bc_demo_guard_edit')) bc_demo_guard_edit($connection_server);
+        $vendor_id = (int)$get_logged_admin_details["id"];
+        $check_user_details = mysqli_query($connection_server, "SELECT id, username, email FROM sas_users WHERE vendor_id='$vendor_id' && id='".$user_id_number."' LIMIT 1");
+        if ($check_user_details && mysqli_num_rows($check_user_details) == 1) {
+            $target_user = mysqli_fetch_assoc($check_user_details);
+            $cleared = function_exists('bc_q')
+                ? bc_q("UPDATE sas_users SET security_pin=NULL, transaction_pin=NULL, failed_pin_count=0, last_failed_pin=NULL WHERE vendor_id=? AND id=?", array($vendor_id, (int)$user_id_number))
+                : mysqli_query($connection_server, "UPDATE sas_users SET security_pin=NULL, transaction_pin=NULL, failed_pin_count=0, last_failed_pin=NULL WHERE vendor_id='$vendor_id' && id='".$user_id_number."'");
+            if ($cleared) {
+                if (function_exists('bc_web_session_revoke_actor')) {
+                    bc_web_session_revoke_actor('user', $vendor_id, (int)$user_id_number, 'admin_pin_cleared');
+                }
+                if (function_exists('bc_sec_audit')) {
+                    bc_sec_audit($vendor_id, 'admin', (string)($get_logged_admin_details['email'] ?? ''), 'user_security_pin_cleared', 'user#' . (int)$user_id_number, 'Vendor admin cleared user security PIN for ' . (string)($target_user['username'] ?? $target_user['email'] ?? ''));
+                }
+                $_SESSION["product_purchase_response"] = "User Security PIN Cleared. User will set a new PIN on next login.";
+            } else {
+                $_SESSION["product_purchase_response"] = "Could not clear User Security PIN. Please try again.";
+            }
+        } else {
+            $_SESSION["product_purchase_response"] = "User Not Exists";
+        }
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit;
+    }
+
+    if($user_edit_unlocked && isset($_POST["change-password"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        if (function_exists('bc_demo_guard_edit')) bc_demo_guard_edit($connection_server);
+        $new_pass = trim(strip_tags((string)($_POST["new-pass"] ?? "")));
+        $con_new_pass = trim(strip_tags((string)($_POST["con-new-pass"] ?? "")));
         
         if(!empty($new_pass) && !empty($con_new_pass)){
-            $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
+            $vendor_id = (int)$get_logged_admin_details["id"];
+            $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' && id='".$user_id_number."'");
             if(mysqli_num_rows($check_user_details) == 1){
-                $md5_new_pass = md5($new_pass);
-                $md5_con_new_pass = md5($con_new_pass);
-                
-                if($md5_new_pass !== $get_logged_admin_details["password"]){
-                    if($md5_new_pass == $md5_con_new_pass){
-                        mysqli_query($connection_server, "UPDATE sas_users SET password='$md5_new_pass' WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
-                        //Account Password Updated Successfully
-                        $json_response_array = array("desc" => "Account Password Updated Successfully");
-                        $json_response_encode = json_encode($json_response_array,true);
-                    }else{
-                        //New & Confirm Password Not Match
-                        $json_response_array = array("desc" => "New & Confirm Password Not Match");
-                        $json_response_encode = json_encode($json_response_array,true);
+                $new_pass_hash = function_exists('bc_hash_password') ? bc_hash_password($new_pass) : md5($new_pass);
+                $new_pass_hash_esc = mysqli_real_escape_string($connection_server, $new_pass_hash);
+
+                if($new_pass === $con_new_pass){
+                    mysqli_query($connection_server, "UPDATE sas_users SET password='$new_pass_hash_esc' WHERE vendor_id='$vendor_id' && id='".$user_id_number."'");
+                    if (function_exists('bc_web_session_revoke_actor')) {
+                        bc_web_session_revoke_actor('user', $vendor_id, (int)$user_id_number, 'admin_password_reset');
                     }
+                    if (function_exists('bc_sec_audit')) {
+                        bc_sec_audit($vendor_id, 'admin', (string)($get_logged_admin_details['email'] ?? ''), 'user_password_reset', 'user#' . (int)$user_id_number, 'Vendor admin reset user password');
+                    }
+                    //Account Password Updated Successfully
+                    $json_response_array = array("desc" => "Account Password Updated Successfully");
+                    $json_response_encode = json_encode($json_response_array,true);
                 }else{
-                    //New & Old Password Must Be Different
-                    $json_response_array = array("desc" => "New & Old Password Must Be Different");
+                    //New & Confirm Password Not Match
+                    $json_response_array = array("desc" => "New & Confirm Password Not Match");
                     $json_response_encode = json_encode($json_response_array,true);
                 }
             }else{
@@ -210,7 +294,52 @@ bc_adm_head("Edit User | " . ($get_all_super_admin_site_details["site_title"]), 
 
     <section class="section dashboard">
       <div class="row">
-    <?php if(!empty($get_user_details['id'])){ ?>
+        <div class="col-12">
+    <?php
+        echo function_exists('bc_gauth_settings_banner') ? bc_gauth_settings_banner($user_edit_scope, $get_logged_admin_details) : '';
+        $user_edit_channels = array('google' => true, 'email' => true);
+        if (function_exists('bc_action_channels')) {
+            try { $user_edit_channels = bc_action_channels('sas_vendors', $get_logged_admin_details); } catch (Throwable $e) { $user_edit_channels = array('google' => true, 'email' => true); }
+        }
+    ?>
+        </div>
+    <?php if(!$user_edit_unlocked){ ?>
+        <div class="col-12">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+                <div class="card-body text-center py-5 px-4">
+                    <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 76px; height: 76px;">
+                        <i class="bi bi-shield-lock-fill text-warning fs-1"></i>
+                    </div>
+                    <h4 class="fw-bold mb-2">User Editor Locked</h4>
+                    <p class="text-muted mx-auto mb-4" style="max-width: 560px;">
+                        Complete the security verification above to unlock user profile edits, password resets, and security PIN resets for 10 minutes.
+                    </p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <?php if(!empty($user_edit_channels['google']) && function_exists('bc_gauth_enrolled') && !bc_gauth_enrolled($get_logged_admin_details)): ?>
+                            <a href="AccountSettings.php#tab-security" class="btn btn-primary rounded-pill px-4 fw-bold">
+                                <i class="bi bi-shield-check me-2"></i>Enrol Google Authenticator in Account Settings
+                            </a>
+                        <?php else: ?>
+                            <a href="<?php echo htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'Users.php'), ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-primary rounded-pill px-4 fw-bold">
+                                <i class="bi bi-arrow-clockwise me-2"></i>Refresh After Unlocking
+                            </a>
+                        <?php endif; ?>
+                        <a href="Users.php" class="btn btn-light rounded-pill px-4 fw-bold">Back to Users</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php }elseif(!empty($get_user_details['id'])){ ?>
+        <?php if(empty($user_edit_channels['google']) && function_exists('bc_csrf_field')): ?>
+            <div class="col-12 d-flex justify-content-end mb-3">
+                <form method="post" class="m-0">
+                    <?php echo bc_csrf_field(); ?>
+                    <button type="submit" name="gauth-lock" value="1" class="btn btn-sm btn-outline-dark rounded-pill px-3">
+                        <i class="bi bi-lock-fill me-1"></i>Lock User Editor Now
+                    </button>
+                </form>
+            </div>
+        <?php endif; ?>
         <div class="col-lg-8">
             <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
                 <div class="card-header bg-white py-4 border-0">
@@ -226,6 +355,7 @@ bc_adm_head("Edit User | " . ($get_all_super_admin_site_details["site_title"]), 
                 </div>
                 <div class="card-body p-4">
                     <form method="post">
+                        <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                         <div class="row g-3 mb-4">
                             <div class="col-12">
                                 <h6 class="fw-bold text-primary text-uppercase small border-bottom pb-2 mb-3">Personal Information</h6>
@@ -308,12 +438,51 @@ bc_adm_head("Edit User | " . ($get_all_super_admin_site_details["site_title"]), 
         </div>
 
         <div class="col-lg-4">
+            <?php
+                $user_has_pin = !empty($get_user_details['security_pin']) || (!empty($get_user_details['transaction_pin']) && (int)$get_user_details['transaction_pin'] !== 0);
+            ?>
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+                <div class="card-header bg-warning bg-opacity-10 py-3 border-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <h6 class="fw-bold mb-0 text-warning"><i class="bi bi-key-fill me-2"></i>Reset User Security PIN</h6>
+                    <?php if($user_has_pin): ?>
+                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">PIN Configured</span>
+                    <?php else: ?>
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 py-1">Not Set</span>
+                    <?php endif; ?>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" class="mb-3">
+                        <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">New 4-Digit PIN</label>
+                            <input name="new-pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="new-password" placeholder="4 digits" class="form-control rounded-3" required/>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">Confirm Security PIN</label>
+                            <input name="con-new-pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="new-password" placeholder="4 digits" class="form-control rounded-3" required/>
+                        </div>
+                        <button name="reset-security-pin" type="submit" class="btn btn-warning text-dark w-100 rounded-pill fw-bold">
+                            Update Security PIN
+                        </button>
+                    </form>
+                    <hr class="my-3">
+                    <form method="post" class="m-0">
+                        <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                        <p class="small text-muted mb-2">Or clear the existing PIN so the user sets a fresh 4-digit PIN on next login.</p>
+                        <button name="clear-security-pin" type="submit" class="btn btn-outline-warning text-dark w-100 rounded-pill fw-bold" onclick="return confirm('Clear this user\'s Security PIN? They will be prompted to set a new 4-digit PIN on next login.');">
+                            Clear Security PIN
+                        </button>
+                    </form>
+                </div>
+            </div>
+
             <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
                 <div class="card-header bg-danger bg-opacity-10 py-3 border-0">
                     <h6 class="fw-bold mb-0 text-danger"><i class="bi bi-shield-lock me-2"></i>Reset User Password</h6>
                 </div>
                 <div class="card-body p-4">
                     <form method="post">
+                        <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                         <div class="mb-3">
                             <label class="form-label small fw-bold">New Password</label>
                             <input name="new-pass" type="password" class="form-control rounded-3" required/>

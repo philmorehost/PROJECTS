@@ -8,12 +8,14 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     if(!isset($_SESSION['bc_action_unlock_policy'][$scope]))unset($_SESSION['bc_gauth_unlock'][$scope]);
     $reply=function($ok,$message){header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     if(isset($_POST['send_settings_code'])){
-        bc_validate_csrf();if(!$p['email'])$reply(false,'Email OTP is disabled.');
+        header('Content-Type: application/json; charset=UTF-8');
+        bc_validate_csrf(true);if(!$p['email'])$reply(false,'Email OTP is disabled.');
         $error=bc_stepup_send_email_otp($table==='sas_super_admin'?0:(int)$actor['id'],(string)$actor['email'],(string)$actor['email'],'settings_unlock','Unlock account settings');
         $reply($error==='',$error===''?'SENT':$error);
     }
     if(isset($_POST['gauth-unlock'])){
-        bc_validate_csrf();
+        header('Content-Type: application/json; charset=UTF-8');
+        bc_validate_csrf(true);
         $input=['pin'=>(string)($_POST['pin']??''),'otp_code'=>(string)($_POST['otp_code']??''),'factor_method'=>'auto'];
         $error=$table==='sas_super_admin'?bc_stepup_spadmin_verify($actor,$input,'settings_unlock'):bc_stepup_admin_verify($actor,$input,'settings_unlock');
         if($error===''){
@@ -29,10 +31,11 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     foreach($exempt as $key)if(isset($_POST[$key]))return true;
     if(isset($_SESSION['bc_action_unlock_policy'][$scope]) && hash_equals($_SESSION['bc_action_unlock_policy'][$scope],$fingerprint) && bc_gauth_unlocked_until($scope)>0)return true;
     $_SESSION['product_purchase_response']='Settings are locked. Use the PIN/policy unlock form first.';
-    header('Location: AccountSettings.php');exit;
+    $self=(string)($_SERVER['REQUEST_URI']??'');
+    header('Location: '.($self!==''?$self:'AccountSettings.php'));exit;
 }
 function bc_action_settings_banner($scope,$actor) {
-    $table=$scope==='spadmin_settings'?'sas_super_admin':'sas_vendors';
+    $table=($scope==='spadmin_settings'||strpos((string)$scope,'spadmin_')===0)?'sas_super_admin':'sas_vendors';
     try{$p=bc_action_channels($table,$actor);}catch(Throwable $e){return null;}
     if($p['google'])return null;
     $csrf=bc_csrf_field();

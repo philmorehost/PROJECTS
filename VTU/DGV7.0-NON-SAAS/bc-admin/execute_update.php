@@ -303,12 +303,18 @@ try {
     // CRITICAL EXCEPTION: EXECUTE ROLLBACK
     // ---------------------------------------------------------
     $error_msg = $e->getMessage();
-    $rollback_status = restore_backup($backup_zip, $backup_sql, $connection_server);
+    $has_backup = (!empty($backup_zip) || !empty($backup_sql));
+    $rollback_status = $has_backup ? restore_backup($backup_zip, $backup_sql, $connection_server) : null;
     
     cleanup_temp_files();
 
     ob_end_clean();
-    if ($rollback_status === true) {
+    if (!$has_backup) {
+        echo json_encode([
+            'status' => 'error',
+            'message' => "Update failed: {$error_msg}.<br><b>Note:</b> Automated rollback was skipped because pre-update backup was disabled for this run. If needed, restore from an earlier snapshot in '/backups' or re-run the update."
+        ]);
+    } elseif ($rollback_status === true) {
         echo json_encode([
             'status' => 'error',
             'message' => "Update failed: {$error_msg}.<br><b>Your system files and database have been successfully restored to their pre-update state.</b>"

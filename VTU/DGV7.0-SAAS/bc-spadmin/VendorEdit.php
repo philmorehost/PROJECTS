@@ -2,14 +2,23 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
-    
-    $vendor_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags($_GET["vendorID"]))));
+
+    // Gate VendorEdit behind the super-admin security unlock (Google Authenticator
+    // or configured Action Verification Policy: Security PIN / Email OTP, 10-minute window).
+    $vendor_edit_scope = 'spadmin_vendor_edit';
+    if (function_exists('bc_gauth_settings_gate')) {
+        bc_gauth_settings_gate($vendor_edit_scope, 'sas_super_admin', $get_logged_spadmin_details, array('gauth-unlock', 'gauth-lock', 'send_settings_code'));
+    }
+    $vendor_edit_unlocked = function_exists('bc_gauth_unlocked_until') && bc_gauth_unlocked_until($vendor_edit_scope) > 0;
+
+    $vendor_id_number = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/", "", trim(strip_tags((string)($_GET["vendorID"] ?? "")))));
     $select_vendor = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id_number'");
-    if(mysqli_num_rows($select_vendor) > 0){
+    if($select_vendor && mysqli_num_rows($select_vendor) > 0){
         $get_vendor_details = mysqli_fetch_array($select_vendor);
     }
 
-    if(isset($_POST["update-profile"])){
+    if($vendor_edit_unlocked && isset($_POST["update-profile"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["first"]))));
         $last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
         $address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
@@ -205,9 +214,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $json_response_decode = json_decode($json_response_encode,true);
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
         header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
     }
     
-    if(isset($_POST["update-subscription"])){
+    if($vendor_edit_unlocked && isset($_POST["update-subscription"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $new_expiry = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["expiry-date"])));
         if(!empty($new_expiry)){
             mysqli_query($connection_server, "UPDATE sas_vendors SET expiry_date='$new_expiry', status=1 WHERE id='$vendor_id_number'");
@@ -219,7 +230,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
-    if(isset($_POST["update-app-orders"])){
+    if($vendor_edit_unlocked && isset($_POST["update-app-orders"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $apk = isset($_POST["apk_ordered"]) ? 1 : 0;
         $ios = isset($_POST["ios_ordered"]) ? 1 : 0;
         $ps = isset($_POST["playstore_ordered"]) ? 1 : 0;
@@ -231,7 +243,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
-    if(isset($_POST["toggle-nin-card"])){
+    if($vendor_edit_unlocked && isset($_POST["toggle-nin-card"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $nin_enabled = isset($_POST["nin_card_enabled"]) ? 1 : 0;
         mysqli_query($connection_server, "UPDATE sas_vendors SET nin_card_enabled='$nin_enabled' WHERE id='$vendor_id_number'");
         $_SESSION["product_purchase_response"] = $nin_enabled ? "NIN Card Service enabled for this vendor." : "NIN Card Service disabled for this vendor.";
@@ -239,7 +252,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
-    if(isset($_POST["update-ai-settings"])){
+    if($vendor_edit_unlocked && isset($_POST["update-ai-settings"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $ai_status = isset($_POST["ai_status"]) ? 1 : 0;
         $tokens = (int)$_POST["ai_token_balance"];
         $price_1k = (float)$_POST["ai_price_per_1k"];
@@ -252,7 +266,72 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
-    if(isset($_POST["change-password"])){
+    if($vendor_edit_unlocked && isset($_POST["reset-security-pin"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $new_pin = trim((string)($_POST["new-pin"] ?? ""));
+        $con_new_pin = trim((string)($_POST["con-new-pin"] ?? ""));
+
+        if ($new_pin === "" || $con_new_pin === "") {
+            $_SESSION["product_purchase_response"] = ($new_pin === "") ? "New Security PIN Field Empty" : "Confirm Security PIN Field Empty";
+        } elseif (!preg_match('/\A[0-9]{4}\z/D', $new_pin)) {
+            $_SESSION["product_purchase_response"] = "Security PIN must be exactly 4 digits";
+        } elseif (!hash_equals($new_pin, $con_new_pin)) {
+            $_SESSION["product_purchase_response"] = "New & Confirm Security PIN Not Match";
+        } else {
+            $check_vendor_details = mysqli_query($connection_server, "SELECT id, email FROM sas_vendors WHERE id='".$vendor_id_number."' LIMIT 1");
+            if ($check_vendor_details && mysqli_num_rows($check_vendor_details) == 1) {
+                $target_vendor = mysqli_fetch_assoc($check_vendor_details);
+                $new_pin_hash = password_hash($new_pin, PASSWORD_DEFAULT);
+                $saved = function_exists('bc_q')
+                    ? bc_q("UPDATE sas_vendors SET security_pin=?, failed_pin_count=0, last_failed_pin=NULL WHERE id=?", array($new_pin_hash, (int)$vendor_id_number))
+                    : mysqli_query($connection_server, "UPDATE sas_vendors SET security_pin='".mysqli_real_escape_string($connection_server, $new_pin_hash)."', failed_pin_count=0, last_failed_pin=NULL WHERE id='".$vendor_id_number."'");
+                if ($saved) {
+                    if (function_exists('bc_web_session_revoke_actor')) {
+                        bc_web_session_revoke_actor('admin', (int)$vendor_id_number, (int)$vendor_id_number, 'spadmin_pin_reset');
+                    }
+                    if (function_exists('bc_sec_audit')) {
+                        bc_sec_audit(0, 'spadmin', (string)($get_logged_spadmin_details['email'] ?? ''), 'vendor_security_pin_reset', 'vendor#' . (int)$vendor_id_number, 'Super admin reset vendor security PIN for ' . (string)($target_vendor['email'] ?? ''));
+                    }
+                    $_SESSION["product_purchase_response"] = "Vendor Security PIN Updated Successfully";
+                } else {
+                    $_SESSION["product_purchase_response"] = "Could not update Vendor Security PIN. Please try again.";
+                }
+            } else {
+                $_SESSION["product_purchase_response"] = "Vendor Not Exists";
+            }
+        }
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
+    if($vendor_edit_unlocked && isset($_POST["clear-security-pin"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $check_vendor_details = mysqli_query($connection_server, "SELECT id, email FROM sas_vendors WHERE id='".$vendor_id_number."' LIMIT 1");
+        if ($check_vendor_details && mysqli_num_rows($check_vendor_details) == 1) {
+            $target_vendor = mysqli_fetch_assoc($check_vendor_details);
+            $cleared = function_exists('bc_q')
+                ? bc_q("UPDATE sas_vendors SET security_pin=NULL, failed_pin_count=0, last_failed_pin=NULL WHERE id=?", array((int)$vendor_id_number))
+                : mysqli_query($connection_server, "UPDATE sas_vendors SET security_pin=NULL, failed_pin_count=0, last_failed_pin=NULL WHERE id='".$vendor_id_number."'");
+            if ($cleared) {
+                if (function_exists('bc_web_session_revoke_actor')) {
+                    bc_web_session_revoke_actor('admin', (int)$vendor_id_number, (int)$vendor_id_number, 'spadmin_pin_cleared');
+                }
+                if (function_exists('bc_sec_audit')) {
+                    bc_sec_audit(0, 'spadmin', (string)($get_logged_spadmin_details['email'] ?? ''), 'vendor_security_pin_cleared', 'vendor#' . (int)$vendor_id_number, 'Super admin cleared vendor security PIN for ' . (string)($target_vendor['email'] ?? ''));
+                }
+                $_SESSION["product_purchase_response"] = "Vendor Security PIN Cleared. Vendor will set a new PIN on next login.";
+            } else {
+                $_SESSION["product_purchase_response"] = "Could not clear Vendor Security PIN. Please try again.";
+            }
+        } else {
+            $_SESSION["product_purchase_response"] = "Vendor Not Exists";
+        }
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
+    if($vendor_edit_unlocked && isset($_POST["change-password"])){
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new-pass"])));
         $con_new_pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["con-new-pass"])));
         
@@ -302,6 +381,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $json_response_decode = json_decode($json_response_encode,true);
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
         header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
     }    
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
@@ -315,8 +395,49 @@ bc_adm_head('', array("area" => "spadmin"));
     <section class="section dashboard">
       <div class="row justify-content-center">
         <div class="col-lg-10">
-    
-    <?php if(!empty($get_vendor_details['id'])){ ?>
+    <?php
+        echo function_exists('bc_gauth_settings_banner') ? bc_gauth_settings_banner($vendor_edit_scope, $get_logged_spadmin_details) : '';
+        $vendor_edit_channels = array('google' => true, 'email' => true);
+        if (function_exists('bc_action_channels')) {
+            try { $vendor_edit_channels = bc_action_channels('sas_super_admin', $get_logged_spadmin_details); } catch (Throwable $e) { $vendor_edit_channels = array('google' => true, 'email' => true); }
+        }
+    ?>
+
+    <?php if(!$vendor_edit_unlocked){ ?>
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+            <div class="card-body text-center py-5 px-4">
+                <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 76px; height: 76px;">
+                    <i class="bi bi-shield-lock-fill text-warning fs-1"></i>
+                </div>
+                <h4 class="fw-bold mb-2">Vendor Editor Locked</h4>
+                <p class="text-muted mx-auto mb-4" style="max-width: 560px;">
+                    Complete the security verification above to unlock vendor profile edits, password resets, and security PIN resets for 10 minutes.
+                </p>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                    <?php if(!empty($vendor_edit_channels['google']) && function_exists('bc_gauth_enrolled') && !bc_gauth_enrolled($get_logged_spadmin_details)): ?>
+                        <a href="AccountSettings.php#tab-security" class="btn btn-primary rounded-pill px-4 fw-bold">
+                            <i class="bi bi-shield-check me-2"></i>Enrol Google Authenticator in Account Settings
+                        </a>
+                    <?php else: ?>
+                        <a href="<?php echo htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'Vendors.php'), ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-primary rounded-pill px-4 fw-bold">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Refresh After Unlocking
+                        </a>
+                    <?php endif; ?>
+                    <a href="Vendors.php" class="btn btn-light rounded-pill px-4 fw-bold">Back to Vendors</a>
+                </div>
+            </div>
+        </div>
+    <?php }elseif(!empty($get_vendor_details['id'])){ ?>
+        <?php if(empty($vendor_edit_channels['google']) && function_exists('bc_csrf_field')): ?>
+            <div class="d-flex justify-content-end mb-3">
+                <form method="post" class="m-0">
+                    <?php echo bc_csrf_field(); ?>
+                    <button type="submit" name="gauth-lock" value="1" class="btn btn-sm btn-outline-dark rounded-pill px-3">
+                        <i class="bi bi-lock-fill me-1"></i>Lock Vendor Editor Now
+                    </button>
+                </form>
+            </div>
+        <?php endif; ?>
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
             <div class="card-header bg-white py-4 border-0 text-center">
                 <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
@@ -327,6 +448,7 @@ bc_adm_head('', array("area" => "spadmin"));
             </div>
             <div class="card-body p-4 p-md-5">
                 <form method="post">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="row g-4 mb-5">
                         <div class="col-12"><h6 class="fw-bold text-uppercase small text-primary border-bottom pb-2">Personal & Business Info</h6></div>
                         <div class="col-md-6">
@@ -473,6 +595,7 @@ bc_adm_head('', array("area" => "spadmin"));
             <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-phone me-2"></i>Mobile App Add-ons</h5></div>
             <div class="card-body p-4">
                 <form method="post">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="row g-3">
                         <div class="col-md-3">
                             <div class="form-check form-switch">
@@ -508,6 +631,7 @@ bc_adm_head('', array("area" => "spadmin"));
             <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-success"><i class="bi bi-calendar-check me-2"></i>Manual Renewal</h5></div>
             <div class="card-body p-4">
                 <form method="post">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="row g-3 align-items-end">
                         <div class="col-md-8">
                             <label class="form-label small fw-bold">SUBSCRIPTION EXPIRY DATE</label>
@@ -528,6 +652,7 @@ bc_adm_head('', array("area" => "spadmin"));
             </div>
             <div class="card-body p-4">
                 <form method="post" class="d-flex align-items-center gap-3 flex-wrap">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="flex-grow-1">
                         <h6 class="fw-bold mb-1">Enable NIN Card Service</h6>
                         <p class="text-muted small mb-0">Toggle whether this vendor's users can generate Digital NIN Slips. Normally activated by the vendor via the wallet payment, but you can grant or revoke it manually here.</p>
@@ -549,6 +674,7 @@ bc_adm_head('', array("area" => "spadmin"));
             </div>
             <div class="card-body p-4">
                 <form method="post">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label small fw-bold">AI FEATURE STATUS</label>
@@ -590,11 +716,45 @@ bc_adm_head('', array("area" => "spadmin"));
                 </form>
             </div>
         </div>
+
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
+            <div class="card-header bg-white py-3 border-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <h5 class="fw-bold mb-0 text-warning"><i class="bi bi-key-fill me-2"></i>Reset Security PIN</h5>
+                <?php if(!empty($get_vendor_details['security_pin'])): ?>
+                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">PIN Configured</span>
+                <?php else: ?>
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary rounded-pill px-3 py-2">Not Set (Vendor Prompted on Next Login)</span>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" class="mb-3">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">NEW 4-DIGIT SECURITY PIN</label>
+                            <input name="new-pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="new-password" placeholder="4 digits" class="form-control rounded-3" required/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">CONFIRM SECURITY PIN</label>
+                            <input name="con-new-pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="new-password" placeholder="4 digits" class="form-control rounded-3" required/>
+                        </div>
+                    </div>
+                    <button name="reset-security-pin" type="submit" class="btn btn-warning text-dark mt-4 rounded-pill px-5 fw-bold">Update Security PIN</button>
+                </form>
+                <hr class="my-3">
+                <form method="post" class="d-flex flex-wrap align-items-center justify-content-between gap-2 m-0">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                    <div class="small text-muted">Or clear the existing PIN so the vendor is prompted to choose a fresh 4-digit PIN on their next admin login.</div>
+                    <button name="clear-security-pin" type="submit" class="btn btn-outline-warning text-dark rounded-pill px-4 fw-bold" onclick="return confirm('Clear this vendor\'s Security PIN? They will be prompted to set a new 4-digit PIN on their next admin login.');">Clear Security PIN</button>
+                </form>
+            </div>
+        </div>
         
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
             <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-danger">Reset Password</h5></div>
             <div class="card-body p-4">
                 <form method="post">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold">NEW PASSWORD</label>

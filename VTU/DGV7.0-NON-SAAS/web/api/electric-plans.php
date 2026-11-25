@@ -16,19 +16,15 @@ if ($select_vendor_table) {
     }
 
     $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), $vendor_id));
-    $user_id = mysqli_real_escape_string($connection_server, trim(strip_tags($input["UserID"] ?? "")));
-
     if (!empty($api_key)) {
         $get_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $select_vendor_table["id"] . "' && api_key='" . $api_key . "' LIMIT 1");
-    } elseif (!empty($user_id)) {
-        $get_user_query = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $select_vendor_table["id"] . "' && username='" . $user_id . "' LIMIT 1");
     } else {
-        echo json_encode(["status" => "failed", "desc" => "Authentication failed: Provide api_key or UserID"]);
+        echo json_encode(["status" => "failed", "desc" => "Authentication failed: Provide api_key"]);
         exit;
     }
 
     $get_logged_user_details = mysqli_fetch_array($get_user_query);
-    $purchase_method = ((isset($api_post_info_from_app) && is_array($api_post_info_from_app)) || (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android')) ? "app" : "api";
+    $purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
 
     if (mysqli_num_rows($get_user_query) == 1) {
         if (($get_logged_user_details["api_status"] == 1 || $purchase_method == "app") && $get_logged_user_details["status"] == 1) {

@@ -52,7 +52,7 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
                 try { if (oversized) throw new Error('Video too large.'); attach(new Blob(chunks,{type:mime.split(';')[0]}),mime.startsWith('video/mp4')?'mp4':'webm'); }
                 catch(e) { fail(e); }
             };
-            recorder.start(250); status.textContent = 'Recording 8 seconds: say your name and today’s date, then turn your head slowly.';
+            recorder.start(250); status.textContent = 'Recording 8 seconds: say your name and today’s date, then turn your head slowly. Wait until it finishes, or click Retake to cancel.';
             timer = setTimeout(stop,8000);
         } catch(e) { if (epoch === generation) fail(e); }
     });
@@ -62,10 +62,25 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
         const scale = Math.min(1,960 / Math.max(w,h)), canvas = document.createElement('canvas');
         canvas.width = Math.round(w*scale); canvas.height = Math.round(h*scale);
         canvas.getContext('2d').drawImage(preview,0,0,canvas.width,canvas.height); shot.hidden = true;
-        canvas.toBlob(blob => { if (epoch !== generation) return; stop(); try { attach(blob,'jpg'); } catch(e) { fail(e); } },'image/jpeg',0.78);
+        const qualities = [0.78, 0.62, 0.48];
+        const encode = idx => canvas.toBlob(blob => {
+            if (epoch !== generation) return;
+            if (blob && blob.size > 512 * 1024 && idx + 1 < qualities.length) { encode(idx + 1); return; }
+            stop();
+            try { attach(blob,'jpg'); } catch(e) { fail(e); }
+        },'image/jpeg',qualities[idx]);
+        encode(0);
     });
     reset.addEventListener('click',clear);
-    box.closest('form')?.addEventListener('submit', e => { if (busy) { e.preventDefault(); status.textContent = 'Finish or cancel the camera capture before submitting.'; } });
+    box.closest('form')?.addEventListener('submit', e => {
+        if (busy) { e.preventDefault(); status.textContent = 'Finish or cancel the camera capture before submitting.'; return; }
+        const form = box.closest('form');
+        const inputs = form ? Array.from(form.querySelectorAll('input[type="file"]')) : [];
+        if (inputs.length && inputs.every(inp => !inp.files || !inp.files.length)) {
+            e.preventDefault();
+            status.textContent = moving ? 'Record your live video (or select a document above) before submitting.' : 'Take a live photo (or select a document) before submitting.';
+        }
+    });
     window.addEventListener('pagehide',clear);
     document.addEventListener('visibilitychange', () => { if (document.hidden && busy) { clear(); status.textContent = 'Capture cancelled when the page was hidden. Please retake.'; } });
 });

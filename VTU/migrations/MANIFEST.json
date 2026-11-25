@@ -177,7 +177,7 @@
     },
     {
       "name": "bc-schema-autoheal.php",
-      "sha256": "05c236ffa7808a78e24790772eba470805aa9e67f2648804fe916f0d8871969f"
+      "sha256": "4dda84a762f859df9f7b44c8cf01becdaf96d2eca05d7d47256c6716d174764f"
     },
     {
       "name": "bc-service-intake-bridge.php",

@@ -333,6 +333,12 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 					header("Location: /bc-spadmin/Login.php");
 					exit();
 				}
+				if (function_exists('bc_web_session_touch_and_check') && !bc_web_session_touch_and_check('spadmin', $get_logged_spadmin_details)) {
+					$_SESSION = array();
+					if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
+					header("Location: /bc-spadmin/Login.php");
+					exit();
+				}
 				if($get_logged_spadmin_details["status"] == 1 && $get_logged_spadmin_details["is_blocked"] == 0){
 					if(in_array(explode("?",trim($_SERVER["REQUEST_URI"]))[0], array("/bc-spadmin/Login.php", "/bc-spadmin/PasswordRecovery.php", "/web/LockoutResolution.php"))){
 						header("Location: /bc-spadmin/Dashboard.php");

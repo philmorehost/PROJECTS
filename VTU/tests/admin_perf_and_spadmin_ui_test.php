@@ -94,6 +94,54 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
     ap_check(strpos($adm, '.pk-adm__memeta, .pk-adm__me .pk-app__chev { display: none; }') !== false && strpos($adm, 'aria-label="<?php echo htmlspecialchars($name . \' profile menu\'') !== false, "$ed bc-plate-admin collapses topbar profile link to icon-only on mobile");
     ap_check(strpos($hist, '$show_vendor_col') !== false, "$ed history-table displays vendor column when enabled");
     ap_check(strpos($cfg, "DELETE FROM sas_") !== false && strpos($cfg, 'system_migration_version') !== false, "$ed bc-config persists system_migration_version without duplicate-key drift");
+
+    $stepup = file_get_contents($root . '/' . $ed . '/func/bc-stepup.php');
+    $admCfg = file_get_contents($root . '/' . $ed . '/func/bc-admin-config.php');
+    $autoheal = file_get_contents($root . '/' . $ed . '/func/bc-schema-autoheal.php');
+    $logoutPhp = file_get_contents($root . '/' . $ed . '/logout.php');
+    $admLogoutPhp = file_get_contents($root . '/' . $ed . '/admin-logout.php');
+
+    ap_check(strpos($stepup, 'CREATE TABLE IF NOT EXISTS sas_web_sessions') !== false, "$ed bc-stepup defines sas_web_sessions schema");
+    ap_check(strpos($stepup, 'function bc_web_session_touch_and_check') !== false, "$ed bc-stepup defines bc_web_session_touch_and_check");
+    ap_check(strpos($cfg, "bc_web_session_touch_and_check('user'") !== false, "$ed bc-config wires web session touch/revoke check");
+    ap_check(strpos($admCfg, "bc_web_session_touch_and_check('vendor'") !== false, "$ed bc-admin-config wires web session touch/revoke check");
+    ap_check(strpos($logoutPhp, 'sas_web_sessions') !== false, "$ed logout.php closes tracked web session");
+    ap_check(strpos($admLogoutPhp, 'sas_web_sessions') !== false, "$ed admin-logout.php closes tracked web session");
+    ap_check(strpos($autoheal, 'CREATE TABLE IF NOT EXISTS sas_service_requests') !== false, "$ed bc-schema-autoheal ensures sas_service_requests before SQL migrations");
 }
+
+ap_check(
+    file_get_contents($root . '/DGV7.0-SAAS/func/bc-stepup.php') === file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-stepup.php'),
+    'edition parity preserved for func/bc-stepup.php'
+);
+ap_check(
+    file_get_contents($root . '/DGV7.0-SAAS/func/bc-schema-autoheal.php') === file_get_contents($root . '/DGV7.0-NON-SAAS/func/bc-schema-autoheal.php'),
+    'edition parity preserved for func/bc-schema-autoheal.php'
+);
+
+$spCfg = file_get_contents($root . '/DGV7.0-SAAS/func/bc-spadmin-config.php');
+$spLogout = file_get_contents($root . '/DGV7.0-SAAS/spadmin-logout.php');
+$bfs = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/BruteForceSecurity.php');
+$spExec = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/execute_update.php');
+$admExec = file_get_contents($root . '/DGV7.0-NON-SAAS/bc-admin/execute_update.php');
+$spUpd = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/UpdateSystem.php');
+$admUpd = file_get_contents($root . '/DGV7.0-NON-SAAS/bc-admin/UpdateSystem.php');
+
+ap_check(strpos($spCfg, "bc_web_session_touch_and_check('spadmin'") !== false, 'SAAS bc-spadmin-config wires web session touch/revoke check');
+ap_check(strpos($spLogout, 'sas_web_sessions') !== false, 'SAAS spadmin-logout closes tracked web session');
+ap_check(
+    strpos($bfs, 'Live Sessions') !== false
+    && strpos($bfs, 'Session History Records') !== false
+    && strpos($bfs, 'revoke-web-session') !== false
+    && strpos($bfs, 'revoke-app-session') !== false
+    && strpos($bfs, 'revoke-actor-sessions') !== false
+    && strpos($bfs, 'block-session-ip') !== false
+    && strpos($bfs, 'unblock-session-ip') !== false,
+    'SAAS bc-spadmin/BruteForceSecurity exposes live sessions, history records, and management actions'
+);
+ap_check(strpos($spExec, '$has_backup = (!empty($backup_zip) || !empty($backup_sql));') !== false, 'SAAS execute_update skips rollback cleanly when backup disabled');
+ap_check(strpos($admExec, '$has_backup = (!empty($backup_zip) || !empty($backup_sql));') !== false, 'NON-SAAS execute_update skips rollback cleanly when backup disabled');
+ap_check(strpos($spUpd, 'setStepStatus(activeStep, \'error\')') !== false, 'SAAS UpdateSystem marks only failing step red');
+ap_check(strpos($admUpd, 'setStepStatus(activeStep, \'error\')') !== false, 'NON-SAAS UpdateSystem marks only failing step red');
 
 echo "PASS $n admin perf & spadmin UI regression checks\n";

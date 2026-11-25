@@ -187,6 +187,12 @@ if ($connection_server) {
                         header("Location: /bc-admin/Login.php");
                         exit();
                     }
+                    if (!isset($_SESSION["spadmin_vendor_auth"]) && function_exists('bc_web_session_touch_and_check') && !bc_web_session_touch_and_check('vendor', $get_logged_admin_details)) {
+                        $_SESSION = array();
+                        if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
+                        header("Location: /bc-admin/Login.php");
+                        exit();
+                    }
 
                     // §35: URL probe inspection — a signed-in vendor scanning for
                     // traversal/SQLi/code paths is scored by the abuse guard; the

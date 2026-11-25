@@ -2549,9 +2549,10 @@ $required_nav_pages = [
     'Electric.php', 'Betting.php', 'Exam.php', 'Fund.php', 'VirtualBanks.php',
     'SendFund.php', 'ShareFund.php', 'ShareFundHistory.php', 'CoinConversion.php', 'VirtualCard.php',
     'NINCard.php', 'NINCardHistory.php', 'BVNVerification.php', 'NumberFilter.php', 'GiftCard.php',
-    // §25: AISuite.php left the nav (VTU-purchase AI retired); Support (AI-Assistant.php),
-    // Refer & Earn and the new provider services joined it.
-    'CryptoHub.php', 'AI-Assistant.php', 'Referral.php', 'IntlTransfer.php', 'Tuition.php',
+    // §25: AISuite.php left the nav (VTU-purchase AI retired); Support moved into
+    // Settings & Help (Hub.php?g=settings-help#bcSupportSection), Refer & Earn and
+    // the new provider services joined it.
+    'CryptoHub.php', 'Hub.php?g=settings-help#bcSupportSection', 'Referral.php', 'IntlTransfer.php', 'Tuition.php',
     'ESIM.php', 'POSRequest.php', 'BulkSMS.php', 'SubmitSenderID.php',
     'Pricing.php', 'BusinessUpgrade.php', 'APIDocs.php', 'Transactions.php', 'BatchTransactions.php',
     'PointsHistory.php', 'TransactionCalculator.php', 'NumberChecker.php', 'PrintHub.php',
