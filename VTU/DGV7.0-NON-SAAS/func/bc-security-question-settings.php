@@ -2,16 +2,21 @@
 require_once __DIR__.'/bc-security-question-policy.php';
 function bc_question_policy_handle($platform,$actor) {
     if(!isset($_POST['save-question-policy']) && !isset($_POST['send-question-code']))return;
-    bc_validate_csrf();header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+    header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+    bc_validate_csrf();
     $reply=function($ok,$message){echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     global $connection_server;
     $table=$platform?'sas_super_admin':'sas_vendors';$id=(int)$actor['id'];
-    $fresh=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1",[$id]);
+    try{
+        $fresh=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1",[$id]);
+    }catch(Throwable $e){$reply(false,'Could not load account details. Please try again.');}
     if(!$fresh || (int)$fresh['status']!==1 || !empty($fresh['is_blocked']) || !empty($fresh['force_password_change']))$reply(false,'Account restricted.');
     if(!$platform && function_exists('bc_demo_guard_edit'))bc_demo_guard_edit($connection_server);
     if(isset($_POST['send-question-code'])){
         if(bc_gauth_enrolled($fresh))$reply(false,'Use your enrolled authenticator to verify a security-policy change.');
-        $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'security_question_policy','Change security question policy');
+        try{
+            $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'security_question_policy','Change security question policy');
+        }catch(Throwable $e){$err='Could not send the verification code. Please try again.';}
         $reply($err==='',$err===''?'SENT':$err);
     }
     if(!is_string($_POST['current_password']??null) || !bc_verify_password($_POST['current_password'],$fresh['password']))$reply(false,'Current password is incorrect.');
@@ -54,9 +59,9 @@ function bc_question_policy_form($actor) {
  <label class="d-block"><input type="checkbox" name="question_web" <?php echo $p['web']?'checked':''; ?>> Web security question ON</label>
  <label class="d-block"><input type="checkbox" name="question_app" <?php echo $p['app']?'checked':''; ?>> App security question ON</label>
  <label class="d-block text-danger"><input type="checkbox" name="ack_question_off"> I understand that disabling the question gate reduces shared-device protection.</label>
- <label class="d-block">Current password<input class="form-control" type="password" name="current_password" required></label>
- <label class="d-block">Security PIN<input class="form-control" type="password" name="pin" required></label>
- <label class="d-block">Authenticator / email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" required></label>
+ <label class="d-block">Current password<input class="form-control" type="password" name="current_password" autocomplete="current-password" required></label>
+ <label class="d-block">Security PIN<input class="form-control" type="password" name="pin" autocomplete="off" required></label>
+ <label class="d-block">Authenticator / email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
  <?php if(!bc_gauth_enrolled($actor)): ?><button type="button" class="btn btn-outline-primary" data-security-send="send-question-code">Send code</button><?php endif; ?>
  <p data-wallet-status role="status"></p><button class="btn btn-primary" name="save-question-policy" value="1">Save security question policy</button>
  </form></section><?php

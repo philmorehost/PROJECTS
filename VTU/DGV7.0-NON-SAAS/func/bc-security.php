@@ -66,7 +66,8 @@ function bc_validate_csrf(bool $json_response = false): void {
     $expected  = $_SESSION['_csrf_token'] ?? '';
 
     if (empty($submitted) || empty($expected) || !hash_equals($expected, $submitted)) {
-        if ($json_response) {
+        $wants_json = $json_response || (strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest');
+        if ($wants_json) {
             header('Content-Type: application/json');
             http_response_code(403);
             echo json_encode(['status' => 'error', 'message' => 'Invalid security token. Please refresh the page and try again.']);

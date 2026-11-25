@@ -377,16 +377,26 @@ if (!function_exists('bc_stepup_send_email_otp')) {
      */
     function bc_stepup_send_email_otp($vendor_id, $identity, $email, $context, $action_label) {
         if (!function_exists('bc_issue_otp')) return 'Verification is unavailable.';
+        if (!filter_var((string)$email, FILTER_VALIDATE_EMAIL)) {
+            return 'A valid account email is required to send the verification code.';
+        }
         $code = bc_issue_otp('stepup_' . $context, (string)$identity, (int)$vendor_id, array(), 600);
         if ($code === '') return 'Could not send the verification code. Please try again.';
-        if (function_exists('sendVendorEmail') && filter_var((string)$email, FILTER_VALIDATE_EMAIL)) {
-            // §46: same copy-friendly code format as the login OTP.
-            $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($code, (string)$action_label) : null;
-            $body = $otp_mail ? $otp_mail['body']
-                : "Your verification code for <b>" . htmlspecialchars((string)$action_label, ENT_QUOTES, 'UTF-8') . "</b> is "
-                . "<b style=\"font-size:20px;letter-spacing:3px;\">" . $code . "</b>.<br>It expires in 10 minutes. "
-                . "If you did not request this, change your password and contact support immediately.";
-            sendVendorEmail((string)$email, $otp_mail ? $otp_mail['subject'] : 'Verification Code — ' . (string)$action_label, $body);
+        // §46: same copy-friendly code format as the login OTP.
+        $otp_mail = function_exists('bc_otp_email') ? bc_otp_email($code, (string)$action_label) : null;
+        $subject = $otp_mail ? $otp_mail['subject'] : 'Verification Code — ' . (string)$action_label;
+        $body = $otp_mail ? $otp_mail['body']
+            : "Your verification code for <b>" . htmlspecialchars((string)$action_label, ENT_QUOTES, 'UTF-8') . "</b> is "
+            . "<b style=\"font-size:20px;letter-spacing:3px;\">" . $code . "</b>.<br>It expires in 10 minutes. "
+            . "If you did not request this, change your password and contact support immediately.";
+        $is_platform = ((int)$vendor_id === 0);
+        $sender = ($is_platform && function_exists('sendSuperAdminEmail'))
+            ? 'sendSuperAdminEmail'
+            : (function_exists('sendVendorEmail') ? 'sendVendorEmail' : '');
+        if ($sender === '') return 'Email delivery is unavailable.';
+        $sent = $sender((string)$email, $subject, $body);
+        if ($sent !== true) {
+            return 'Could not send the verification code. Please check mail settings and try again.';
         }
         return '';
     }

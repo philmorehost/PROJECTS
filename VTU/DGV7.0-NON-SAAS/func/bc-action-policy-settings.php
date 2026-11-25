@@ -2,16 +2,21 @@
 require_once __DIR__.'/bc-action-channels.php';
 function bc_action_policy_handle($platform,$actor) {
     if(!isset($_POST['save-action-channels']) && !isset($_POST['send-channel-code']))return;
-    bc_validate_csrf();header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+    header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
+    bc_validate_csrf(true);
     $reply=function($ok,$message){echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     global $connection_server;
     $table=$platform?'sas_super_admin':'sas_vendors';$id=(int)$actor['id'];
-    $fresh=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1",[$id]);
+    try{
+        $fresh=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1",[$id]);
+    }catch(Throwable $e){$reply(false,'Could not load account details. Please try again.');}
     if(!$fresh || (int)$fresh['status']!==1 || !empty($fresh['is_blocked']) || !empty($fresh['force_password_change']))$reply(false,'Account restricted.');
     if(!$platform && function_exists('bc_demo_guard_edit'))bc_demo_guard_edit($connection_server);
     if(isset($_POST['send-channel-code'])){
         if(bc_gauth_enrolled($fresh))$reply(false,'Use your enrolled authenticator to verify a security-policy change.');
-        $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'action_channel_policy','Change action verification policy');
+        try{
+            $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'action_channel_policy','Change action verification policy');
+        }catch(Throwable $e){$err='Could not send the verification code. Please try again.';}
         $reply($err==='',$err===''?'SENT':$err);
     }
     if(!is_string($_POST['current_password']??null) || !bc_verify_password($_POST['current_password'],$fresh['password']))$reply(false,'Current password is incorrect.');
@@ -60,7 +65,7 @@ function bc_action_policy_form($platform,$actor) {
     <p>Policy changes always require your current password, PIN, and enrolled authenticator (or email OTP if not enrolled), even when both channels are OFF.</p>
     <label class="d-block">Current password<input class="form-control" type="password" name="current_password" autocomplete="current-password" required></label>
     <label class="d-block">Security PIN<input class="form-control" type="password" name="pin" autocomplete="off" required></label>
-    <label class="d-block"><?php echo bc_gauth_enrolled($actor)?'Google Authenticator code':'Email OTP'; ?><input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" required></label>
+    <label class="d-block"><?php echo bc_gauth_enrolled($actor)?'Google Authenticator code':'Email OTP'; ?><input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
     <?php if(!bc_gauth_enrolled($actor)): ?><button type="button" class="btn btn-outline-primary my-2" data-security-send="send-channel-code">Send code</button><?php endif; ?>
     <p data-wallet-status role="status" aria-live="polite"></p><button class="btn btn-primary" name="save-action-channels" value="1">Save action verification policy</button></form></section>
     <?php

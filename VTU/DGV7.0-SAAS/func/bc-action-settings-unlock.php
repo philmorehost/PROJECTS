@@ -8,12 +8,14 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     if(!isset($_SESSION['bc_action_unlock_policy'][$scope]))unset($_SESSION['bc_gauth_unlock'][$scope]);
     $reply=function($ok,$message){header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     if(isset($_POST['send_settings_code'])){
-        bc_validate_csrf();if(!$p['email'])$reply(false,'Email OTP is disabled.');
+        header('Content-Type: application/json; charset=UTF-8');
+        bc_validate_csrf(true);if(!$p['email'])$reply(false,'Email OTP is disabled.');
         $error=bc_stepup_send_email_otp($table==='sas_super_admin'?0:(int)$actor['id'],(string)$actor['email'],(string)$actor['email'],'settings_unlock','Unlock account settings');
         $reply($error==='',$error===''?'SENT':$error);
     }
     if(isset($_POST['gauth-unlock'])){
-        bc_validate_csrf();
+        header('Content-Type: application/json; charset=UTF-8');
+        bc_validate_csrf(true);
         $input=['pin'=>(string)($_POST['pin']??''),'otp_code'=>(string)($_POST['otp_code']??''),'factor_method'=>'auto'];
         $error=$table==='sas_super_admin'?bc_stepup_spadmin_verify($actor,$input,'settings_unlock'):bc_stepup_admin_verify($actor,$input,'settings_unlock');
         if($error===''){

@@ -1249,28 +1249,6 @@ bc_adm_head('', array("area" => "spadmin"));
 
                                 <div class="card border border-primary border-opacity-25 rounded-4 shadow-none mb-4">
                                     <div class="card-body p-4">
-                                        <h6 class="fw-bold mb-3"><i class="bi bi-phone-lock me-2 text-primary"></i>My Super Admin Authenticator App (2FA)</h6>
-                                        <p class="text-muted small">Funding a vendor or user wallet, and approving vendor payment orders, require your Security PIN <strong>plus</strong> this authenticator code. If you never enrol, a 6-digit code is emailed to you each time instead — enrol here for the stronger option.</p>
-                                        <?php
-                                        $sec30_q = mysqli_query($connection_server, "SELECT two_factor_type, totp_secret FROM sas_super_admin WHERE id='" . (int)$get_logged_spadmin_details["id"] . "' LIMIT 1");
-                                        $sec30_row = $sec30_q ? mysqli_fetch_assoc($sec30_q) : array('two_factor_type' => 'none', 'totp_secret' => '');
-                                        $sec30_state = (string)($sec30_row['two_factor_type'] ?? 'none');
-                                        ?>
-                                        <?php if ($sec30_state === 'totp'): ?>
-                                            <p class="small text-success fw-bold mb-2">Enabled — funding and approvals require this code with your PIN.</p>
-                                            <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
-                                                <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
-                                                <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
-                                                <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
-                                            </form>
-                                        <?php else: ?>
-<?php bc_totp_setup_widget(); ?>
-<?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <div class="card border border-primary border-opacity-25 rounded-4 shadow-none mb-4">
-                                    <div class="card-body p-4">
                                         <h6 class="fw-bold mb-3"><i class="bi bi-envelope-at me-2 text-primary"></i>Global Platform SMTP (System Fallback)</h6>
                                         <p class="text-muted small">Configure the default SMTP server used for all system notifications when vendors have not set their own.</p>
                                         <div class="row g-3">
@@ -1320,6 +1298,31 @@ bc_adm_head('', array("area" => "spadmin"));
 
                                 <button name="update-security" class="btn btn-primary px-5 rounded-pill fw-bold py-2 shadow-sm">Apply Security Policy</button>
                             </form>
+
+                            <!-- Authenticator App card deliberately lives OUTSIDE the security policy form element above:
+                                 both bc_totp_setup_widget() and the disable action own their own <form> elements, and a
+                                 nested form element would be dropped by browsers (breaking setup buttons) and orphan the
+                                 Apply Security Policy button. -->
+                            <div class="card border border-primary border-opacity-25 rounded-4 shadow-none mb-4 mt-4">
+                                <div class="card-body p-4">
+                                    <h6 class="fw-bold mb-3"><i class="bi bi-phone-lock me-2 text-primary"></i>My Super Admin Authenticator App (2FA)</h6>
+                                    <p class="text-muted small">Funding a vendor or user wallet, and approving vendor payment orders, require your Security PIN <strong>plus</strong> this authenticator code. If you never enrol, a 6-digit code is emailed to you each time instead — enrol here for the stronger option.</p>
+                                    <?php
+                                    $sec30_q = mysqli_query($connection_server, "SELECT two_factor_type, totp_secret FROM sas_super_admin WHERE id='" . (int)$get_logged_spadmin_details["id"] . "' LIMIT 1");
+                                    $sec30_row = $sec30_q ? mysqli_fetch_assoc($sec30_q) : array('two_factor_type' => 'none', 'totp_secret' => '');
+                                    $sec30_state = (string)($sec30_row['two_factor_type'] ?? 'none');
+                                    ?>
+                                    <?php if ($sec30_state === 'totp'): ?>
+                                        <p class="small text-success fw-bold mb-2">Enabled — funding and approvals require this code with your PIN.</p>
+                                        <form method="post" class="row g-2 align-items-end"><?php echo bc_csrf_field(); ?>
+                                            <div class="col-md-4"><input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" class="form-control" placeholder="Security PIN" inputmode="numeric" required /></div>
+                                            <div class="col-md-4"><button name="totp-disable" type="submit" class="btn btn-outline-danger rounded-pill fw-bold" onclick="return confirm('Disable authenticator protection?')">Disable authenticator</button></div>
+                                        </form>
+                                    <?php else: ?>
+<?php bc_totp_setup_widget(); ?>
+<?php endif; ?>
+                                </div>
+                            </div>
 
                             <!-- Demo Mode card deliberately lives OUTSIDE the security policy form element above:
                                  it owns its own forms, and a nested form element's closing tag would close

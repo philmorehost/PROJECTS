@@ -1487,7 +1487,7 @@ function sendVendorEmail($recipient_email, $email_subject, $email_body, $backgro
 	//$mail_headers .= 'Cc: ' . $logged_account_details["email"] . "\r\n";
 	//$mail_headers .= 'Subject: '.$email_subject."\r\n";
 
-	$website_admin_phone_number = "234" . substr($logged_account_details["phone_number"], 1, 11);
+	$website_admin_phone_number = "234" . substr((string)($logged_account_details["phone_number"] ?? ''), 1, 11);
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, true);
 
@@ -1536,7 +1536,7 @@ function sendSuperAdminEmail($recipient_email, $email_subject, $email_body, $bac
 	//$mail_headers .= 'Cc: ' . $logged_account_details["email"] . "\r\n";
 	//$mail_headers .= 'Subject: '.$email_subject."\r\n";
 
-	$website_admin_phone_number = "234" . substr($logged_account_details["phone_number"], 1, 11);
+	$website_admin_phone_number = "234" . substr((string)($logged_account_details["phone_number"] ?? ''), 1, 11);
 	$details_array = array($website_admin_phone_number);
 	$mail_html_body = mailDesignTemplate($email_subject, $email_body, $details_array, false);
 
