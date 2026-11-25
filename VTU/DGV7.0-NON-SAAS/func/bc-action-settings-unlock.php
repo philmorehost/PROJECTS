@@ -8,12 +8,16 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     if(!isset($_SESSION['bc_action_unlock_policy'][$scope]))unset($_SESSION['bc_gauth_unlock'][$scope]);
     $reply=function($ok,$message){header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     if(isset($_POST['send_settings_code'])){
+        @ini_set('display_errors', '0');@ini_set('html_errors', '0');
         header('Content-Type: application/json; charset=UTF-8');
         bc_validate_csrf(true);if(!$p['email'])$reply(false,'Email OTP is disabled.');
-        $error=bc_stepup_send_email_otp($table==='sas_super_admin'?0:(int)$actor['id'],(string)$actor['email'],(string)$actor['email'],'settings_unlock','Unlock account settings');
+        try{
+            $error=bc_stepup_send_email_otp($table==='sas_super_admin'?0:(int)$actor['id'],(string)$actor['email'],(string)$actor['email'],'settings_unlock','Unlock account settings');
+        }catch(Throwable $e){$error='Could not send the verification code. Please try again.';}
         $reply($error==='',$error===''?'SENT':$error);
     }
     if(isset($_POST['gauth-unlock'])){
+        @ini_set('display_errors', '0');@ini_set('html_errors', '0');
         header('Content-Type: application/json; charset=UTF-8');
         bc_validate_csrf(true);
         $input=['pin'=>(string)($_POST['pin']??''),'otp_code'=>(string)($_POST['otp_code']??''),'factor_method'=>'auto'];

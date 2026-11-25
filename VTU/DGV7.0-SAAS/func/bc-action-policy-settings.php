@@ -2,6 +2,7 @@
 require_once __DIR__.'/bc-action-channels.php';
 function bc_action_policy_handle($platform,$actor) {
     if(!isset($_POST['save-action-channels']) && !isset($_POST['send-channel-code']))return;
+    @ini_set('display_errors', '0');@ini_set('html_errors', '0');
     header('Content-Type: application/json; charset=UTF-8');header('Cache-Control: no-store');
     bc_validate_csrf(true);
     $reply=function($ok,$message){echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};

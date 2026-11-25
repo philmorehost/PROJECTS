@@ -235,7 +235,7 @@ function bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $pla
 		$smtpMAIL->Port = $smtp_port;
         $smtpMAIL->CharSet = 'UTF-8';
         $smtpMAIL->Timeout = 5;
-        $smtpMAIL->Timelimit = 8;
+        $smtpMAIL->getSMTPInstance()->Timelimit = 8;
 		
 		$smtpMAIL->Username = $smtp_user;
 		$smtpMAIL->Password = $smtp_pass;

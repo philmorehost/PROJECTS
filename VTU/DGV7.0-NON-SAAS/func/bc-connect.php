@@ -11,7 +11,12 @@
         stripos($_SERVER['SCRIPT_NAME'] ?? '', '/web/api/') !== false ||
         isset($_SERVER['HTTP_X_APP_SOURCE'])
     );
-    if ($bc_connect_is_api_client) {
+    $bc_connect_is_json_request = (
+        $bc_connect_is_api_client ||
+        strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest' ||
+        stripos((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false
+    );
+    if ($bc_connect_is_json_request) {
         @ini_set('display_errors', '0');
         @ini_set('html_errors', '0');
         @ini_set('log_errors', '1');

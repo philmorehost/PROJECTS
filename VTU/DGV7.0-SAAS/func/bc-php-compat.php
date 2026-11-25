@@ -14,7 +14,7 @@ $_bc_app_env = strtolower((string)(getenv('APP_ENV') ?: 'production'));
 $_bc_is_dev  = ($_bc_app_env === 'development' || $_bc_app_env === 'dev');
 
 // ── Error display: Production Mode (Hide from users, log to file) ─────────────
-error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT);
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 ini_set('display_errors', '0');
 ini_set('display_startup_errors', '0');
 
