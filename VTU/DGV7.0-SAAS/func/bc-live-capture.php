@@ -20,11 +20,14 @@ function bc_live_media_prepare($tmp, $kind) {
     if (!is_file($tmp)) return false;
     $size = filesize($tmp);
     if ($size <= 0 || $size > ($kind === 'selfie' ? 512 * 1024 : 3 * 1024 * 1024)) return false;
-    if (!class_exists('finfo')) return false;
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
-    if ($kind !== 'selfie') return bc_video_evidence_inspect($tmp,$mime);
+    if ($kind !== 'selfie') {
+        if (!class_exists('finfo')) return false;
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
+        return bc_video_evidence_inspect($tmp, $mime);
+    }
     $info = @getimagesize($tmp);
-    if (!$info || $mime !== 'image/jpeg' || $info[0] > 960 || $info[1] > 960 || min($info[0],$info[1]) < 160) return false;
+    if (!$info || (int)$info[2] !== IMAGETYPE_JPEG || ($info['mime'] ?? '') !== 'image/jpeg' || $info[0] > 960 || $info[1] > 960 || min($info[0], $info[1]) < 160) return false;
+    if (class_exists('finfo') && (new finfo(FILEINFO_MIME_TYPE))->file($tmp) !== 'image/jpeg') return false;
     // Strip metadata and recompress when GD is available; input limits apply even without GD.
     if (function_exists('imagecreatefromjpeg')) {
         $image = @imagecreatefromjpeg($tmp);

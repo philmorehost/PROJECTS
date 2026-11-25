@@ -38,6 +38,11 @@ $bc_message_type = 'info';
 // Re-render the form with what the user typed when validation fails; never re-fill on success.
 $bc_old = ['business_name' => '', 'registration_no' => '', 'category' => ''];
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $bc_message = "Your upload exceeded the server's maximum request size (" . ini_get('post_max_size') . '). Please upload a smaller file (8MB max).';
+    $bc_message_type = 'danger';
+}
+
 if (isset($_POST['submit_business_kyb'])) {
     bc_validate_csrf();
     if(bc_is_rate_limited('kyb_submit',(int)$bc_upgrade_vendor.':'.(int)$bc_upgrade_uid,5,300)){http_response_code(429);exit('Too many submission attempts. Please wait.');}
@@ -74,7 +79,10 @@ if (isset($_POST['submit_business_kyb'])) {
             $ext  = strtolower(pathinfo((string)$_FILES['kyb_document']['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
 
-            if ($err !== UPLOAD_ERR_OK || !is_uploaded_file($tmp)) {
+            if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+                $bc_message = 'The document exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Please upload a smaller file.';
+                $bc_message_type = 'danger';
+            } elseif ($err !== UPLOAD_ERR_OK || !is_uploaded_file($tmp)) {
                 $bc_message = 'The document did not upload. Please try again.';
                 $bc_message_type = 'danger';
             } elseif ($size > 8 * 1024 * 1024) {

@@ -506,6 +506,12 @@ if ($connection_server) {
             header('Location: /web/Login.php');
             exit();
         }
+        if (!isset($_SESSION["admin_session"]) && function_exists('bc_web_session_touch_and_check') && !bc_web_session_touch_and_check('user', $get_logged_user_details)) {
+            $_SESSION = array();
+            if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
+            header('Location: /web/Login.php');
+            exit();
+        }
 
         // §35: URL probe inspection for signed-in customers (abuse guard);
         // an actor whose probes just earned a 24h IP block is cut off here.

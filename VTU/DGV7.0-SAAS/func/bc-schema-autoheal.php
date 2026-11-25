@@ -155,6 +155,32 @@ if (!function_exists('bc_schema_autoheal')) {
                 mysqli_free_result($q);
             }
 
+            // Ensure sas_service_requests exists before index migrations (e.g.
+            // 20261118_service_attempt_review_indexes.sql) alter it; otherwise installations
+            // that have not yet lazily initialized bc_svc_ensure_schema() fail during OTA updates.
+            $okSvcReq = mysqli_query(
+                $db,
+                "CREATE TABLE IF NOT EXISTS sas_service_requests (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    vendor_id INT UNSIGNED NOT NULL,
+                    user_id INT UNSIGNED NOT NULL DEFAULT 0,
+                    username VARCHAR(191) NOT NULL DEFAULT '',
+                    type VARCHAR(32) NOT NULL DEFAULT '',
+                    provider VARCHAR(32) NOT NULL DEFAULT '',
+                    reference VARCHAR(64) NOT NULL DEFAULT '',
+                    payload TEXT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NULL,
+                    PRIMARY KEY (id),
+                    KEY idx_vendor_user (vendor_id, user_id),
+                    KEY idx_vendor_type (vendor_id, type, status)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+            if (!$okSvcReq) {
+                return ['ok' => false, 'code' => 'service_requests_table_failed', 'error' => mysqli_error($db), 'applied' => [], 'skipped' => []];
+            }
+
             $applied = [];
             $skipped = [];
             $benignPatterns = ['already exists', 'duplicate column name', 'duplicate key name', 'multiple primary keys'];

@@ -29,10 +29,11 @@ $db->select_db($dbName);
 
 try {
     // Seed prerequisite legacy tables created earlier in bc-tables.php
+    // Intentionally omit sas_service_requests to verify bc_schema_autoheal() creates it
+    // before running 20261118_service_attempt_review_indexes.sql.
     $db->query("CREATE TABLE sas_users (id INT AUTO_INCREMENT PRIMARY KEY, vendor_id INT NOT NULL, username VARCHAR(120) NOT NULL, balance DECIMAL(30,8) NOT NULL DEFAULT 0, is_blocked TINYINT(1) NOT NULL DEFAULT 0) ENGINE=InnoDB");
     $db->query("CREATE TABLE sas_site_details (vendor_id INT UNSIGNED PRIMARY KEY) ENGINE=InnoDB");
     $db->query("CREATE TABLE sas_service_control (vendor_id INT UNSIGNED NOT NULL, service_name VARCHAR(64) NOT NULL, status INT DEFAULT 1) ENGINE=InnoDB");
-    $db->query("CREATE TABLE sas_service_requests (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, vendor_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NOT NULL, type VARCHAR(32) NOT NULL, provider VARCHAR(64) NOT NULL, payload LONGTEXT) ENGINE=InnoDB");
 
     // 1. Refuses inside an open transaction (autocommit=0)
     $db->autocommit(false);
@@ -60,6 +61,7 @@ try {
         'sas_virtualcard_orders',
         'sas_giftcard_orders',
         'sas_checkout_intents',
+        'sas_service_requests',
         'sas_service_dispatch_leases',
         'sas_crypto_trade_orders',
         'sas_crypto_chain_deposits',

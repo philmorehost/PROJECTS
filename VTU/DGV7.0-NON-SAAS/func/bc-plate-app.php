@@ -762,6 +762,8 @@ if (!function_exists('bc_app_css')) {
             font-weight: 700; background: #fff; }
         .pk-app__wrap .card-footer { padding: 14px 18px; border-top: 1px solid var(--line); background: var(--wash); }
         .pk-app__wrap .card-blue, .pk-app__wrap .card-primary { background: var(--brand); color: #fff; }
+        /* Preserve HTML5 hidden attribute even when component classes set display (e.g. .btn { display: inline-flex }) */
+        .pk-app__wrap [hidden] { display: none !important; }
         /* Buttons */
         .pk-app__wrap .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 7px; font: inherit;
