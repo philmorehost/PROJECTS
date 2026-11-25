@@ -359,8 +359,10 @@ if (!function_exists('bc_landing_services')) {
 if (!function_exists('bc_landing_head')) {
     function bc_landing_e($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
-    function bc_landing_head($ctx, $title, $desc) {
+    function bc_landing_head($ctx, $title, $desc, $world = 'personal') {
         require_once __DIR__ . '/bc-public-meridian.php';
+        $world = ($world === 'business') ? 'business' : 'personal';
+        $style_vars = ($world === 'personal') ? bc_meridian_personal_style_vars($ctx['primary_color'] ?? '#287BFF') : '';
         $js_config = array(
             'siteName' => $ctx['site_name'],
             'appUrl' => $ctx['app_url'] ?? '',
@@ -372,7 +374,7 @@ if (!function_exists('bc_landing_head')) {
             'rates' => $ctx['rates'] ?? array(),
         );
         ?><!DOCTYPE html>
-<html lang="en" data-theme="dark" data-world="business">
+<html lang="en" data-theme="dark" data-world="<?php echo bc_landing_e($world); ?>"<?php if ($style_vars !== ''): ?> style="<?php echo bc_landing_e($style_vars); ?>"<?php endif; ?>>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -384,67 +386,22 @@ if (!function_exists('bc_landing_head')) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES); ?>;</script>
-<style>
-:root{--ink:#F8FAFC;--cream:#050507;--card:rgba(255,255,255,.04);--muted:#CBD5E1;--line:rgba(255,255,255,.14)}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;padding-top:78px;font-family:'Figtree',system-ui,sans-serif;background:#050507;color:#F8FAFC}
-h1,h2,h3,.disp{font-family:'Figtree',sans-serif;letter-spacing:-.025em;color:#FFFFFF}
-a{color:inherit}
-.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
-.hero{padding:64px 0 30px;text-align:center}
-.kick,.eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#E2E8F0;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
-.hero h1{font-size:clamp(34px,5.6vw,64px);line-height:1.04;margin:20px 0 14px;font-weight:900}
-.hero h1 .hl{color:#E2E8F0;text-decoration:underline;text-decoration-color:rgba(255,255,255,.35);text-underline-offset:6px}
-.hero p{max-width:660px;margin:0 auto 12px;color:#CBD5E1;font-size:18px;line-height:1.6}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 26px;font-weight:700;text-decoration:none;font-size:15px}
-.btn-dark{background:#FFFFFF;color:#09090B;border:1px solid rgba(255,255,255,.22)}
-.btn-brand{background:rgba(255,255,255,.08);color:#FFFFFF;border:1px solid rgba(255,255,255,.22)}
-.btn-dark:hover{background:#E2E8F0}.btn-brand:hover{background:rgba(255,255,255,.15)}
-.hero-cta{margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.stats{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:34px 0 8px}
-.stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:16px 22px;text-align:left;min-width:170px}
-.stat b{font-size:22px;display:block;color:#FFFFFF}
-.stat span{color:#94A3B8;font-size:13px}
-.cards3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin:32px 0}
-.step,.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:26px;color:#F8FAFC}
-.step .n{font-weight:800;font-size:13px;text-transform:uppercase;color:#94A3B8;letter-spacing:.08em}
-.step h3,.card h3{font-size:22px;margin:10px 0 8px}
-.step p,.card p{margin:0;color:#CBD5E1;line-height:1.55}
-section.blk,section.section{padding:44px 0}
-.blk h2,.section h2{font-size:clamp(26px,3.8vw,40px);margin:0 0 10px}
-.blk .sub{color:#CBD5E1;max-width:620px;line-height:1.6}
-.feat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
-.feat .f{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:22px}
-.feat .f b{display:block;font-size:17px;margin-bottom:6px;color:#FFFFFF}
-.feat .f p{margin:0;color:#CBD5E1;line-height:1.55}
-details{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px 20px;margin:10px 0}
-summary{font-weight:700;cursor:pointer;color:#FFFFFF}
-details p{color:#CBD5E1;line-height:1.6;margin:10px 0 0}
-.grid-svc{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px}
-.svc{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px;text-decoration:none;display:block;transition:transform .15s,border-color .15s}
-.svc:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.32)}
-.svc .ic{font-size:32px}
-.svc h3{margin:12px 0 6px;font-size:21px;color:#FFFFFF}
-.svc p{color:#CBD5E1;margin:0;line-height:1.55}
-.svc .go{margin-top:14px;font-weight:700;color:#FFFFFF}
-.cta-band{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#FFFFFF;border-radius:26px;padding:40px 28px;text-align:center;margin:32px 0 54px}
-.cta-band h2{color:#FFFFFF;margin:0 0 8px}
-.cta-band p{color:#CBD5E1}
-@media(max-width:860px){.cards3,.grid-svc,.feat{grid-template-columns:1fr}.hero{padding:40px 0 20px}}
-</style>
 </head>
 <body>
+<main class="m-sub-main" style="padding-top:78px">
 <?php
     }
 
-    function bc_landing_nav($ctx, $active = '') {
+    function bc_landing_nav($ctx, $active = '', $world = 'personal') {
         require_once __DIR__ . '/bc-public-meridian.php';
-        echo bc_meridian_header_and_menu($ctx, 'business');
+        $world = ($world === 'business') ? 'business' : 'personal';
+        echo bc_meridian_header_and_menu($ctx, $world);
     }
 
     function bc_landing_foot($ctx) {
         require_once __DIR__ . '/bc-public-meridian.php';
         require_once __DIR__ . '/bc-public-pages.php';
+        echo '</main>';
         ob_start();
         bc_public_directory_html();
         $directory_html = ob_get_clean();
@@ -456,19 +413,74 @@ details p{color:#CBD5E1;line-height:1.6;margin:10px 0 0}
 if (!function_exists('bc_landing_render_referral')) {
     function bc_landing_render_referral($ctx) {
         $coins = (int)$ctx['bonus_coins'];
-        $rate = max(0.000001, (float)$ctx['coin_rate']);
+        $qual = number_format((float)$ctx['qualifying_usd'], 0);
         bc_landing_head($ctx, 'Refer & Earn — ' . number_format($coins) . ' coins per qualified friend',
-            'Invite friends, track their verified transaction progress and unlock referral coins.');
-        bc_landing_nav($ctx, 'refer');
+            'Invite friends, track their verified transaction progress and unlock referral coins.', 'personal');
+        bc_landing_nav($ctx, 'refer', 'personal');
         ?>
-<div class="wrap"><div class="hero"><span class="kick">Grow together</span>
-<h1>Real friends.<br><span class="hl">Real progress.</span></h1>
-<p>Earn <strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong> when a friend you refer completes <strong>$100</strong> in verified Crypto or International Transfers. Referral coins stay locked until the conditions are met.</p>
-<div class="hero-cta"><a class="btn btn-dark" href="/ReferAndEarn.php">See my referral growth</a><a class="btn btn-brand" href="#how">How it works</a></div>
-<div class="stats"><div class="stat"><b><?php echo number_format($coins); ?> coins</b><span>current reward per qualified friend</span></div><div class="stat"><b>$100</b><span>minimum verified transaction volume</span></div><div class="stat"><b>0 spendable</b><span>until your friend qualifies</span></div><div class="stat"><b>One reward</b><span>per genuine referred friend</span></div></div></div>
-<div class="cards3" id="how"><div class="step"><div class="n">01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></div><div class="step"><div class="n">02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed and amount remaining toward $100. Pending requests and quotes do not count.</p></div><div class="step"><div class="n">03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, the referrer's coins unlock for conversion. No separate cash reward is paid to either wallet.</p></div></div>
-<section class="blk"><h2>Understand your reward</h2><div class="feat"><div class="f"><b>Only settled activity</b><p>Completed Crypto trades and International Transfers count after provider confirmation. Deposits, funding, internal transfers, fees, failed transactions, requests and quotes do not count.</p></div><div class="f"><b>Locked means locked</b><p>Pending referral coins cannot be spent, converted or withdrawn. A reversal that brings qualifying volume below $100 revokes the reward.</p></div><div class="f"><b>Coins to wallet funds</b><p>The current conversion rate is <?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins per ₦1. Conversion requests require at least <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins and admin approval. Bank withdrawals remain subject to wallet limits.</p></div><div class="f"><b>Genuine referrals only</b><p>Self-referrals do not qualify. Active accounts, distinct contact details, verified emails and settlement review are required. Rewards cannot be earned repeatedly by reversing and repeating a transaction.</p></div></div></section>
-<div class="cta-band"><h2>Your next milestone starts with a friend.</h2><p>See who joined, what remains and which rewards are unlocked.</p><a class="btn btn-dark" href="/ReferAndEarn.php">Open referral dashboard</a></div></div>
+<div class="wrap">
+    <section class="m-sub-hero">
+        <div class="m-page-split">
+            <div>
+                <p class="eyebrow"><i></i>Grow together</p>
+                <h1>Real friends.<br>Real progress.</h1>
+                <p class="lede">Earn <strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong> when a friend you refer completes <strong>$<?php echo bc_landing_e($qual); ?></strong> in verified Crypto or International Transfers. Referral coins stay locked until the conditions are met.</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                    <a class="btn primary" href="/web/Register.php">Start referring</a>
+                    <a class="btn ghost" href="#how">How it works</a>
+                </div>
+            </div>
+            <aside class="m-showcase-card">
+                <p class="eyebrow"><i></i>Programme Rules</p>
+                <div class="m-kv-row"><span>Reward per qualified friend</span><strong><?php echo bc_landing_e(number_format($coins)); ?> coins</strong></div>
+                <div class="m-kv-row"><span>Qualifying volume</span><strong>$<?php echo bc_landing_e($qual); ?> settled</strong></div>
+                <div class="m-kv-row"><span>Conversion rate</span><strong><?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins / ₦1</strong></div>
+                <div class="m-kv-row"><span>Minimum conversion</span><strong><?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins</strong></div>
+                <p class="m-notice" style="margin:4px 0 0">Pending referral coins cannot be spent, converted, or withdrawn until your friend’s qualifying settlements are confirmed.</p>
+            </aside>
+        </div>
+        <div class="m-stats-row">
+            <div class="m-stat-box"><b><?php echo bc_landing_e(number_format($coins)); ?> coins</b><span>reward per qualified friend</span></div>
+            <div class="m-stat-box"><b>$<?php echo bc_landing_e($qual); ?></b><span>minimum verified transaction volume</span></div>
+            <div class="m-stat-box"><b>0 spendable</b><span>until your friend qualifies</span></div>
+            <div class="m-stat-box"><b>One reward</b><span>per genuine referred friend</span></div>
+        </div>
+    </section>
+
+    <section class="chapter tight" id="how">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Three Simple Steps</p>
+            <h2 style="margin-top:10px">From invite to unlocked coins.</h2>
+        </div>
+        <div class="m-cards3">
+            <article class="m-card"><div class="m-step-num">Step 01</div><h3>Invite a friend</h3><p>Share your personal link. Your friend must sign up using your referral code.</p></article>
+            <article class="m-card"><div class="m-step-num">Step 02</div><h3>Watch their growth</h3><p>Track each friend's verified USD volume, percentage completed, and amount remaining toward $<?php echo bc_landing_e($qual); ?>. Pending requests and quotes do not count.</p></article>
+            <article class="m-card"><div class="m-step-num">Step 03</div><h3>Unlock your coins</h3><p>After confirmed qualifying settlements and identity checks, your coins unlock for conversion. No separate cash reward is paid to either wallet.</p></article>
+        </div>
+    </section>
+
+    <section class="chapter tight">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Transparency</p>
+            <h2 style="margin-top:10px">Understand your reward.</h2>
+        </div>
+        <div class="m-feat-grid">
+            <article class="m-card"><h3>Only settled activity</h3><p>Completed Crypto trades and International Transfers count after provider confirmation. Deposits, funding, internal transfers, fees, failed transactions, requests, and quotes do not count.</p></article>
+            <article class="m-card"><h3>Locked means locked</h3><p>Pending referral coins cannot be spent, converted, or withdrawn. A reversal that brings qualifying volume below $<?php echo bc_landing_e($qual); ?> revokes the reward.</p></article>
+            <article class="m-card"><h3>Coins to wallet funds</h3><p>The current conversion rate is <?php echo bc_landing_e(number_format($ctx['coin_rate'], 2)); ?> coins per ₦1. Conversion requests require at least <?php echo bc_landing_e(number_format($ctx['coin_min'])); ?> unlocked coins and admin approval.</p></article>
+            <article class="m-card"><h3>Genuine referrals only</h3><p>Self-referrals do not qualify. Active accounts, distinct contact details, verified emails, and settlement review are required.</p></article>
+        </div>
+    </section>
+
+    <div class="m-cta-band">
+        <h2>Your next milestone starts with a friend.</h2>
+        <p>Sign in to copy your invite link, track referral progress, and convert unlocked coins.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+            <a class="btn primary" href="/web/Login.php">Open referral dashboard</a>
+            <a class="btn ghost" href="/services/CoinConversion.php">Coin conversion rules</a>
+        </div>
+    </div>
+</div>
 <?php bc_landing_foot($ctx);
     }
 }
@@ -514,27 +526,52 @@ if (!function_exists('bc_landing_render_services_index')) {
                 );
             }
         }
-        bc_landing_head($ctx, 'Services', 'Every service on ' . $ctx['site_name'] . ' — bills, data, transfers, cards and more, explained.');
-        bc_landing_nav($ctx, 'services');
+        bc_landing_head($ctx, 'Services', 'Every service on ' . $ctx['site_name'] . ' — bills, data, transfers, cards and more, explained.', 'personal');
+        bc_landing_nav($ctx, 'services', 'personal');
         ?>
 <div class="wrap">
-    <div class="hero">
-        <span class="kick">Services</span>
-        <h1>Everything your<br><span class="hl">wallet can do.</span></h1>
-        <p>One account for everyday bills and global money. Pick an active service below to see how it works, or check Coming Soon for services awaiting activation.</p>
-    </div>
+    <section class="m-sub-hero">
+        <div class="m-page-split">
+            <div>
+                <p class="eyebrow"><i></i>Services Directory</p>
+                <h1>Everything your wallet can do.</h1>
+                <p class="lede">One account for everyday bills, transfers, virtual cards, travel eSIMs, and identity services. Pick any active service below to see how it works, or check Coming Soon for services awaiting activation.</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                    <a class="btn primary" href="/web/Register.php">Create free account</a>
+                    <a class="btn ghost" href="/Business.php">Explore Business tools</a>
+                </div>
+            </div>
+            <aside class="m-showcase-card">
+                <p class="eyebrow"><i></i>Live Platform Status</p>
+                <div class="m-kv-row"><span>Active services</span><strong><?php echo count($live); ?> ready</strong></div>
+                <div class="m-kv-row"><span>Coming Soon / Paused</span><strong><?php echo count($coming_soon); ?> tracked</strong></div>
+                <div class="m-kv-row"><span>Account tiers</span><strong>Personal &amp; Business</strong></div>
+                <p class="m-notice" style="margin:4px 0 0">Service availability updates automatically from the Site Owner Service Control Center.</p>
+            </aside>
+        </div>
+    </section>
+
     <?php if (!empty($live)): ?>
-    <div class="grid-svc">
-        <?php foreach ($live as $slug => $s): ?>
-        <a class="svc" href="/services/<?php echo bc_landing_e($slug); ?>.php">
-            <div class="ic"><?php echo $s['icon']; ?></div>
-            <h3><?php echo bc_landing_e($s['name']); ?></h3>
-            <p><?php echo bc_landing_e($s['tagline']); ?></p>
-            <div class="go">Explore →</div>
-        </a>
-        <?php endforeach; ?>
-    </div>
+    <section class="chapter tight">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Available Now</p>
+            <h2 style="margin-top:10px">Active services on <?php echo bc_landing_e($ctx['site_name']); ?>.</h2>
+        </div>
+        <div class="m-svc-grid">
+            <?php foreach ($live as $slug => $s): ?>
+            <a class="m-svc-card" href="/services/<?php echo bc_landing_e($slug); ?>.php">
+                <div>
+                    <div class="ic"><?php echo $s['icon']; ?></div>
+                    <h3 style="margin-top:12px"><?php echo bc_landing_e($s['name']); ?></h3>
+                    <p style="margin-top:6px"><?php echo bc_landing_e($s['tagline']); ?></p>
+                </div>
+                <div class="go">Explore →</div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </section>
     <?php endif; ?>
+
     <?php if (!empty($coming_soon)): ?>
     <div class="m-cs-band" id="coming-soon">
         <p class="eyebrow"><i></i>Coming Soon &amp; Service Rollout</p>
@@ -542,7 +579,7 @@ if (!function_exists('bc_landing_render_services_index')) {
         <p class="small" style="margin-top:4px">Services turned off in the Site Owner Service Control Center or awaiting replacement provider integration appear here until activated.</p>
         <div class="m-cs-grid">
             <?php foreach ($coming_soon as $slug => $cs): $s = $cs['service']; ?>
-            <a class="m-cs-item" href="/services/<?php echo bc_landing_e($slug); ?>.php" style="text-decoration:none;display:block">
+            <a class="m-cs-item" href="/services/<?php echo bc_landing_e($slug); ?>.php">
                 <span class="m-cs-pill"><?php echo bc_landing_e($cs['reason']); ?></span>
                 <h4><?php echo bc_landing_e($s['name']); ?></h4>
                 <p><?php echo bc_landing_e($s['tagline']); ?></p>
@@ -551,10 +588,11 @@ if (!function_exists('bc_landing_render_services_index')) {
         </div>
     </div>
     <?php endif; ?>
-    <div class="cta-band">
+
+    <div class="m-cta-band">
         <h2>One wallet. Every service.</h2>
-        <p style="opacity:.9">Fund once and spend across active bills, transfers and cards — earning coins as you go.</p>
-        <a class="btn btn-dark" href="/web/Register.php">Create free account</a>
+        <p>Fund once and spend across active bills, transfers, and cards — earning coins as you go.</p>
+        <a class="btn primary" href="/web/Register.php">Create free account</a>
     </div>
 </div>
 <?php
@@ -571,73 +609,97 @@ if (!function_exists('bc_landing_render_service')) {
         $vid = (int)($ctx['vendor_id'] ?? 0);
         $ctrl = bc_landing_service_control_key($slug);
         $is_live = bc_meridian_service_enabled($ctrl, $vid);
+        $world = ($slug === 'bulk-sms') ? 'business' : 'personal';
         $status_label = ($ctrl === 'crypto_hub') ? 'Coming Soon — Pending replacement integration' : 'Coming Soon — Currently paused by platform operator';
-        bc_landing_head($ctx, $s['name'], $s['tagline'] . ' — on ' . $ctx['site_name'] . '.');
-        bc_landing_nav($ctx, 'services');
+        bc_landing_head($ctx, $s['name'], $s['tagline'] . ' — on ' . $ctx['site_name'] . '.', $world);
+        bc_landing_nav($ctx, 'services', $world);
         ?>
 <div class="wrap">
-    <div class="hero">
-        <span class="kick"><?php echo $s['icon']; ?> <?php echo bc_landing_e($s['name']); ?></span>
-        <?php if (!$is_live): ?>
-        <div style="margin-top:14px"><span class="m-cs-pill"><?php echo bc_landing_e($status_label); ?></span></div>
-        <?php endif; ?>
-        <h1><?php echo bc_landing_e($s['tagline']); ?></h1>
-        <p><?php echo bc_landing_e($s['hero']); ?></p>
-        <div class="hero-cta">
-            <?php if ($is_live): ?>
-            <a class="btn btn-dark" href="<?php echo bc_landing_e($s['app']); ?>">Use <?php echo bc_landing_e($s['name']); ?></a>
-            <?php else: ?>
-            <a class="btn btn-dark" href="/Services.php">Browse active services</a>
-            <?php endif; ?>
-            <a class="btn btn-brand" href="/Services.php">All services</a>
+    <section class="m-sub-hero">
+        <div class="m-page-split">
+            <div>
+                <p class="eyebrow"><i></i><?php echo $s['icon']; ?> <?php echo bc_landing_e($s['name']); ?></p>
+                <?php if (!$is_live): ?>
+                <div style="margin-top:14px"><span class="m-cs-pill"><?php echo bc_landing_e($status_label); ?></span></div>
+                <?php endif; ?>
+                <h1><?php echo bc_landing_e($s['tagline']); ?></h1>
+                <p class="lede"><?php echo bc_landing_e($s['hero']); ?></p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                    <?php if ($is_live): ?>
+                    <a class="btn primary" href="<?php echo bc_landing_e($s['app']); ?>">Use <?php echo bc_landing_e($s['name']); ?></a>
+                    <?php else: ?>
+                    <a class="btn primary" href="/Services.php">Browse active services</a>
+                    <?php endif; ?>
+                    <a class="btn ghost" href="/Services.php">All services</a>
+                </div>
+            </div>
+            <aside class="m-showcase-card">
+                <p class="eyebrow"><i></i>Service Snapshot</p>
+                <div class="m-kv-row"><span>Service</span><strong><?php echo bc_landing_e($s['name']); ?></strong></div>
+                <div class="m-kv-row"><span>Status</span><strong><?php echo $is_live ? 'Active' : 'Coming Soon'; ?></strong></div>
+                <div class="m-kv-row"><span>Mode</span><strong><?php echo $world === 'business' ? 'Business &amp; Merchant' : 'Personal Wallet'; ?></strong></div>
+                <p class="m-notice" style="margin:4px 0 0"><strong>Ideal for:</strong> <?php echo bc_landing_e($s['audience']); ?></p>
+            </aside>
         </div>
-    </div>
+    </section>
 
-    <section class="blk">
-        <h2>Why <?php echo bc_landing_e($ctx['site_name']); ?></h2>
-        <div class="feat">
+    <section class="chapter tight">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Key Capabilities</p>
+            <h2 style="margin-top:10px">Why use <?php echo bc_landing_e($s['name']); ?> on <?php echo bc_landing_e($ctx['site_name']); ?>.</h2>
+        </div>
+        <div class="m-feat-grid">
             <?php foreach ($s['features'] as $f): ?>
-            <div class="f"><b><?php echo bc_landing_e($f[0]); ?></b><p><?php echo bc_landing_e($f[1]); ?></p></div>
+            <article class="m-card"><h3><?php echo bc_landing_e($f[0]); ?></h3><p><?php echo bc_landing_e($f[1]); ?></p></article>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <div class="cards3">
-        <?php foreach ($s['steps'] as $i => $step): ?>
-        <div class="step"><div class="n">Step <?php echo $i + 1; ?></div><h3><?php echo $i === 0 ? 'Start' : ($i === 1 ? 'Confirm' : 'Done'); ?></h3><p><?php echo bc_landing_e($step); ?></p></div>
-        <?php endforeach; ?>
-    </div>
-
-    <section class="blk">
-        <h2>Who it is for</h2>
-        <p class="sub"><?php echo bc_landing_e($s['audience']); ?></p>
+    <section class="chapter tight">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>How It Works</p>
+            <h2 style="margin-top:10px">Three steps from start to finish.</h2>
+        </div>
+        <div class="m-cards3">
+            <?php foreach ($s['steps'] as $i => $step): ?>
+            <article class="m-card"><div class="m-step-num">Step 0<?php echo $i + 1; ?></div><h3><?php echo $i === 0 ? 'Start' : ($i === 1 ? 'Confirm' : 'Done'); ?></h3><p><?php echo bc_landing_e($step); ?></p></article>
+            <?php endforeach; ?>
+        </div>
     </section>
 
-    <section class="blk" style="padding-top:6px">
-        <h2>Questions</h2>
+    <section class="chapter tight m-faq">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Questions</p>
+            <h2 style="margin-top:10px">Frequently asked about <?php echo bc_landing_e($s['name']); ?>.</h2>
+        </div>
         <?php foreach ($s['faqs'] as $q): ?>
         <details><summary><?php echo bc_landing_e($q[0]); ?></summary><p><?php echo bc_landing_e($q[1]); ?></p></details>
         <?php endforeach; ?>
     </section>
 
-    <section class="blk" style="padding-top:6px">
-        <h2>Keep exploring</h2>
-        <div class="grid-svc">
+    <section class="chapter tight">
+        <div class="chap-head">
+            <p class="eyebrow"><i></i>Keep Exploring</p>
+            <h2 style="margin-top:10px">More services on <?php echo bc_landing_e($ctx['site_name']); ?>.</h2>
+        </div>
+        <div class="m-svc-grid">
             <?php $shown = 0; foreach ($all as $oslug => $os): if ($oslug === $slug || $shown >= 3) continue; $shown++; ?>
-            <a class="svc" href="/services/<?php echo bc_landing_e($oslug); ?>.php">
-                <div class="ic"><?php echo $os['icon']; ?></div>
-                <h3><?php echo bc_landing_e($os['name']); ?></h3>
-                <p><?php echo bc_landing_e($os['tagline']); ?></p>
+            <a class="m-svc-card" href="/services/<?php echo bc_landing_e($oslug); ?>.php">
+                <div>
+                    <div class="ic"><?php echo $os['icon']; ?></div>
+                    <h3 style="margin-top:12px"><?php echo bc_landing_e($os['name']); ?></h3>
+                    <p style="margin-top:6px"><?php echo bc_landing_e($os['tagline']); ?></p>
+                </div>
                 <div class="go">Explore →</div>
             </a>
             <?php endforeach; ?>
         </div>
     </section>
 
-    <div class="cta-band">
-        <h2>Try <?php echo bc_landing_e($s['name']); ?> now</h2>
-        <p style="opacity:.9">Free account, instant wallet, coins on every purchase.</p>
-        <a class="btn btn-dark" href="/web/Register.php">Create free account</a>
+    <div class="m-cta-band">
+        <h2><?php echo $is_live ? 'Ready to use ' . bc_landing_e($s['name']) . '?' : 'Explore active services on ' . bc_landing_e($ctx['site_name']); ?></h2>
+        <p>Free account, instant wallet, and full transaction receipts in one place.</p>
+        <a class="btn primary" href="<?php echo $is_live ? '/web/Register.php' : '/Services.php'; ?>"><?php echo $is_live ? 'Create free account' : 'Browse active services'; ?></a>
     </div>
 </div>
 <?php
@@ -707,20 +769,30 @@ if (!function_exists('bc_landing_legal_sections')) {
     function bc_landing_render_legal($ctx, $kind) {
         $is_terms = ($kind === 'terms');
         $title = $is_terms ? 'Terms of Service' : 'Privacy Policy';
-        bc_landing_head($ctx, $title, $title . ' for ' . $ctx['site_name'] . ' — plain-language rules for using our services.');
-        bc_landing_nav($ctx, '');
+        bc_landing_head($ctx, $title, $title . ' for ' . $ctx['site_name'] . ' — plain-language rules for using our services.', 'personal');
+        bc_landing_nav($ctx, '', 'personal');
         ?>
 <div class="wrap">
-    <div class="hero">
-        <span class="kick"><?php echo $is_terms ? '📜 Terms' : '🔒 Privacy'; ?></span>
-        <h1><?php echo bc_landing_e($title); ?></h1>
-        <p>Last updated <?php echo date('F d, Y'); ?>. Written in plain language — the short version is: we collect what we need to run your account, we never sell it, and you can ask us to delete it.</p>
-        <div class="hero-cta">
-            <a class="btn btn-dark" href="<?php echo $is_terms ? '/Privacy.php' : '/Terms.php'; ?>">Read the <?php echo $is_terms ? 'Privacy Policy' : 'Terms of Service'; ?></a>
-            <a class="btn btn-brand" href="/web/DeleteAccount.php">Delete my account</a>
+    <section class="m-sub-hero">
+        <div class="m-page-split">
+            <div>
+                <p class="eyebrow"><i></i><?php echo $is_terms ? 'Terms' : 'Privacy'; ?></p>
+                <h1><?php echo bc_landing_e($title); ?></h1>
+                <p class="lede">Last updated <?php echo date('F d, Y'); ?>. Written in plain language — the short version is: we collect what we need to run your account, we never sell it, and you can ask us to delete it.</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                    <a class="btn primary" href="<?php echo $is_terms ? '/Privacy.php' : '/Terms.php'; ?>">Read the <?php echo $is_terms ? 'Privacy Policy' : 'Terms of Service'; ?></a>
+                    <a class="btn ghost" href="/web/DeleteAccount.php">Delete my account</a>
+                </div>
+            </div>
+            <aside class="m-showcase-card">
+                <p class="eyebrow"><i></i>Key Commitments</p>
+                <div class="m-kv-row"><span>Data ownership</span><strong>We never sell your data</strong></div>
+                <div class="m-kv-row"><span>Step-up controls</span><strong>PIN, 2FA &amp; session logs</strong></div>
+                <div class="m-kv-row"><span>Account rights</span><strong>Deletion via email check</strong></div>
+            </aside>
         </div>
-    </div>
-    <section class="blk" style="padding-top:16px">
+    </section>
+    <section class="chapter tight m-faq">
         <?php foreach (bc_landing_legal_sections($kind) as $sec): ?>
         <details open>
             <summary><?php echo bc_landing_e(str_replace('{site}', $ctx['site_name'], $sec['title'])); ?></summary>
@@ -728,10 +800,10 @@ if (!function_exists('bc_landing_legal_sections')) {
         </details>
         <?php endforeach; ?>
     </section>
-    <div class="cta-band">
+    <div class="m-cta-band">
         <h2>Questions about your data?</h2>
-        <p style="opacity:.9">Message us any time through support, or manage your account below.</p>
-        <a class="btn btn-dark" href="/web/DeleteAccount.php">Request account deletion</a>
+        <p>Message us any time through support, or manage your account below.</p>
+        <a class="btn primary" href="/web/DeleteAccount.php">Request account deletion</a>
     </div>
 </div>
 <?php

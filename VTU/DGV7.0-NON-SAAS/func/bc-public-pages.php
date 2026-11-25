@@ -110,26 +110,51 @@ function bc_public_render($ctx, $key) {
     if (!isset($pages[$key])) { http_response_code(404); return; }
     $p = $pages[$key];
     require_once __DIR__ . '/bc-public-meridian.php';
-    bc_landing_head($ctx, $p[0], $p[2]); bc_landing_nav($ctx);
+    $biz_keys = array('business', 'payment-links', 'invoices', 'payouts', 'pos', 'developers', 'resellers');
+    $world = in_array($key, $biz_keys, true) ? 'business' : 'personal';
+    bc_landing_head($ctx, $p[0], $p[2], $world);
+    bc_landing_nav($ctx, $key, $world);
 
     if ($key === 'business') {
         $vid = (int)($ctx['vendor_id'] ?? 0);
         $site_e = bc_landing_e($ctx['site_name']);
         ?>
-        <main class="m-sub-main">
-            <section class="bz-hero wrap" style="padding:56px 20px 32px">
-                <p class="bz-eyebrow"><i></i><?php echo $site_e; ?> Business · Dark Workspace</p>
-                <div style="margin-top:14px"><h1><?php echo bc_landing_e($p[0]); ?></h1></div>
-                <p class="lede" style="max-width:64ch;margin-top:14px">One workspace for collections, payouts, and reseller APIs. Accept payments via links and invoices, disburse single or bulk payouts, request POS terminals, and integrate VTU wholesale APIs — all gated by your platform’s live Service Control Center.</p>
-                <div class="bz-ctas" style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap">
-                    <a class="btn primary" href="/web/BusinessUpgrade.php">Open business access</a>
-                    <a class="btn ghost" href="/Developers.php">View VTU &amp; API guide</a>
-                    <a class="btn ghost" href="/web/Register.php">Create account</a>
+        <div class="wrap">
+            <section class="m-sub-hero">
+                <div class="m-page-split">
+                    <div>
+                        <p class="eyebrow"><i></i><?php echo $site_e; ?> Business · Dark Workspace</p>
+                        <h1><?php echo bc_landing_e($p[0]); ?></h1>
+                        <p class="lede">One workspace for collections, payouts, POS terminals, and wholesale VTU APIs — gated live by your platform’s Service Control Center.</p>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                            <a class="btn primary" href="/web/BusinessUpgrade.php">Open business access</a>
+                            <a class="btn ghost" href="/Developers.php">View VTU &amp; API guide</a>
+                            <a class="btn ghost" href="/web/Register.php">Create account</a>
+                        </div>
+                        <div class="bz-trust">
+                            <span>Payment Links &amp; Invoices</span>
+                            <span>Single &amp; Bulk Payouts</span>
+                            <span>POS Enquiries</span>
+                            <span>VTU Reseller APIs</span>
+                        </div>
+                        <?php echo bc_meridian_support_bar($ctx); ?>
+                    </div>
+                    <div class="biz-hero-media">
+                        <figure class="photo">
+                            <img src="/asset/meridian-1/images/obj-business.webp" alt="<?php echo $site_e; ?> Business workspace preview">
+                        </figure>
+                    </div>
                 </div>
-                <?php echo bc_meridian_support_bar($ctx); ?>
+
+                <div class="m-biz-pillars">
+                    <article class="m-pillar"><b>Collections</b><span>Shareable payment links, virtual accounts, and structured customer invoices.</span></article>
+                    <article class="m-pillar"><b>Payouts &amp; FX</b><span>Local settlements, bulk disbursements, China supplier wires, and tuition routes.</span></article>
+                    <article class="m-pillar"><b>POS &amp; Resellers</b><span>Terminal enquiries, branded bulk SMS, and printable recharge or data cards.</span></article>
+                    <article class="m-pillar"><b>Wholesale APIs</b><span>Server-side airtime, data, cable, power, and exam vending with webhooks.</span></article>
+                </div>
             </section>
 
-            <section class="bstory wrap" id="bstory">
+            <section class="bstory" id="bstory">
                 <div class="bs-pin">
                     <nav class="bs-rail" aria-label="Business workflow chapters">
                         <button type="button" aria-current="step"><b>01</b><span>Collections &amp; Links</span></button>
@@ -141,84 +166,221 @@ function bc_public_render($ctx, $key) {
                     </nav>
                     <div class="bs-chs">
                         <article class="bs-ch is-active">
-                            <div class="bs-copy"><span class="bs-time">01 · Collections &amp; Payment Links</span><h2>Collect payments with clarity and tracking.</h2><p class="lede">Share payment links and virtual collection accounts so customers can settle invoices cleanly while your ledger tracks every reference.</p><div style="margin-top:16px"><a class="bz-link" href="/PaymentLinks.php">Explore Payment Links →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-business.webp" alt="Business collections preview" loading="lazy"><figcaption>Collections &amp; payment links</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">01 · Collections &amp; Payment Links</span><h2>Collect payments with clarity and tracking.</h2><p class="lede">Share payment links and virtual collection accounts so customers can settle invoices cleanly while your ledger tracks every reference.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Dedicated virtual inflow accounts where enabled</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Instant reference history for every settled payment</span></li></ul><a class="bz-link" href="/PaymentLinks.php">Explore Payment Links →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-business.webp" alt="Business collections preview" loading="lazy"><figcaption>Collections &amp; payment links</figcaption></figure></div>
                         </article>
                         <article class="bs-ch">
-                            <div class="bs-copy"><span class="bs-time">02 · Multi-Currency Wallets</span><h2>Hold and track balances across currencies.</h2><p class="lede">Organize NGN, USD, GBP, and EUR business balances alongside live FX quotes where enabled.</p><div style="margin-top:16px"><a class="bz-link" href="/MultiCurrencyWallet.php">Explore Wallets →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-accounts.webp" alt="Multi-currency accounts" loading="lazy"><figcaption>Multi-currency accounts</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">02 · Multi-Currency Wallets</span><h2>Hold and track balances across currencies.</h2><p class="lede">Organize NGN, USD, GBP, and EUR business balances alongside live FX quotes where enabled.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Transparent rates shown prior to confirmation</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Clear separation of personal and merchant flows</span></li></ul><a class="bz-link" href="/MultiCurrencyWallet.php">Explore Wallets →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-accounts.webp" alt="Multi-currency accounts" loading="lazy"><figcaption>Multi-currency accounts</figcaption></figure></div>
                         </article>
                         <article class="bs-ch">
-                            <div class="bs-copy"><span class="bs-time">03 · Transfers &amp; Payouts</span><h2>Move supplier and team payouts smoothly.</h2><p class="lede">Run single or bulk disbursements locally or internationally, including China settlement and institutional tuition routes.</p><div style="margin-top:16px"><a class="bz-link" href="/Payouts.php">Explore Payouts →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-swap.webp" alt="Global payouts" loading="lazy"><figcaption>Local &amp; global payouts</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">03 · Transfers &amp; Payouts</span><h2>Move supplier and team payouts smoothly.</h2><p class="lede">Run single or bulk disbursements locally or internationally, including China settlement and institutional tuition routes.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Recipient verification before disbursement</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>PIN &amp; step-up verification on outgoing funds</span></li></ul><a class="bz-link" href="/Payouts.php">Explore Payouts →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-swap.webp" alt="Global payouts" loading="lazy"><figcaption>Local &amp; global payouts</figcaption></figure></div>
                         </article>
                         <article class="bs-ch">
-                            <div class="bs-copy"><span class="bs-time">04 · POS &amp; Merchant Resellers</span><h2>In-person acceptance and VTU resale.</h2><p class="lede">Request POS terminals, send branded bulk SMS campaigns, and print recharge or data card batches for walk-in customers.</p><div style="margin-top:16px"><a class="bz-link" href="/POSTerminals.php">Explore POS &amp; Resellers →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-biz-pos.webp" alt="POS terminals" loading="lazy"><figcaption>POS &amp; merchant tools</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">04 · POS &amp; Merchant Resellers</span><h2>In-person acceptance and VTU resale.</h2><p class="lede">Request POS terminals, send branded bulk SMS campaigns, and print recharge or data card batches for walk-in customers.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Tiered reseller pricing aligned with account level</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Printable card batches and branded SMS alerts</span></li></ul><a class="bz-link" href="/POSTerminals.php">Explore POS &amp; Resellers →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-biz-pos.webp" alt="POS terminals" loading="lazy"><figcaption>POS &amp; merchant tools</figcaption></figure></div>
                         </article>
                         <article class="bs-ch">
-                            <div class="bs-copy"><span class="bs-time">05 · Invoices, Records &amp; Security</span><h2>Audit trails, PINs, and verification built in.</h2><p class="lede">Manage customer invoices, reconciliation records, transaction PINs, and authenticator second-factor verification from one console.</p><div style="margin-top:16px"><a class="bz-link" href="/Invoices.php">Explore Invoices →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-biz-invoice.webp" alt="Business invoices" loading="lazy"><figcaption>Invoices &amp; records</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">05 · Invoices, Records &amp; Security</span><h2>Audit trails, PINs, and verification built in.</h2><p class="lede">Manage customer invoices, reconciliation records, transaction PINs, and authenticator second-factor verification from one console.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Only verified settled records mark invoices paid</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Session management &amp; 2FA security controls</span></li></ul><a class="bz-link" href="/Invoices.php">Explore Invoices →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-biz-invoice.webp" alt="Business invoices" loading="lazy"><figcaption>Invoices &amp; records</figcaption></figure></div>
                         </article>
                         <article class="bs-ch">
-                            <div class="bs-copy"><span class="bs-time">06 · VTU Wholesale &amp; APIs</span><h2>Automate airtime, data, cable, and power.</h2><p class="lede">Connect approved merchant API keys to vend digital utilities with idempotency and server-side verification.</p><div style="margin-top:16px"><a class="bz-link" href="/Developers.php">Read Developer Guide →</a></div></div>
-                            <div class="bs-scene"><figure class="biz-visual glass"><img src="/asset/meridian-1/images/obj-refill.webp" alt="VTU wholesale API" loading="lazy"><figcaption>VTU reseller APIs</figcaption></figure></div>
+                            <div class="bs-copy"><span class="bs-time">06 · VTU Wholesale &amp; APIs</span><h2>Automate airtime, data, cable, and power.</h2><p class="lede">Connect approved merchant API keys to vend digital utilities with idempotency and server-side verification.</p><ul class="bs-proof"><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Dedicated API key management in your dashboard</span></li><li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg><span>Requery endpoints for reliable status checks</span></li></ul><a class="bz-link" href="/Developers.php">Read Developer Guide →</a></div>
+                            <div class="bs-scene"><figure class="biz-visual"><img src="/asset/meridian-1/images/obj-refill.webp" alt="VTU wholesale API" loading="lazy"><figcaption>VTU reseller APIs</figcaption></figure></div>
                         </article>
                     </div>
                 </div>
             </section>
+        </div>
 
-            <?php
-            echo bc_meridian_render_catalog_section(
-                'business',
-                $vid,
-                'Business feature catalogue',
-                'Every category below updates dynamically from the Site Owner Service Control Center. Disabled or pending services are moved to Coming Soon.'
-            );
-            ?>
+        <?php
+        echo bc_meridian_render_catalog_section(
+            'business',
+            $vid,
+            'Business feature catalogue',
+            'Every category below updates dynamically from the Site Owner Service Control Center. Disabled or pending services are moved to Coming Soon.'
+        );
+        ?>
 
+        <div class="wrap">
             <section class="chapter tight" id="vtu-api">
-                <div class="wrap">
-                    <div class="api-layout">
-                        <section class="api-block glass">
-                            <p class="bz-eyebrow"><i></i>VTU Business &amp; API</p>
-                            <h3>Server-side integration built for reliability</h3>
-                            <p class="small">Keep API keys strictly on your backend, validate recipients before debiting, attach idempotency references to every request, and verify signed webhook deliveries.</p>
-                            <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-                                <a class="btn primary" href="/Developers.php">Open API documentation</a>
-                                <a class="btn ghost" href="/Resellers.php">Merchant &amp; reseller tools</a>
-                            </div>
-                        </section>
-                        <section class="api-block glass">
-                            <p class="bz-eyebrow"><i></i>Onboarding</p>
-                            <h3>Four steps to activate Business access</h3>
-                            <ul class="bs-proof" style="margin-top:12px">
-                                <li>1. Create your account and request Business upgrade.</li>
-                                <li>2. Complete KYB &amp; identity verification checks.</li>
-                                <li>3. Confirm approved services in your workspace.</li>
-                                <li>4. Launch collections, payouts, POS, or API vending.</li>
-                            </ul>
-                        </section>
-                    </div>
+                <div class="api-layout">
+                    <section class="api-block">
+                        <p class="eyebrow"><i></i>VTU Business &amp; API</p>
+                        <h3>Server-side integration built for reliability</h3>
+                        <p class="small">Keep API keys strictly on your backend, validate recipients before debiting, attach unique references to every request, and verify status via requery or webhooks.</p>
+                        <pre class="m-code-block">POST /web/api/airtime.php
+{
+  "api_key": "YOUR_SERVER_API_KEY",
+  "network": "mtn",
+  "phone_number": "08031234567",
+  "amount": 1000,
+  "reference": "ord_9f3c2a1b"
+}</pre>
+                        <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+                            <a class="btn primary" href="/Developers.php">Open API documentation</a>
+                            <a class="btn ghost" href="/Resellers.php">Merchant &amp; reseller tools</a>
+                        </div>
+                    </section>
+                    <section class="api-block">
+                        <p class="eyebrow"><i></i>Onboarding</p>
+                        <h3>Four steps to activate Business access</h3>
+                        <ul class="m-steps-list">
+                            <li><i>01</i><span>Create your account and request Business upgrade from your console.</span></li>
+                            <li><i>02</i><span>Complete KYB &amp; identity verification checks required for higher limits.</span></li>
+                            <li><i>03</i><span>Confirm approved services, fee schedules, and reseller pricing tiers.</span></li>
+                            <li><i>04</i><span>Launch collections, payouts, POS enquiries, or API vending.</span></li>
+                        </ul>
+                    </section>
                 </div>
             </section>
-        </main>
+        </div>
         <?php
         bc_landing_foot($ctx);
         return;
     }
 
-    echo '<main class="wrap m-sub-main"><section class="hero"><p class="eyebrow">'.bc_landing_e($ctx['site_name']).'</p><h1>'.bc_landing_e($p[0]).'</h1><p class="lead">'.bc_landing_e($p[2]).'</p><p>'.bc_landing_e($p[3]).'</p><p>'.bc_landing_e($p[4]).'</p><div class="hero-cta"><a class="btn btn-dark" href="'.bc_landing_e($p[5]).'">'.bc_landing_e($p[6]).'</a><a class="btn btn-brand" href="/Services.php">All services</a></div>';
-    if ($key === 'download') {
-        $url = bc_public_download_url($ctx['vendor_id']);
-        if ($url !== '') echo '<p style="margin-top:18px"><a class="btn btn-dark" href="'.bc_landing_e($url).'" rel="noopener noreferrer">Open official app download</a></p>';
-        else echo '<p role="status" style="margin-top:18px">An app download has not been published for this website yet. Please use the browser option above or contact support.</p>';
-        echo '<p>App Store and Google Play availability depends on the operator’s published release. No store listing is assumed here.</p>';
+    // Structured Meridian-1 subpage rendering for all 16 PublicPage.php routes
+    $highlights = array(
+        array('Access level', $world === 'business' ? 'Business & Merchant' : 'Personal Account'),
+        array('Verification', 'PIN & account checks apply'),
+        array('Records', 'Full receipt & status history'),
+    );
+    $extra_cards = array(
+        array('01 · Check eligibility', 'Sign in and complete the verification requested for your account and service tier.'),
+        array('02 · Review the details', 'Read the current fees, limits, FX quotes, and terms before confirming any request.'),
+        array('03 · Keep your records', 'Use transaction history and support chat for status updates. Never share your security codes.'),
+    );
+    if ($key === 'wallet') {
+        $r = $ctx['rates'] ?? array();
+        $highlights = array(
+            array('USD / NGN quote', !empty($r['USD']) ? '₦' . number_format((float)$r['USD'], 2) : 'Shown in wallet'),
+            array('GBP / NGN quote', !empty($r['GBP']) ? '₦' . number_format((float)$r['GBP'], 2) : 'Shown in wallet'),
+            array('EUR / NGN quote', !empty($r['EUR']) ? '₦' . number_format((float)$r['EUR'], 2) : 'Shown in wallet'),
+        );
+    } elseif ($key === 'developers') {
+        $highlights = array(
+            array('Auth model', 'Server-side API key'),
+            array('Protection', 'Idempotent reference checks'),
+            array('Coverage', 'Airtime, Data, Cable, Electric, Exam'),
+        );
+        $extra_cards = array(
+            array('01 · Generate server key', 'Sign in to your account console and generate an API key restricted to your server.'),
+            array('02 · Validate & requery', 'Always verify smartcards or meters before debiting and requery pending transactions.'),
+            array('03 · Protect secrets', 'Never embed API keys in mobile apps, frontend JavaScript, or public repositories.'),
+        );
+    } elseif ($key === 'security') {
+        $highlights = array(
+            array('Login & session', 'Hashed passwords + session controls'),
+            array('Step-up auth', 'Security PIN & 2FA / Email OTP'),
+            array('Identity KYC', 'Tiered BVN / NIN checks'),
+        );
+        $extra_cards = array(
+            array('01 · Transaction PIN', 'Transfers and sensitive settings require your personal security PIN before execution.'),
+            array('02 · Two-factor verification', 'Enable Google Authenticator or email OTP protection for sign-in and payouts.'),
+            array('03 · Never share codes', 'Official support will never request your password, PIN, OTP, or full card CVV.'),
+        );
+    } elseif ($key === 'resellers') {
+        $highlights = array(
+            array('Pricing tiers', 'Account-level reseller margins'),
+            array('Print hub', 'Recharge & data card batches'),
+            array('Acceptance', 'POS requests & Bulk SMS'),
+        );
     }
-    if ($key === 'contact') {
-        echo '<div style="display:flex;justify-content:center;margin-top:18px">' . bc_meridian_support_bar($ctx) . '</div>';
-    }
-    echo '</section><section class="section"><h2>Before you continue</h2><div class="cards3"><article class="card"><h3>1. Check eligibility</h3><p>Sign in and complete the verification requested for your account and service.</p></article><article class="card"><h3>2. Review the details</h3><p>Read the current fees, limits and terms before confirming any request.</p></article><article class="card"><h3>3. Keep your records</h3><p>Use transaction history and support for status updates. Never share your security codes.</p></article></div></section></main>';
+
+    $secondary_href = $world === 'business' ? '/Business.php' : '/Services.php';
+    $secondary_label = $world === 'business' ? 'Business workspace' : 'All services';
+    ?>
+    <div class="wrap">
+        <section class="m-sub-hero">
+            <div class="m-page-split">
+                <div>
+                    <p class="eyebrow"><i></i><?php echo bc_landing_e($ctx['site_name']); ?><?php echo $world === 'business' ? ' · Business' : ''; ?></p>
+                    <h1><?php echo bc_landing_e($p[0]); ?></h1>
+                    <p class="lede"><?php echo bc_landing_e($p[2]); ?></p>
+                    <p style="margin-top:12px;color:var(--text2,#CBD5E1);line-height:1.65"><?php echo bc_landing_e($p[3]); ?></p>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                        <a class="btn primary" href="<?php echo bc_landing_e($p[5]); ?>"><?php echo bc_landing_e($p[6]); ?></a>
+                        <a class="btn ghost" href="<?php echo bc_landing_e($secondary_href); ?>"><?php echo bc_landing_e($secondary_label); ?></a>
+                    </div>
+                    <?php if ($key === 'download'): ?>
+                        <?php $url = bc_public_download_url($ctx['vendor_id']); ?>
+                        <?php if ($url !== ''): ?>
+                            <div style="margin-top:18px"><a class="btn primary" href="<?php echo bc_landing_e($url); ?>" rel="noopener noreferrer">Open official app download</a></div>
+                        <?php else: ?>
+                            <p class="m-notice" role="status" style="margin-top:18px">An app download has not been published for this website yet. Please use the browser option above or contact support.</p>
+                        <?php endif; ?>
+                        <p class="small" style="margin-top:10px">App Store and Google Play availability depends on the operator’s published release. No store listing is assumed here.</p>
+                    <?php endif; ?>
+                    <?php if ($key === 'contact'): ?>
+                        <?php echo bc_meridian_support_bar($ctx); ?>
+                    <?php endif; ?>
+                </div>
+                <aside class="m-showcase-card">
+                    <p class="eyebrow"><i></i>At a Glance</p>
+                    <?php foreach ($highlights as $hl): ?>
+                    <div class="m-kv-row"><span><?php echo bc_landing_e($hl[0]); ?></span><strong><?php echo bc_landing_e($hl[1]); ?></strong></div>
+                    <?php endforeach; ?>
+                    <p class="m-notice" style="margin:4px 0 0"><?php echo bc_landing_e($p[4]); ?></p>
+                </aside>
+            </div>
+        </section>
+
+        <?php if ($key === 'developers'): ?>
+        <section class="chapter tight">
+            <div class="api-layout">
+                <section class="api-block">
+                    <p class="eyebrow"><i></i>Sample Request</p>
+                    <h3>Server-side VTU endpoint</h3>
+                    <pre class="m-code-block">POST /web/api/data.php
+{
+  "api_key": "YOUR_SERVER_API_KEY",
+  "network": "mtn",
+  "phone_number": "08031234567",
+  "plan_code": "MTN_SME_1GB",
+  "reference": "tx_01J9Z4K"
+}</pre>
+                </section>
+                <section class="api-block">
+                    <p class="eyebrow"><i></i>Best Practices</p>
+                    <h3>Integration checklist</h3>
+                    <ul class="m-steps-list">
+                        <li><i>01</i><span>Store API keys in server environment variables, never client bundles.</span></li>
+                        <li><i>02</i><span>Send unique client references to protect against duplicate debits.</span></li>
+                        <li><i>03</i><span>Always requery pending responses before marking an order failed.</span></li>
+                    </ul>
+                </section>
+            </div>
+        </section>
+        <?php endif; ?>
+
+        <section class="chapter tight">
+            <div class="chap-head">
+                <p class="eyebrow"><i></i>Guidance</p>
+                <h2 style="margin-top:10px">Before you continue</h2>
+            </div>
+            <div class="m-cards3">
+                <?php foreach ($extra_cards as $ec): ?>
+                <article class="m-card">
+                    <div class="m-step-num"><?php echo bc_landing_e(explode(' · ', $ec[0])[0]); ?></div>
+                    <h3><?php echo bc_landing_e(explode(' · ', $ec[0])[1] ?? $ec[0]); ?></h3>
+                    <p><?php echo bc_landing_e($ec[1]); ?></p>
+                </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <div class="m-cta-band">
+            <h2>Ready to take the next step?</h2>
+            <p><?php echo bc_landing_e($p[2]); ?></p>
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+                <a class="btn primary" href="<?php echo bc_landing_e($p[5]); ?>"><?php echo bc_landing_e($p[6]); ?></a>
+                <a class="btn ghost" href="/Contact.php">Contact support</a>
+            </div>
+        </div>
+    </div>
+    <?php
     bc_landing_foot($ctx);
 }
 

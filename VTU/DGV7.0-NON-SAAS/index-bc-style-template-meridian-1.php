@@ -22,7 +22,7 @@ $js_config = array(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title><?php echo $site_e; ?> | Move and manage your money across borders</title>
+<title><?php echo $site_e; ?> | Everyday top-ups and bill payments, together</title>
 <meta name="description" content="<?php echo bc_meridian_e($ctx['site_desc']); ?>">
 <link rel="stylesheet" href="/asset/meridian-1/meridian-1.css">
 <link rel="stylesheet" href="/asset/meridian-1/meridian-theme.css">
@@ -69,7 +69,7 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
       <div class="hero-copy">
         <p class="eyebrow"><i></i><?php echo $site_e; ?> · Bills, Top-Ups &amp; Global Money</p>
         <h1>Everyday top-ups and bill payments, together.</h1>
-        <p class="lede">Instant airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, betting funding, gift cards, and travel eSIMs in one place.</p>
+        <p class="lede">Pick a network, enter a Nigerian mobile number, and preview airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, and travel eSIMs.</p>
         <div class="ctas" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
           <?php if ($ctx['registration_open']): ?>
             <a class="btn primary" href="/web/Register.php">Create free account</a>
@@ -77,7 +77,8 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
             <a class="btn primary" href="/web/Login.php">Sign in to account</a>
           <?php endif; ?>
           <a class="btn ghost" href="/BillsAndAirtime.php">Bills &amp; airtime</a>
-          <a class="btn ghost" href="/Services.php">Explore services</a>
+          <a class="btn ghost" href="/services/gift-cards.php">Gift cards</a>
+          <a class="btn ghost" href="/services/esim.php">Travel eSIM</a>
           <?php if ($app_badge !== ''): ?>
             <?php echo $app_badge; ?>
           <?php else: ?>
@@ -88,21 +89,29 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
         <div class="scroll-hint" aria-hidden="true"><i></i>Scroll to explore your wallet tools</div>
       </div>
 
-      <div class="stage-wrap">
-        <div class="stage" id="stage">
-          <div class="slab"><div class="glass tint"><div class="mesh"></div></div><div class="sweep"></div></div>
-          <div class="layer portrait"><img class="hero-customer-photo" src="/asset/meridian-1/images/fintechflow-portrait.webp" alt="<?php echo $site_e; ?> customer" width="640" height="594" decoding="async" fetchpriority="high"></div>
-          <div class="phone-glow" id="phoneGlow"></div>
-          <div class="float f2"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg></div><div><b>Instant Wallet</b><span>Bills, data &amp; peer transfers</span></div></div></div>
-          <div class="float f1"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg></div><div><b>Virtual USD Card</b><span>Global online checkout</span></div></div></div>
-          <div class="float f3"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg></div><div><b><svg class="flag" aria-hidden="true"><use href="#fl-gb"/></svg> Multi-Currency</b><span>NGN · USD · GBP · EUR</span></div></div></div>
-          <div class="hero-wallet glass tint" id="heroWallet" aria-hidden="true">
-            <div class="row"><span class="small" style="color:var(--text2)"><?php echo $site_e; ?> wallet</span><span class="tag demo">Preview</span></div>
-            <div class="big"><svg class="flag" aria-hidden="true"><use href="#fl-ng"/></svg> ₦250,000.00</div>
-            <p class="small" style="color:var(--text2)">Everyday utilities, global transfers, cards and rewards under one roof.</p>
-            <div class="acts"><span>Swap</span><span>Send</span><span>Card</span><span>Bills</span></div>
+      <div>
+        <?php if (bc_meridian_service_enabled('airtime', $ctx['vendor_id']) || bc_meridian_service_enabled('data', $ctx['vendor_id'])): ?>
+        <form class="glass panel stack" id="topupForm" novalidate="">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <strong style="font-size:16px">Instant airtime &amp; mobile data preview</strong>
+            <span class="tag demo">Interactive</span>
           </div>
+          <div class="chips" role="group" aria-label="Network" id="netChips"><button type="button" class="chip" aria-pressed="true">MTN</button><button type="button" class="chip" aria-pressed="false">Airtel</button><button type="button" class="chip" aria-pressed="false">Glo</button><button type="button" class="chip" aria-pressed="false">9mobile</button></div>
+          <div class="field"><label for="phone">Phone number</label><input class="input" id="phone" inputmode="tel" autocomplete="off" value="0803 000 0000"></div>
+          <div class="chips" role="group" aria-label="Amount" id="amtChips"><button type="button" class="chip" aria-pressed="true" data-v="1000">₦1,000</button><button type="button" class="chip" aria-pressed="false" data-v="2000">₦2,000</button><button type="button" class="chip" aria-pressed="false" data-v="5000">₦5,000</button></div>
+          <div class="result" id="topupRes" aria-live="polite"><svg class="check" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="32" cy="32" r="29"/><path d="M20 33l8 8 16-17"/></svg><span class="small" id="topupMsg">Pick a network and amount, then preview.</span></div>
+          <button class="btn primary" type="submit" style="width:100%">Preview top up ₦1,000</button>
+        </form>
+        <?php else: ?>
+        <div class="glass panel stack">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <strong style="font-size:16px"><?php echo $site_e; ?> Utilities &amp; Lifestyle</strong>
+            <span class="tag demo">Wallet</span>
+          </div>
+          <p class="small" style="margin:0">Browse active bills, gift cards, travel eSIMs, and digital services from your account.</p>
+          <a class="btn primary" href="/Services.php" style="width:100%">Explore active services</a>
         </div>
+        <?php endif; ?>
       </div>
     </div>
   </section>
@@ -126,16 +135,22 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
           <a class="btn ghost" href="/services/international-transfer.php">International transfers</a>
         </div>
       </div>
-      <div class="glass panel stack">
-        <div class="row" style="justify-content:space-between;align-items:center">
-          <span class="small" style="color:var(--text2)">Global Money Corridors</span>
-          <span class="tag demo">Multi-Currency</span>
+
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="slab"><div class="glass tint"><div class="mesh"></div></div><div class="sweep"></div></div>
+          <div class="layer portrait"><img class="hero-customer-photo" src="/asset/meridian-1/images/fintechflow-portrait.webp" alt="<?php echo $site_e; ?> customer" width="640" height="594" decoding="async" fetchpriority="high"></div>
+          <div class="phone-glow" id="phoneGlow"></div>
+          <div class="float f2"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg></div><div><b>Instant Wallet</b><span>Bills, data &amp; peer transfers</span></div></div></div>
+          <div class="float f1"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg></div><div><b>Virtual USD Card</b><span>Global online checkout</span></div></div></div>
+          <div class="float f3"><div class="chipf glass"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg></div><div><b><svg class="flag" aria-hidden="true"><use href="#fl-gb"/></svg> Multi-Currency</b><span>NGN · USD · GBP · EUR</span></div></div></div>
+          <div class="hero-wallet glass tint" id="heroWallet" aria-hidden="true">
+            <div class="row"><span class="small" style="color:var(--text2)"><?php echo $site_e; ?> wallet</span><span class="tag demo">Preview</span></div>
+            <div class="big"><svg class="flag" aria-hidden="true"><use href="#fl-ng"/></svg> ₦250,000.00</div>
+            <p class="small" style="color:var(--text2)">Everyday utilities, global transfers, cards and rewards under one roof.</p>
+            <div class="acts"><span>Swap</span><span>Send</span><span>Card</span><span>Bills</span></div>
+          </div>
         </div>
-        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-ng"/></svg> Naira Wallet (NGN)</span><span class="num">Instant Bills &amp; Transfers</span></div>
-        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-us"/></svg> US Dollar (USD)</span><span class="num">Virtual Cards &amp; Wires</span></div>
-        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-gb"/></svg> British Pound (GBP)</span><span class="num">Remittance &amp; Tuition</span></div>
-        <div class="kv"><span class="small"><svg class="flag" aria-hidden="true"><use href="#fl-eu"/></svg> Euro (EUR)</span><span class="num">Cross-Border Settlement</span></div>
-        <p class="small" style="margin:0;color:var(--text3)">Confirmed FX quotes, recipient verification, and fees are displayed before you confirm in your <?php echo $site_e; ?> account.</p>
       </div>
     </div>
   </section>
@@ -216,31 +231,6 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
           </div>
         </div>
       </div>
-    </div>
-  </section>
-  <?php endif; ?>
-
-  <?php if (bc_meridian_service_enabled('airtime', $ctx['vendor_id']) || bc_meridian_service_enabled('data', $ctx['vendor_id'])): ?>
-  <section class="chapter" id="bills-ch">
-    <div class="wrap split flip">
-      <div>
-        <div class="chap-head">
-          <h2>Instant airtime &amp; mobile data preview.</h2>
-          <p class="lede">Pick a network, enter a Nigerian mobile number, and preview airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, and travel eSIMs.</p>
-        </div>
-        <div class="chips">
-          <a class="btn primary" href="/BillsAndAirtime.php">Bills &amp; airtime</a>
-          <a class="btn ghost" href="/services/gift-cards.php">Gift cards</a>
-          <a class="btn ghost" href="/services/esim.php">Travel eSIM</a>
-        </div>
-      </div>
-      <form class="glass panel stack" id="topupForm" novalidate="">
-        <div class="chips" role="group" aria-label="Network" id="netChips"><button type="button" class="chip" aria-pressed="true">MTN</button><button type="button" class="chip" aria-pressed="false">Airtel</button><button type="button" class="chip" aria-pressed="false">Glo</button><button type="button" class="chip" aria-pressed="false">9mobile</button></div>
-        <div class="field"><label for="phone">Phone number</label><input class="input" id="phone" inputmode="tel" autocomplete="off" value="0803 000 0000"></div>
-        <div class="chips" role="group" aria-label="Amount" id="amtChips"><button type="button" class="chip" aria-pressed="true" data-v="1000">₦1,000</button><button type="button" class="chip" aria-pressed="false" data-v="2000">₦2,000</button><button type="button" class="chip" aria-pressed="false" data-v="5000">₦5,000</button></div>
-        <div class="result" id="topupRes" aria-live="polite"><svg class="check" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="32" cy="32" r="29"/><path d="M20 33l8 8 16-17"/></svg><span class="small" id="topupMsg">Pick a network and amount, then preview.</span></div>
-        <button class="btn primary" type="submit" style="width:100%">Preview top up ₦1,000</button>
-      </form>
     </div>
   </section>
   <?php endif; ?>

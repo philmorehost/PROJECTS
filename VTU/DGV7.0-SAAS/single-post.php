@@ -16,7 +16,6 @@
     }
     $current_vendor_id = $vendor_account_details['id'] ?? 0;
 
-    // --- FETCH SINGLE POST ---
     if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
         header("Location: blog.php");
         exit();
@@ -34,7 +33,6 @@
     }
     $post = mysqli_fetch_assoc($post_res);
 
-    // --- FETCH RELATED POSTS ---
     $related_posts = [];
     $related_sql = "SELECT id, title, featured_image, created_at FROM blog_posts WHERE author_id = ? AND id != ? AND status = 'published' ORDER BY created_at DESC LIMIT 3";
     $related_stmt = mysqli_prepare($connection_server, $related_sql);
@@ -48,6 +46,7 @@
     $m_ctx = bc_meridian_context();
     $site_title_post = trim((string)($get_site_details['site_title'] ?? ''));
     if ($site_title_post === '') $site_title_post = $m_ctx['site_name'];
+    $personal_vars_post = bc_meridian_personal_style_vars($m_ctx['primary_color']);
     $js_config_post = array(
         'siteName' => $site_title_post,
         'appUrl' => $m_ctx['app_url'] ?? '',
@@ -60,10 +59,10 @@
     );
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-world="business">
+<html lang="en" data-theme="dark" data-world="personal" style="<?php echo htmlspecialchars($personal_vars_post, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?php echo htmlspecialchars($post['title']); ?> | <?php echo htmlspecialchars($site_title_post); ?></title>
 
     <link rel="stylesheet" href="/asset/meridian-1/meridian-1.css">
@@ -71,167 +70,72 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link href="assets-2/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="assets-2/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
     <script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config_post, JSON_UNESCAPED_SLASHES); ?>;</script>
-
-    <!-- ShareThis -->
     <script type='text/javascript' src='https://platform-api.sharethis.com/js/sharethis.js#property=65c490a071c82a001275d46a&product=inline-share-buttons' async='async'></script>
-
     <style>
-        :root {
-            --accent-color: #FFFFFF;
-            --dark-bg: #050507;
-            --text-main: #F8FAFC;
-            --text-muted: #CBD5E1;
-        }
-
-        body {
-            font-family: 'Figtree', system-ui, sans-serif;
-            background-color: #050507;
-            color: var(--text-main);
-            line-height: 1.7;
-            padding-top: 78px;
-        }
-
-        .article-header {
-            padding: 52px 0 36px;
-            text-align: center;
-        }
-        .article-title {
-            font-weight: 800;
-            font-size: clamp(2rem, 4.4vw, 3rem);
-            margin-bottom: 20px;
-            color: #FFFFFF;
-        }
-        .article-meta {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 20px;
-            color: #94A3B8;
-            font-weight: 600;
-        }
-
-        .featured-image-container {
-            border-radius: 26px;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,.14);
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-            margin-bottom: 40px;
-        }
-        .featured-image-container img {
-            width: 100%;
-            height: auto;
-            max-height: 580px;
-            object-fit: cover;
-        }
-
-        .content-card {
-            background: rgba(255,255,255,.04);
-            border: 1px solid rgba(255,255,255,.14);
-            padding: 46px;
-            border-radius: 26px;
-            box-shadow: 0 14px 40px rgba(0,0,0,0.3);
-            margin-bottom: 50px;
-        }
-
-        .post-body {
-            font-size: 1.1rem;
-            color: #E2E8F0;
-        }
-        .post-body p { margin-bottom: 22px; }
-        .post-body h2, .post-body h3 { font-weight: 700; margin: 36px 0 18px; color: #FFFFFF; }
-        .post-body a { color: #93C5FD; }
-
-        .share-section {
-            border-top: 1px solid rgba(255,255,255,.14);
-            padding-top: 26px;
-            margin-top: 44px;
-        }
-
-        .related-card {
-            border: 1px solid rgba(255,255,255,.14);
-            border-radius: 20px;
-            background: rgba(255,255,255,.04);
-            overflow: hidden;
-            transition: transform 0.25s ease, border-color 0.25s ease;
-        }
-        .related-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.32); }
-        .related-card img { height: 180px; object-fit: cover; }
-        .related-card a { color: #FFFFFF !important; }
-
-        @media (max-width: 768px) {
-            .article-title { font-size: 1.9rem; }
-            .content-card { padding: 24px; }
-        }
+        .m-post-body { font-size: 1.06rem; line-height: 1.75; color: #E2E8F0; }
+        .m-post-body p { margin-bottom: 18px; }
+        .m-post-body h2, .m-post-body h3 { margin: 28px 0 12px; color: #FFFFFF; }
+        .m-post-body a { color: #93C5FD; }
     </style>
 </head>
 <body>
 
-    <?php echo bc_meridian_header_and_menu($m_ctx, 'business'); ?>
+    <?php echo bc_meridian_header_and_menu($m_ctx, 'personal'); ?>
 
-    <article class="container">
-        <header class="article-header">
-            <span class="fw-bold text-uppercase small mb-2 d-block" style="color:#94A3B8">Article Insight</span>
-            <h1 class="article-title"><?php echo htmlspecialchars($post['title']); ?></h1>
-            <div class="article-meta">
-                <span><i class="bi bi-person-circle me-2"></i><?php echo htmlspecialchars($post['firstname']); ?></span>
-                <span><i class="bi bi-calendar3 me-2"></i><?php echo date('M d, Y', strtotime($post['created_at'])); ?></span>
-                <span><i class="bi bi-clock me-2"></i>6 min read</span>
+    <main class="wrap m-sub-main" style="padding-top:96px">
+        <article>
+            <header class="m-sub-hero" style="text-align:center;max-width:860px;margin:0 auto">
+                <p class="eyebrow"><i></i>Article Insight</p>
+                <h1><?php echo htmlspecialchars($post['title']); ?></h1>
+                <p class="small" style="color:var(--text3,#94A3B8)">
+                    By <?php echo htmlspecialchars($post['firstname']); ?> · <?php echo date('M d, Y', strtotime($post['created_at'])); ?> · 6 min read
+                </p>
+            </header>
+
+            <?php if(!empty($post['featured_image'])): ?>
+            <div style="max-width:860px;margin:0 auto 28px;border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.14)">
+                <img src="<?php echo htmlspecialchars($post['featured_image']); ?>" alt="<?php echo htmlspecialchars($post['title']); ?>" style="width:100%;max-height:520px;object-fit:cover;display:block">
             </div>
-        </header>
+            <?php endif; ?>
 
-        <?php if(!empty($post['featured_image'])): ?>
-        <div class="featured-image-container">
-            <img src="<?php echo htmlspecialchars($post['featured_image']); ?>" alt="Featured Image">
-        </div>
-        <?php endif; ?>
-
-        <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="content-card">
-                    <div class="post-body">
-                        <?php echo base64_decode($post['content']); ?>
-                    </div>
-
-                    <div class="share-section">
-                        <h6 class="fw-bold mb-3 text-white">Share this story</h6>
-                        <!-- ShareThis Inline Buttons -->
-                        <div class="sharethis-inline-share-buttons"></div>
-                    </div>
+            <div class="m-article-card">
+                <div class="m-post-body">
+                    <?php echo base64_decode($post['content']); ?>
                 </div>
+                <div style="border-top:1px solid rgba(255,255,255,.14);padding-top:22px;margin-top:34px">
+                    <h4 style="margin:0 0 12px">Share this story</h4>
+                    <div class="sharethis-inline-share-buttons"></div>
+                </div>
+            </div>
 
-                <!-- Related Posts -->
-                <?php if(!empty($related_posts)): ?>
-                <div class="mt-5 mb-5">
-                    <h4 class="fw-bold mb-4 text-white">You might also like</h4>
-                    <div class="row g-4">
-                        <?php foreach($related_posts as $rel): ?>
-                        <div class="col-md-4">
-                            <div class="related-card h-100">
-                                <a href="single-post.php?id=<?php echo $rel['id']; ?>">
-                                    <img src="<?php echo htmlspecialchars($rel['featured_image']); ?>" class="w-100" alt="Related">
-                                </a>
-                                <div class="p-3">
-                                    <h6 class="fw-bold mb-0">
-                                        <a href="single-post.php?id=<?php echo $rel['id']; ?>" class="text-decoration-none"><?php echo htmlspecialchars($rel['title']); ?></a>
-                                    </h6>
-                                </div>
-                            </div>
+            <?php if(!empty($related_posts)): ?>
+            <section class="chapter tight">
+                <div class="chap-head">
+                    <p class="eyebrow"><i></i>Continue Reading</p>
+                    <h2 style="margin-top:10px">You might also like</h2>
+                </div>
+                <div class="m-blog-grid">
+                    <?php foreach($related_posts as $rel): ?>
+                    <article class="m-blog-card">
+                        <a href="single-post.php?id=<?php echo (int)$rel['id']; ?>">
+                            <img src="<?php echo htmlspecialchars($rel['featured_image']); ?>" alt="<?php echo htmlspecialchars($rel['title']); ?>" loading="lazy">
+                        </a>
+                        <div class="m-blog-card-body">
+                            <h3 style="margin:0;font-size:18px">
+                                <a href="single-post.php?id=<?php echo (int)$rel['id']; ?>" style="text-decoration:none"><?php echo htmlspecialchars($rel['title']); ?></a>
+                            </h3>
+                            <a class="bz-link" style="margin-top:auto" href="single-post.php?id=<?php echo (int)$rel['id']; ?>">Read Article →</a>
                         </div>
-                        <?php endforeach; ?>
-                    </div>
+                    </article>
+                    <?php endforeach; ?>
                 </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </article>
+            </section>
+            <?php endif; ?>
+        </article>
+    </main>
 
     <?php echo bc_meridian_footer($m_ctx); ?>
-
-    <script src="assets-2/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/asset/meridian-1/meridian-1.js"></script>
 </body>
 </html>
