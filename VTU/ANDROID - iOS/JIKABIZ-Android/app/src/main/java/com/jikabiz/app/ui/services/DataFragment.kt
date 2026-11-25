@@ -188,8 +188,8 @@ class DataFragment : Fragment(R.layout.fragment_data) {
 
         // One label per plan: name, price and validity - the same information the rows showed.
         val labels = plans.map { plan ->
-            val validity = if (plan.duration.isNotEmpty()) " Â· ${plan.duration}" else ""
-            "${plan.name} â€” â‚¦${formatAmount(plan.amount)}$validity"
+            val validity = if (plan.duration.isNotEmpty()) " · ${plan.duration}" else ""
+            "${plan.name} — ₦${formatAmount(plan.amount)}$validity"
         }
 
         suppressDropdownCallback = true
@@ -203,7 +203,14 @@ class DataFragment : Fragment(R.layout.fragment_data) {
     }
 
     private fun formatAmount(raw: String): String = try {
-        NumberFormat.getNumberInstance(Locale.getDefault()).format(raw.toDouble())
+        val amount = raw.toDouble()
+        if (amount == amount.toLong().toDouble()) {
+            NumberFormat.getNumberInstance(Locale.US).format(amount.toLong())
+        } else {
+            NumberFormat.getNumberInstance(Locale.US)
+                .apply { minimumFractionDigits = 2; maximumFractionDigits = 2 }
+                .format(amount)
+        }
     } catch (_: Exception) {
         raw
     }
@@ -249,7 +256,7 @@ class DataFragment : Fragment(R.layout.fragment_data) {
         val durationLine = if (plan.duration.isNotEmpty()) "\nValidity: ${plan.duration}" else ""
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Confirm Purchase")
-            .setMessage("Phone: $phone\nNetwork: ${selectedNetwork.uppercase()}\nType: ${selectedDataType.replace("-", " ").uppercase()}\nPlan: ${plan.name}\nAmount: â‚¦${plan.amount}$durationLine")
+            .setMessage("Phone: $phone\nNetwork: ${selectedNetwork.uppercase()}\nType: ${selectedDataType.replace("-", " ").uppercase()}\nPlan: ${plan.name}\nAmount: ₦${formatAmount(plan.amount)}$durationLine")
             .setPositiveButton("Buy Now") { _, _ -> promptPinThenPurchase(phone, plan) }
             .setNegativeButton("Cancel", null).show()
     }
@@ -303,9 +310,9 @@ class DataFragment : Fragment(R.layout.fragment_data) {
      *  rather than only success getting a clear dialog and everything else a small snackbar. */
     private fun showResult(status: String, msg: String) {
         val title = when {
-            status.contains("success", ignoreCase = true) -> "âœ… Successful"
-            status.contains("pending", ignoreCase = true) -> "â³ Pending"
-            else -> "âŒ Failed"
+            status.contains("success", ignoreCase = true) -> "Successful"
+            status.contains("pending", ignoreCase = true) -> "Pending"
+            else -> "Failed"
         }
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(title)
@@ -320,4 +327,3 @@ class DataFragment : Fragment(R.layout.fragment_data) {
 
     override fun onDestroyView() { super.onDestroyView(); _binding = null }
 }
-
