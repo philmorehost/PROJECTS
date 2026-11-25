@@ -5,6 +5,17 @@
         http_response_code(403); exit('Development tools are not web endpoints.');
     }
 
+    // ─── JSON purity for API / app clients ───────────────────────────────────────
+    $bc_connect_is_api_client = (
+        stripos($_SERVER['REQUEST_URI'] ?? '', '/web/api/') !== false ||
+        stripos($_SERVER['SCRIPT_NAME'] ?? '', '/web/api/') !== false ||
+        isset($_SERVER['HTTP_X_APP_SOURCE'])
+    );
+    if ($bc_connect_is_api_client) {
+        @ini_set('display_errors', '0');
+        @ini_set('html_errors', '0');
+        @ini_set('log_errors', '1');
+    }
 
     // ─── PHP 8.1+ Compatibility Fix ──────────────────────────────────────────────
     // PHP 8.1+ enables STRICT exception mode for MySQLi by default.

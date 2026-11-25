@@ -12,12 +12,13 @@ if (isset($get_logged_user_details)) {
 }
 
 if (isset($_POST["request-api"])) {
+	if (function_exists('bc_validate_csrf')) bc_validate_csrf();
 	if (isset($get_logged_user_details) && $get_logged_user_details['account_level'] != 3) {
 		if ($api_request_status !== 'pending') {
 			$uid = $get_logged_user_details['id'];
 			$uname = $get_logged_user_details['username'];
 			$vid = $get_logged_user_details['vendor_id'];
-			$domain = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['api_domain'])));
+			$domain = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['api_domain'] ?? '')));
 			mysqli_query($connection_server, "INSERT INTO sas_api_requests (vendor_id, user_id, username, api_domain, status) VALUES ('$vid', '$uid', '$uname', '$domain', 'pending')");
 			$_SESSION["product_purchase_response"] = "API Access Request Submitted Successfully!";
 			header("Location: " . $_SERVER["REQUEST_URI"]);
@@ -27,9 +28,14 @@ if (isset($_POST["request-api"])) {
 }
 
 if (isset($_POST["update-domain"])) {
-	if (isset($get_logged_user_details) && $get_logged_user_details['account_level'] == 3) {
-		$domain = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['api_domain'])));
-		mysqli_query($connection_server, "UPDATE sas_users SET api_domain='$domain' WHERE id='" . $get_logged_user_details["id"] . "'");
+	if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+	$can_dev_api = isset($get_logged_user_details)
+		&& (int)($get_logged_user_details['account_level'] ?? 0) === 3
+		&& (int)($get_logged_user_details['api_status'] ?? 0) === 1
+		&& (!function_exists('bc_fintech_developer_api_allowed') || bc_fintech_developer_api_allowed($get_logged_user_details));
+	if ($can_dev_api) {
+		$domain = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST['api_domain'] ?? '')));
+		mysqli_query($connection_server, "UPDATE sas_users SET api_domain='$domain' WHERE id='" . (int)$get_logged_user_details["id"] . "'");
 		$_SESSION["product_purchase_response"] = "API Whitelisted Domain Updated Successfully!";
 		header("Location: " . $_SERVER["REQUEST_URI"]);
 		exit();
@@ -37,15 +43,19 @@ if (isset($_POST["update-domain"])) {
 }
 
 if (isset($_POST["generate-apikey"])) {
-	if (isset($get_logged_user_details) && $get_logged_user_details['account_level'] == 3) {
+	if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+	$can_dev_api = isset($get_logged_user_details)
+		&& (int)($get_logged_user_details['account_level'] ?? 0) === 3
+		&& (int)($get_logged_user_details['api_status'] ?? 0) === 1
+		&& (!function_exists('bc_fintech_developer_api_allowed') || bc_fintech_developer_api_allowed($get_logged_user_details));
+	if ($can_dev_api) {
 		$api_key = bin2hex(random_bytes(32));
-		mysqli_query($connection_server, "UPDATE sas_users SET api_key='$api_key' WHERE id='" . $get_logged_user_details["id"] . "'");
+		mysqli_query($connection_server, "UPDATE sas_users SET api_key='$api_key', api_key_created_at=NOW(), api_key_expires_at=DATE_ADD(NOW(), INTERVAL 60 DAY) WHERE id='" . (int)$get_logged_user_details["id"] . "'");
 		$_SESSION["product_purchase_response"] = "API Key Regenerated Successfully!";
 		header("Location: " . $_SERVER["REQUEST_URI"]);
 		exit();
 	}
 }
-?>
 ?>
 <?php
 // Plate app shell: one shared chrome for the signed-in console.
@@ -424,11 +434,12 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 						<p>To access our endpoints, every request must include your <code>api_key</code>. This key acts as your identity and authorization token.</p>
 
 						<?php if (isset($get_logged_user_details)) { ?>
-							<?php if ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] == 1) { ?>
+							<?php if ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] == 1 && (!function_exists('bc_fintech_developer_api_allowed') || bc_fintech_developer_api_allowed($get_logged_user_details))) { ?>
 								<div class="bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-25 mt-4">
 									<div class="d-flex justify-content-between align-items-center mb-3">
 										<label class="small fw-bold text-muted text-uppercase">Your Private API Key</label>
 										<form method="post">
+											<?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
 											<button name="generate-apikey" class="btn btn-link btn-sm text-danger text-decoration-none fw-bold" onclick="return confirm('Regenerate API Key? Your existing integrations will stop working.')">
 												<i class="bi bi-arrow-clockwise"></i> Regenerate Key
 											</button>
@@ -442,6 +453,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 									</div>
 
 									<form method="post" class="mt-4 pt-4 border-top">
+										<?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
 										<label class="small fw-bold text-muted text-uppercase mb-2">Whitelisted Domain Name</label>
 										<div class="input-group shadow-sm mb-2">
 											<span class="input-group-text bg-white border-0"><i class="bi bi-globe"></i></span>
@@ -456,8 +468,8 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 							<?php } else { ?>
 								<div class="bg-light p-5 rounded-4 text-center mt-4 border">
 									<i class="bi bi-lock display-4 text-primary mb-3"></i>
-									<h5 class="fw-bold"><?php echo ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] != 1) ? 'API Access Disabled' : 'Upgrade to API Level Required'; ?></h5>
-									<p class="text-muted small mb-4">Integrate our services into your own apps and websites by becoming a Business account.</p>
+									<h5 class="fw-bold"><?php echo ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] != 1) ? 'API Access Disabled' : 'Upgrade to Business API Level Required'; ?></h5>
+									<p class="text-muted small mb-4">Integrate our services into your own apps and websites by becoming an approved Business account.</p>
 									<?php if ($get_logged_user_details['account_level'] == 3 && $get_logged_user_details['api_status'] != 1): ?>
 										<div class="alert alert-warning py-2 mb-0 rounded-pill px-4 d-inline-block fw-bold small"><i class="bi bi-info-circle me-1"></i> Contact Administrator to enable your API access.</div>
 									<?php elseif ($api_request_status === 'pending'): ?>
@@ -466,6 +478,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 										</button>
 									<?php else: ?>
 										<form method="post">
+											<?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
 											<div class="row justify-content-center">
 												<div class="col-md-8">
 													<div class="mb-3 text-start">
@@ -1356,35 +1369,35 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 						</div>
 						<p class="small text-muted">Parameters: <code>user</code>, <code>pass</code>, <code>first</code>, <code>last</code>, <code>email</code>, <code>phone</code>, <code>address</code>.</p>
 
-						<h5 class="fw-bold mt-4 mb-3">2. Login</h5>
+						<h5 class="fw-bold mt-4 mb-3">2. Login (Bearer App Token)</h5>
 						<div class="endpoint-box">
 							<span class="badge-method badge-post">POST</span>
 							<span class="endpoint-url"><?php echo $web_http_host; ?>/web/api/login.php</span>
 						</div>
-						<p class="small text-muted">Parameters: <code>user</code>, <code>pass</code>. Returns <code>api_key</code> and user details.</p>
+						<p class="small text-muted">Parameters: <code>user</code>, <code>pass</code>. Restricted to Personal accounts. Returns a revocable <code>app_token</code> (or prompts for <code>/web/api/login-otp.php</code> when login OTP is enabled). Send <code>Authorization: Bearer &lt;app_token&gt;</code> (or <code>X-App-Token</code>) on subsequent mobile API requests; raw <code>api_key</code> values are not issued to mobile clients.</p>
 
 						<h5 class="fw-bold mt-4 mb-3">3. Biometric Verification</h5>
 						<div class="endpoint-box">
 							<span class="badge-method badge-post">POST</span>
 							<span class="endpoint-url"><?php echo $web_http_host; ?>/web/api/biometric.php?action=verify_mobile_login</span>
 						</div>
-						<p class="small text-muted">Used for native mobile app login. Requires <code>username</code> and <code>api_key</code>.</p>
+						<p class="small text-muted">Used for native mobile app login. Requires <code>Authorization: Bearer &lt;app_token&gt;</code> header and <code>username</code>.</p>
 
 						<h5 class="fw-bold mt-4 mb-3">4. Unified Services Fetcher</h5>
 						<div class="endpoint-box">
 							<span class="badge-method badge-post">POST</span>
 							<span class="endpoint-url"><?php echo $web_http_host; ?>/web/api/services.php</span>
 						</div>
-						<p class="small text-muted">Parameters: <code>api_key</code>. Returns all enabled services and their corresponding plan lists for the dashboard.</p>
+						<p class="small text-muted">Requires <code>Authorization: Bearer &lt;app_token&gt;</code> (for mobile Personal accounts) or an approved Business <code>api_key</code>. Returns all enabled services and their corresponding plan lists for the dashboard.</p>
 
-						<h5 class="fw-bold mt-4 mb-3">4. KYC Identity Verification</h5>
+						<h5 class="fw-bold mt-4 mb-3">5. KYC Identity Verification</h5>
 						<div class="endpoint-box">
 							<span class="badge-method badge-post">POST</span>
-							<span class="endpoint-url"><?php echo $web_http_host; ?>/web/api/kyc_submit.php</span>
+							<span class="endpoint-url"><?php echo $web_http_host; ?>/web/api/kyc.php</span>
 						</div>
-						<p class="small text-muted">Used for Face ID Liveness and Govt ID upload. Supports <code>multipart/form-data</code> for file uploads and <code>face_image_data</code> as Base64.</p>
+						<p class="small text-muted">Used for KYC status and identity document submission. Requires <code>Authorization: Bearer &lt;app_token&gt;</code> (or an approved Business <code>api_key</code>) and supports <code>multipart/form-data</code> file uploads.</p>
 
-						<h5 class="fw-bold mt-4 mb-3">5. Payment Gateway Webhooks</h5>
+						<h5 class="fw-bold mt-4 mb-3">6. Payment Gateway Webhooks</h5>
 						<p class="small text-muted">Use these URLs in your gateway provider dashboards. They automatically credit user wallets upon successful payment notifications.</p>
 
 						<div class="table-responsive">

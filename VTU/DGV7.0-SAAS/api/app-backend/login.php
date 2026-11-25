@@ -41,7 +41,18 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 if (mysqli_num_rows($checkuser_pass) == 1) {
                     $get_user_detail = mysqli_fetch_array($checkuser_pass);
                     bc_enrollment_api_guard($get_user_detail);
-                    if ($get_user_detail["status"] == "1") {
+                    if ($get_user_detail["status"] == "1" && empty($get_user_detail["is_blocked"])) {
+                        if (function_exists('bc_fintech_app_access')) {
+                            $app_dec = bc_fintech_app_access($get_user_detail);
+                            if (empty($app_dec['allowed'])) {
+                                echo json_encode(array(
+                                    "json-status" => "success",
+                                    "status" => "failed",
+                                    "status-msg" => $app_dec['message'] ?? "This account cannot use the mobile app."
+                                ));
+                                exit;
+                            }
+                        }
 
                         // This legacy endpoint has no way to carry a one-time code, so when the
                         // vendor requires user login OTP it must not mint a session at all -

@@ -2,14 +2,36 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
     include("../func/bc-spadmin-config.php");
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
-        http_response_code(503); exit('Legacy approval changes are paused pending atomic reconciliation. No credit or refund was posted.');
+
+    function sec30_verify_spadmin_pin_only($spadmin_row, $input, $context) {
+        global $connection_server;
+        if (!is_array($spadmin_row) || empty($spadmin_row['id'])) return 'Step-up verification is unavailable.';
+        $admin_id = (int)$spadmin_row['id'];
+        $identity = (string)($spadmin_row['email'] ?? ('spadmin#' . $admin_id));
+        if (empty($spadmin_row['security_pin'])) {
+            return 'Set a Security PIN in Account Settings before managing payment orders.';
+        }
+        if (function_exists('bc_is_rate_limited') && bc_is_rate_limited('spadmin_pin_fail_' . $context, (string)$admin_id, 5, 300)) {
+            if (function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_PIN_LOCKED', $context, $identity, 'Too many wrong PIN attempts');
+            return 'Too many wrong PIN attempts. Wait a few minutes and try again.';
+        }
+        $pin = (string)($input['pin'] ?? ($input['security_pin'] ?? ''));
+        if (!function_exists('verifyUserPIN') || !verifyUserPIN($pin, $spadmin_row)) {
+            if ($connection_server instanceof mysqli && function_exists('bc_ensure_security_tables')) {
+                bc_ensure_security_tables();
+                $action = mysqli_real_escape_string($connection_server, 'spadmin_pin_fail_' . $context);
+                $key = mysqli_real_escape_string($connection_server, (string)$admin_id);
+                mysqli_query($connection_server, "INSERT INTO sas_rate_limits (action, rate_key, attempted_at) VALUES ('$action', '$key', NOW())");
+            }
+            if (function_exists('bc_log_security_event')) bc_log_security_event('SPADMIN_PIN_FAILED', $context, $identity, 'Wrong PIN');
+            return 'Invalid Security PIN';
+        }
+        return '';
     }
     
     // §30: approving a vendor payment order credits the vendor's wallet — it
     // now takes POST + CSRF + the super-admin step-up (PIN + authenticator/
-    // email code), acts only on still-pending orders, and is audited. (Was a
-    // session-only GET link, replayable even against rejected orders.)
+    // email code), claims pending status atomically before crediting, and is audited.
     if(isset($_POST["send_stepup_code"])){
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $send_err = function_exists('bc_stepup_send_email_otp')
@@ -22,108 +44,90 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     if(isset($_POST["order-ref"])){
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
-    	$status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"])));
-    	$reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
-    	$statusArray = array(1, 2);
-    	if(is_numeric($status)){
-    		if(in_array($status, $statusArray)){
-    			$select_payment_order = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE reference='".$reference."'");
-    			if(mysqli_num_rows($select_payment_order) == 1){
-    				$get_payment_order = mysqli_fetch_array($select_payment_order);
-				// §30 guards: non-pending orders are final; approvals need step-up.
-				// $status is flipped to 99 to neutralise the legacy action blocks
-				// below while keeping their response/redirect plumbing.
-				if((string)$get_payment_order["status"] !== "2"){
-					$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
-					$status = 99;
-				} elseif((int)$status === 2) {
-					$sec30_err = function_exists('bc_stepup_spadmin_verify') ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $_POST, 'vendor_payment_approve') : 'Verification is unavailable.';
-					if ($sec30_err !== '') {
-						$json_response_encode = json_encode(array("desc" => $sec30_err),true);
-						$status = 99;
-					}
-				} elseif((int)$status === 1) {
-					// Rejection moves no money: PIN-checked only (same throttle).
-					$sec30_reject_input = $_POST;
-					$sec30_reject_input['pin_check_only'] = '1';
-					$sec30_err2 = function_exists('bc_stepup_spadmin_verify') ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $sec30_reject_input, 'vendor_payment_approve') : 'Verification is unavailable.';
-					if ($sec30_err2 !== '') {
-						$json_response_encode = json_encode(array("desc" => $sec30_err2),true);
-						$status = 99;
-					}
-					if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_rejected', (string)$reference, 'Rejected vendor payment order');
-				}
-					$get_vendors_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='".$get_payment_order["vendor_id"]."'"));
-					if(isset($get_vendors_details["id"])){
-						$verified_vendors_details = $get_vendors_details;
-					}else{
-						$verified_vendors_details = "User Not Exists";
-					}
-                    		
-    				if($status == 1){
-    					$update_payment_status = mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='3' WHERE reference='".$reference."'");
-    					$json_response_array = array("desc" => ucwords($verified_vendors_details["email"]." Order with N".toDecimal($get_payment_order["discounted_amount"],2)." rejected successfully"));
-    					$json_response_encode = json_encode($json_response_array,true);
-    				}
-    				
-    				if($status == 2){
-						if(in_array($get_payment_order["status"], array("2","3"))){
-							$purchase_method = "web";
-							$purchase_method = strtoupper($purchase_method);
-							$user = $verified_vendors_details["email"];
-							$type = "credit";
-							$amount = $get_payment_order["amount"];
-							$discounted_amount = $get_payment_order["discounted_amount"];
-							$type_alternative = ucwords("wallet ".$type);
-							$reference_2 = substr(str_shuffle("12345678901234567890"), 0, 15);
-							$description = ucwords("account ".$type."ed by admin ( payment order )");
-							$transType = $type;
-
-							$credit_other_user = chargeOtherVendor($user, $transType, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"], "1");
-							if(in_array($credit_other_user, array("success"))){
-								$update_payment_status = mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='1' WHERE reference='".$reference."'");
-						if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($verified_vendors_details["email"] ?? 'vendor'));
-								$json_response_array = array("desc" => ucwords($verified_vendors_details["email"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
+        $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"] ?? '')));
+        $reference = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"] ?? '')));
+        $statusArray = array(1, 2);
+        if(is_numeric($status)){
+            if(in_array((int)$status, $statusArray, true)){
+                $select_payment_order = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE reference='".$reference."' LIMIT 1");
+                if($select_payment_order && mysqli_num_rows($select_payment_order) == 1){
+                    $get_payment_order = mysqli_fetch_array($select_payment_order);
+					$get_vendors_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='".(int)$get_payment_order["vendor_id"]."' LIMIT 1"));
+					if(!isset($get_vendors_details["id"])){
+						$json_response_encode = json_encode(array("desc" => "Vendor Not Exists"), true);
+					} elseif((string)$get_payment_order["status"] !== "2"){
+						$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
+					} elseif((int)$status === 1) {
+						// Rejection moves no money: PIN-checked only (same throttle, matches modal guidance).
+						$sec30_err2 = sec30_verify_spadmin_pin_only($get_logged_spadmin_details, $_POST, 'vendor_payment_reject');
+						if ($sec30_err2 !== '') {
+							$json_response_encode = json_encode(array("desc" => $sec30_err2),true);
+						} else {
+							mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='3' WHERE reference='".$reference."' AND status='2' LIMIT 1");
+							if (mysqli_affected_rows($connection_server) === 1) {
+								if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_rejected', (string)$reference, 'Rejected vendor payment order');
+								$json_response_array = array("desc" => ucwords($get_vendors_details["email"]." Order with N".toDecimal($get_payment_order["discounted_amount"],2)." rejected successfully"));
 								$json_response_encode = json_encode($json_response_array,true);
-							}
-							
-							if($credit_other_user == "failed"){
-								$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
-								$json_response_encode = json_encode($json_response_array,true);
-							}		
-							
-						}else{
-							if(in_array($get_payment_order["status"], array("1"))){
-								//Order Amount Had Already Been Deposited To User Account
-								$json_response_array = array("desc" => "Order Amount Had Already Been Deposited To User Account");
-								$json_response_encode = json_encode($json_response_array,true);
+							} else {
+								$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
 							}
 						}
-    				}
-    			}else{
-    				if(mysqli_num_rows($select_payment_order) > 1){
-    					//Duplicated Orders
-    					$json_response_array = array("desc" => "Duplicated Orders");
-    					$json_response_encode = json_encode($json_response_array,true);
-    				}else{
-    					//Order Not Exists
-    					$json_response_array = array("desc" => "Order Not Exists");
-    					$json_response_encode = json_encode($json_response_array,true);
-    				}
-    			}
-    		}else{
-    			//Invalid Status Code
-    			$json_response_array = array("desc" => "Invalid Status Code");
-    			$json_response_encode = json_encode($json_response_array,true);
-    		}
-    	}else{
-    		//Non-numeric string
-    		$json_response_array = array("desc" => "Non-numeric string");
-    		$json_response_encode = json_encode($json_response_array,true);
-    	}
-    	$json_response_decode = json_decode($json_response_encode,true);
-    	$_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-    	header("Location: /bc-spadmin/PaymentOrders.php");
+					} elseif((int)$status === 2) {
+						$sec30_err = function_exists('bc_stepup_spadmin_verify') ? bc_stepup_spadmin_verify($get_logged_spadmin_details, $_POST, 'vendor_payment_approve') : 'Verification is unavailable.';
+						if ($sec30_err !== '') {
+							$json_response_encode = json_encode(array("desc" => $sec30_err),true);
+						} else {
+							// Atomic claim: exactly one concurrent request may transition 2 (pending) -> 1 (approved).
+							mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='1' WHERE reference='".$reference."' AND status='2' LIMIT 1");
+							if (mysqli_affected_rows($connection_server) !== 1) {
+								$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
+							} else {
+								$user = $get_vendors_details["email"];
+								$type = "credit";
+								$amount = $get_payment_order["amount"];
+								$discounted_amount = $get_payment_order["discounted_amount"];
+								// Deterministic ledger reference prevents duplicate credits across retries.
+								$reference_2 = 'VPO_' . substr(hash('sha256', (string)$get_payment_order["vendor_id"] . ':' . $reference), 0, 20);
+								$description = ucwords("account ".$type."ed by admin ( payment order )");
+								$credit_other_user = chargeOtherVendor($get_payment_order["vendor_id"], $type, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"], "1");
+								if($credit_other_user === "success"){
+									if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($get_vendors_details["email"] ?? 'vendor'));
+									$json_response_array = array("desc" => ucwords($get_vendors_details["email"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
+									$json_response_encode = json_encode($json_response_array,true);
+								} else {
+									// Revert claim back to pending if wallet mutation did not succeed.
+									mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='2' WHERE reference='".$reference."' AND status='1' LIMIT 1");
+									$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
+									$json_response_encode = json_encode($json_response_array,true);
+								}
+							}
+						}
+					}
+                }else{
+                    if($select_payment_order && mysqli_num_rows($select_payment_order) > 1){
+                        //Duplicated Orders
+                        $json_response_array = array("desc" => "Duplicated Orders");
+                        $json_response_encode = json_encode($json_response_array,true);
+                    }else{
+                        //Order Not Exists
+                        $json_response_array = array("desc" => "Order Not Exists");
+                        $json_response_encode = json_encode($json_response_array,true);
+                    }
+                }
+            }else{
+                //Invalid Status Code
+                $json_response_array = array("desc" => "Invalid Status Code");
+                $json_response_encode = json_encode($json_response_array,true);
+            }
+        }else{
+            //Non-numeric string
+            $json_response_array = array("desc" => "Non-numeric string");
+            $json_response_encode = json_encode($json_response_array,true);
+        }
+        $json_response_decode = json_decode($json_response_encode,true);
+        $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
+        header("Location: /bc-spadmin/PaymentOrders.php");
+        exit();
     }
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");

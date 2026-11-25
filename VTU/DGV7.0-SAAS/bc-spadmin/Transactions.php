@@ -24,11 +24,11 @@ bc_adm_head('', array("area" => "spadmin"));
 
             if(!empty($searchq)){
                 $search_esc = mysqli_real_escape_string($connection_server, $searchq);
-                $search_statement = "WHERE (t.product_unique_id LIKE '%$search_esc%' OR t.reference LIKE '%$search_esc%' OR t.type_alternative LIKE '%$search_esc%' OR t.description LIKE '%$search_esc%' OR v.email LIKE '%$search_esc%' OR v.firstname LIKE '%$search_esc%' OR v.lastname LIKE '%$search_esc%' OR v.website_url LIKE '%$search_esc%' OR v.business_name LIKE '%$search_esc%')";
+                $search_statement = "WHERE (t.product_unique_id LIKE '%$search_esc%' OR t.reference LIKE '%$search_esc%' OR t.type_alternative LIKE '%$search_esc%' OR t.description LIKE '%$search_esc%' OR v.email LIKE '%$search_esc%' OR v.firstname LIKE '%$search_esc%' OR v.lastname LIKE '%$search_esc%' OR v.website_url LIKE '%$search_esc%')";
                 $search_parameter = "searchq=".urlencode($searchq)."&";
             }
             
-            $get_vendor_transaction_details = mysqli_query($connection_server, "SELECT t.*, TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name, v.business_name AS vendor_business_name, v.email AS vendor_email, v.website_url AS vendor_website FROM sas_vendor_transactions t LEFT JOIN sas_vendors v ON v.id = t.vendor_id $search_statement ORDER BY t.date DESC LIMIT $limit $offset_statement");
+            $get_vendor_transaction_details = mysqli_query($connection_server, "SELECT t.*, TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name, '' AS vendor_business_name, v.email AS vendor_email, v.website_url AS vendor_website FROM sas_vendor_transactions t LEFT JOIN sas_vendors v ON v.id = t.vendor_id $search_statement ORDER BY t.date DESC LIMIT $limit $offset_statement");
         ?>
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
             <div class="card-header bg-white py-4 border-0">

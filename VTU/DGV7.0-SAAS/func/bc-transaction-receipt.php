@@ -136,7 +136,7 @@ if (!function_exists('bc_receipt_fetch_spadmin')) {
         $fetch_user = function () use ($connection_server, $ref) {
             $q = mysqli_query($connection_server, "SELECT t.*, p.product_name, a.api_type,
                 TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name,
-                v.business_name AS vendor_business_name,
+                '' AS vendor_business_name,
                 v.email AS vendor_email,
                 v.website_url AS vendor_website
                 FROM sas_transactions t
@@ -160,7 +160,7 @@ if (!function_exists('bc_receipt_fetch_spadmin')) {
         $fetch_vendor = function () use ($connection_server, $ref) {
             $q = mysqli_query($connection_server, "SELECT t.*,
                 TRIM(CONCAT(COALESCE(v.firstname,''), ' ', COALESCE(v.lastname,''))) AS vendor_name,
-                v.business_name AS vendor_business_name,
+                '' AS vendor_business_name,
                 v.email AS vendor_email,
                 v.website_url AS vendor_website
                 FROM sas_vendor_transactions t

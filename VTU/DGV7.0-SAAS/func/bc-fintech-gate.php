@@ -437,8 +437,14 @@ if (!function_exists('bc_fintech_api_credential')) {
         $GLOBALS['bc_api_auth_mode'] = 'api_key';
         $GLOBALS['bc_api_auth_user'] = null;
 
-        $input = null;
-        if (isset($_POST) && is_array($_POST)) $input = $_POST;
+        $input = (isset($_POST) && is_array($_POST) && !empty($_POST)) ? $_POST : null;
+        if ($input === null && PHP_SAPI !== 'cli') {
+            $raw_body = @file_get_contents('php://input');
+            if (is_string($raw_body) && $raw_body !== '') {
+                $decoded = json_decode($raw_body, true);
+                if (is_array($decoded)) $input = $decoded;
+            }
+        }
 
         $token = bc_app_token_from_request($input);
         if ($token === '') {
@@ -458,6 +464,9 @@ if (!function_exists('bc_fintech_api_credential')) {
             }
             if(!bc_fintech_developer_api_allowed($owner)) {
                 bc_fintech_send_app_denial(['http'=>401,'code'=>'APP_SIGNIN_REQUIRED','message'=>'Update the app and sign in again. Personal API keys are not app sessions.']);
+            }
+            if(array_key_exists('api_status', $owner) && (int)$owner['api_status'] !== 1) {
+                bc_fintech_send_app_denial(['http'=>403,'code'=>'API_NOT_APPROVED','message'=>'API access is not approved or is currently disabled for this account.']);
             }
             if(bc_api_key_is_expired($owner)) {
                 bc_fintech_send_app_denial(['http'=>401,'code'=>'API_KEY_EXPIRED','message'=>'Your API key has expired. Sign in to copy your new key, then update your integration.']);
@@ -499,5 +508,16 @@ if (!function_exists('bc_fintech_api_credential')) {
             ]);
         }
         return mysqli_real_escape_string($connection_server, $key);
+    }
+}
+
+if (!function_exists('bc_api_is_app_session')) {
+    /**
+     * Authoritative check for whether the current API request is an authenticated
+     * mobile-app session (never trusting client-supplied headers like X-App-Source).
+     */
+    function bc_api_is_app_session($in_process_app = false) {
+        if ($in_process_app) return true;
+        return (($GLOBALS['bc_api_auth_mode'] ?? '') === 'app_token');
     }
 }

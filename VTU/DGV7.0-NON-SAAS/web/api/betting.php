@@ -15,12 +15,13 @@ if ($select_vendor_table) {
 		$purchase_method = "app";
 		$get_api_post_info = $api_post_info_from_app;
 	} else {
-		$purchase_method = (($_SERVER['HTTP_X_APP_SOURCE'] ?? '') === 'dgv6-android') ? "app" : "api";
+		$purchase_method = "api";
 		$get_api_post_info = json_decode(file_get_contents('php://input'), true);
 	}
 
     $get_vendor_details = $select_vendor_table;
     $api_key_sanitized = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($get_api_post_info["api_key"] ?? "")), $vendor_id));
+$purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
     $get_user_detail_via_apikey = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $get_vendor_details["id"] . "' && api_key='" . $api_key_sanitized . "' LIMIT 1");
     $get_logged_user_details = mysqli_fetch_array($get_user_detail_via_apikey);
     if (mysqli_num_rows($get_user_detail_via_apikey) == 1) {

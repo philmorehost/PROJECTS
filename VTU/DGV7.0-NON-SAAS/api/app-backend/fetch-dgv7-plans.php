@@ -1,4 +1,9 @@
 <?php
+// Diagnostics must never reach the body: this answer is parsed as JSON by ANOTHER DGV7 install, and
+// a single notice printed before the payload reads to that client as "Invalid format returned from
+// DGV7 provider" - a message that points at the wrong end of the connection. Every sibling under
+// api/app-backend/ starts with this for the same reason; this file was the exception.
+error_reporting(0);
 header('Content-Type: application/json');
 include("app-config.php");
 
@@ -46,13 +51,19 @@ try {
     }
 
     $api_key_esc = mysqli_real_escape_string($connection_server, $api_key);
-    $user_q = mysqli_query($connection_server, "SELECT id, account_level, vendor_id FROM sas_users WHERE api_key='$api_key_esc' LIMIT 1");
+    $user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE api_key='$api_key_esc' LIMIT 1");
     if (mysqli_num_rows($user_q) == 0) {
         throw new Error("Invalid API Key");
     }
     
     $user = mysqli_fetch_assoc($user_q);
     bc_enrollment_api_guard($user);
+    // The same access rule the sibling web/api/*-plans.php endpoints apply: this catalogue is only
+    // served to an API user the SELLER has approved. Without it, a suspended or still-pending key
+    // could keep reading prices, and "activate another vendor's API" would mean nothing.
+    if ((int)($user['status'] ?? 0) !== 1 || (int)($user['api_status'] ?? 0) !== 1) {
+        throw new Error("API approval needed, Contact Admin");
+    }
     $vendor_id = $user['vendor_id'];
     $account_level = (int)$user['account_level'];
     
