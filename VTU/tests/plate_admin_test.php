@@ -245,18 +245,20 @@ achk(strpos(file_get_contents($shell), "</body>\n</html>") !== false, 'admin foo
 
 // ---------------------------------------------------------------- legacy widgets
 // The retired bc-admin-header.php injected the admin AI assistant and the forced
-// PIN setup modal; bc_adm_widgets() must keep both, with the same AJAX contract.
+// PIN setup modal; bc_adm_widgets() now serves the converted support chat quick-access
+// widget for bc-admin agents alongside the forced PIN modal.
 if(!function_exists('bc_generate_csrf_token')){function bc_generate_csrf_token(){return 'csrf-fixture';}}
 $GLOBALS['bc_admin_needs_pin'] = true;
-$GLOBALS['get_logged_admin_details'] = array('username' => 'adaobi', 'firstname' => 'Ada', 'ai_status' => 1, 'ai_token_balance' => 42);
+$GLOBALS['get_logged_admin_details'] = array('username' => 'adaobi', 'firstname' => 'Ada');
 $_SERVER['PHP_SELF'] = '/bc-admin/Users.php';
 ob_start();
 bc_adm_foot(array('area' => 'admin'));
 $widgets = ob_get_clean();
 achk(strpos($widgets, 'forcePinModal') !== false, 'forced PIN modal is rendered while no PIN is set');
 achk(strpos($widgets, 'quick_set_pin') !== false, 'forced PIN modal keeps the quick_set_pin contract');
-achk(strpos($widgets, 'ai-assistant.js') !== false, 'admin AI assistant is injected when ai_status is on');
-achk(strpos($widgets, 'context=admin') !== false, 'admin AI assistant uses the admin context');
+achk(strpos($widgets, 'ai-assistant.js') !== false, 'admin support chat quick widget script is injected');
+achk(strpos($widgets, '__bc_admin_chat') !== false && strpos($widgets, 'ajax-support-chat.php') !== false, 'admin widget points at support chat endpoint');
+achk(strpos($widgets, 'ai-handler.php') === false, 'retired VTU-purchase handler is no longer injected into bc-admin');
 unset($GLOBALS['bc_admin_needs_pin']);
 
 echo "plate_admin_test: $checks checks\n";

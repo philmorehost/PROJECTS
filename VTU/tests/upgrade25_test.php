@@ -29,7 +29,7 @@ foreach ($editions as $ed) {
     $shell = src($b . '/func/bc-plate-app.php');
     u25(strpos($shell, 'margin-left: var(--side-w);') !== false, "$ed footer is offset from the fixed sidebar (no footer leak)");
     u25(strpos($shell, "'href' => 'Referral.php'") !== false, "$ed nav links the dedicated Referral page under Tools & API");
-    u25(strpos($shell, "'label' => 'Support', 'href' => 'AI-Assistant.php'") !== false, "$ed nav renames AI-Assistant to Support");
+    u25(strpos($shell, "'label' => 'Support', 'href' => 'Hub.php?g=settings-help#bcSupportSection'") !== false, "$ed nav links Support under Settings & Help");
     u25(strpos($shell, 'AISuite.php') === false, "$ed nav drops the retired AI Suite");
     u25(strpos($shell, 'ai-assistant.js') === false, "$ed shell no longer injects the VTU-purchase AI widget");
     foreach (array('IntlTransfer.php', 'Tuition.php', 'ESIM.php', 'POSRequest.php') as $pg) {
@@ -108,11 +108,12 @@ foreach ($editions as $ed) {
     u25(!file_exists($b . '/includes/BSICardsBridge.php'), "$ed BSICards bridge removed");
     u25(!file_exists($b . '/func/api-gateway/chimoney.php') && !file_exists($b . '/includes/ChimoneyBridge.php'), "$ed Chimoney gateway + bridge removed (§39)");
 
-    // ── Support: free, AI-first, ticketed, counted ──
-    $support = src($b . '/web/AI-Assistant.php');
-    u25(strpos($support, 'FREE SUPPORT') !== false, "$ed Support page states support is free");
-    u25(strpos($support, 'ticket') !== false, "$ed Support page shows the user's ticket");
-    u25(strpos($support, 'AI Assistant Terminal') === false && strpos($support, 'Buy 1GB MTN') === false, "$ed Support page drops the VTU-purchase terminal");
+    // ── Support: free, AI-first, ticketed, counted (hosted in Hub.php?g=settings-help) ──
+    $support = src($b . '/web/Hub.php');
+    u25(strpos($support, 'FREE SUPPORT') !== false, "$ed Support section in Hub states support is free");
+    u25(strpos($support, 'ticket') !== false, "$ed Support section in Hub shows the user's ticket");
+    u25(strpos($support, 'AI Assistant Terminal') === false && strpos($support, 'Buy 1GB MTN') === false, "$ed Support section drops the VTU-purchase terminal");
+    u25(strpos(src($b . '/web/AI-Assistant.php'), 'Hub.php?g=settings-help') !== false, "$ed AI-Assistant.php redirects to Hub.php?g=settings-help");
     $chat = src($b . '/func/bc-support-chat.php');
     u25(strpos($chat, 'ticket_no') !== false && strpos($chat, "'SUP-'") !== false, "$ed chat threads carry SUP- ticket numbers");
     u25(strpos($chat, 'bc_chat_context_provider') !== false, "$ed chat engine accepts account context via the web layer seam");

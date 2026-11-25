@@ -11,6 +11,13 @@
  * /web/ajax-support-chat.php, which does the privileged work server-side and re-checks the session.
  */
 
+if (!isset($get_logged_user_details) && isset($GLOBALS['get_logged_user_details'])) {
+    $get_logged_user_details = $GLOBALS['get_logged_user_details'];
+}
+if (!isset($connection_server) && isset($GLOBALS['connection_server'])) {
+    $connection_server = $GLOBALS['connection_server'];
+}
+
 if (!isset($get_logged_user_details) || !is_array($get_logged_user_details) || empty($get_logged_user_details['id'])) return;
 if (!isset($connection_server) || !($connection_server instanceof mysqli)) return;
 
@@ -18,6 +25,9 @@ $bc_widget_vendor = (int)($get_logged_user_details['vendor_id'] ?? 0);
 if ($bc_widget_vendor <= 0) return;
 
 require_once(__DIR__ . '/bc-support-chat.php');
+if (function_exists('bc_chat_schema_ready') && !bc_chat_schema_ready() && function_exists('bc_chat_ensure_schema')) {
+    bc_chat_ensure_schema();
+}
 if (!bc_chat_widget_enabled($bc_widget_vendor)) return;
 
 $bc_widget_settings = bc_chat_settings($bc_widget_vendor);
@@ -293,17 +303,23 @@ $bc_widget_name     = (string)($get_logged_user_details['username'] ?? '');
         setTyping(true);
         post({ action: "open" }).then(function (res) {
             setTyping(false);
-            if (!res.ok) { statusEl.textContent = res.error || "Chat unavailable"; return; }
+            if (!res.ok) { opened = false; statusEl.textContent = res.error || "Chat unavailable"; return; }
             applyThread(res.thread);
             (res.messages || []).forEach(paint);
             // §28 quick replies: first-run shortcuts, shown only until the user sends something.
             if (!seenAny) showQuick();
             startPolling();
         }).catch(function () {
+            opened = false;
             setTyping(false);
             statusEl.textContent = "Could not connect. Please try again.";
         });
     }
+
+    window.bcChatOpen = function () {
+        if (panel.getAttribute("data-open") !== "1") open();
+        else input.focus();
+    };
 
     function close() {
         panel.setAttribute("data-open", "0");
