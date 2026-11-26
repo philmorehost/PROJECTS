@@ -32,6 +32,7 @@ if (mysqli_num_rows($check_user) == 1) {
 
     $gateways = [];
     $gateway_names = ["monnify", "paystack", "flutterwave", "beewave", "payhub"];
+    $pricing = bc_pg_default_gateway_pricing($connection_server);
 
     foreach ($gateway_names as $name) {
         if (!bc_pg_is_gateway_enabled($connection_server, $vendor_id, $name)) continue;
@@ -44,11 +45,33 @@ if (mysqli_num_rows($check_user) == 1) {
         if ($name !== 'beewave' && $sec === '') continue;
         if ($name === 'monnify' && ($pub === '' || trim((string)($cfg['encrypt_key'] ?? '')) === '')) continue;
 
+        $markup = bc_pg_clamp_markup($cfg["percentage"] ?? null, 0.5);
+        $rule = $pricing[$name] ?? [
+            "percent" => 1.5,
+            "flat" => 0.0,
+            "waive_flat_below" => 0.0,
+            "cap" => 2000.0,
+            "checkout_surcharge_percent" => 0.0,
+            "mode" => "checkout_fee",
+            "label" => "1.5% (capped at ₦2,000)",
+        ];
+
         $gateways[] = [
             "gateway_name" => $cfg["gateway_name"],
             "public_key" => $cfg["public_key"],
             "contract_code" => $cfg["encrypt_key"],
-            "percentage" => $cfg["percentage"],
+            "percentage" => number_format($markup, 2, '.', ''),
+            "markup_percent" => $markup,
+            "gateway_fee_label" => (string)($rule["label"] ?? ""),
+            "gateway_fee_rule" => [
+                "percent" => (float)($rule["percent"] ?? 0),
+                "flat" => (float)($rule["flat"] ?? 0),
+                "waive_flat_below" => (float)($rule["waive_flat_below"] ?? 0),
+                "cap" => (float)($rule["cap"] ?? 0),
+                "checkout_surcharge_percent" => (float)($rule["checkout_surcharge_percent"] ?? 0),
+                "mode" => (string)($rule["mode"] ?? "checkout_fee"),
+            ],
+            "fee_mode" => "customer_pays",
         ];
     }
 

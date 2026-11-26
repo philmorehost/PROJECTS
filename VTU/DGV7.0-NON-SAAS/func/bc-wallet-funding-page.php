@@ -146,13 +146,24 @@ function bc_fund_render($model) {
             <?php
                 $gw_name = (string)($gw['gateway_name'] ?? '');
                 $gw_label = (string)($gw['label'] ?? ucfirst($gw_name));
-                $gw_pct = (float)($gw['percentage'] ?? 0);
-                $fee_note = $gw_pct > 0 ? (' · Fee: ' . rtrim(rtrim(number_format($gw_pct, 2), '0'), '.') . '%') : ' · 0% Fee';
+                $gw_markup = isset($gw['markup_percent']) ? (float)$gw['markup_percent'] : (float)($gw['percentage'] ?? 0.5);
+                $gw_fee_label = (string)($gw['gateway_fee_label'] ?? '');
+                $gw_rule = is_array($gw['gateway_fee_rule'] ?? null) ? $gw['gateway_fee_rule'] : [];
+                $fee_cfg = array_merge($gw_rule, [
+                    'gateway_name' => $gw_name,
+                    'markup_percent' => $gw_markup,
+                    'gateway_fee_label' => $gw_fee_label,
+                    'fee_mode' => (string)($gw['fee_mode'] ?? 'customer_pays'),
+                ]);
+                $markup_text = rtrim(rtrim(number_format($gw_markup, 2), '0'), '.') . '% markup';
+                $fee_note = $gw_fee_label !== ''
+                    ? (' · Gateway: ' . $gw_fee_label . ' + ' . $markup_text)
+                    : (' · Service fee: ' . $markup_text);
             ?>
             <label class="d-block p-3 border rounded mb-2">
-                <input type="radio" name="gateway" value="<?php echo bc_fund_e($gw_name); ?>" required <?php echo $selected === $gw_name ? 'checked' : ''; ?>>
+                <input type="radio" name="gateway" value="<?php echo bc_fund_e($gw_name); ?>" data-fee-config="<?php echo bc_fund_e(json_encode($fee_cfg)); ?>" required <?php echo $selected === $gw_name ? 'checked' : ''; ?>>
                 <strong><?php echo bc_fund_e($gw_label); ?></strong>
-                <span class="small text-muted"><?php echo bc_fund_e($fee_note); ?></span>
+                <div class="small text-muted mt-1"><?php echo bc_fund_e(ltrim($fee_note, ' ·')); ?></div>
             </label>
         <?php endforeach; ?>
     <?php endif; ?>
@@ -165,9 +176,17 @@ function bc_fund_render($model) {
         <label class="d-block p-3 border rounded"><input type="radio" name="gateway" value="payhub" required <?php echo $available ? 'checked' : 'disabled'; ?>> PayHub bank transfer<?php echo $available ? '' : ' — currently unavailable'; ?></label>
     <?php endif; ?>
     </fieldset>
-    <label for="fund-amount" class="form-label">Amount to fund (NGN)</label>
+    <label for="fund-amount" class="form-label">Amount to credit wallet (NGN)</label>
     <input id="fund-amount" name="amount" type="text" inputmode="decimal" autocomplete="off" maxlength="10" required pattern="(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,2})?" value="<?php echo bc_fund_e($model['amount'] ?? ''); ?>" class="form-control mb-2" aria-describedby="fund-help fund-status">
-    <p id="fund-help" class="small text-muted">NGN 100.00–1,000,000.00. Applicable gateway fees are shown before confirmation and verified by the server.</p>
+    <div data-fee-preview class="border rounded bg-light p-3 mb-3 small" style="display:none;" aria-live="polite">
+        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Amount Credited to Wallet</span><strong data-fee-credit>NGN 0.00</strong></div>
+        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Gateway Fee (<span data-fee-gw-label>Auto</span>)</span><span data-fee-gw>NGN 0.00</span></div>
+        <div class="d-flex justify-content-between mb-1"><span class="text-muted">Service Markup (<span data-fee-markup-pct>0.5%</span>)</span><span data-fee-markup>NGN 0.00</span></div>
+        <hr class="my-2">
+        <div class="d-flex justify-content-between"><span class="fw-bold">Total You Will Pay</span><strong class="text-primary" data-fee-total>NGN 0.00</strong></div>
+        <div class="text-muted mt-1" data-fee-note style="display:none;"></div>
+    </div>
+    <p id="fund-help" class="small text-muted">NGN 100.00–1,000,000.00. Exact gateway fee, service markup, and wallet credit are verified by the server.</p>
     <button id="fundProceedBtn" type="submit" class="btn btn-primary w-100 py-3" <?php echo $has_options ? '' : 'disabled'; ?>>PAY NOW — PROCEED</button>
     <p id="fund-status" role="status" aria-live="polite" class="mt-2"><?php echo $has_options ? 'Choose a payment method and amount to continue.' : 'Funding is temporarily unavailable. Do not send a new payment; contact support for existing payments.'; ?></p>
     <noscript><p>You can submit this form without JavaScript. Payment instructions or hosted checkout will open after server validation.</p></noscript>

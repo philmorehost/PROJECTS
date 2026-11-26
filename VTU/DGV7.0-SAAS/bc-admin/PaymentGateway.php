@@ -8,6 +8,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 	include_once(__DIR__ . "/../func/bc-fintech-api-access.php");
     require_once __DIR__.'/../func/bc-paid-security.php';
     require_once __DIR__.'/../func/bc-gateway-api-settings.php';
+    require_once __DIR__.'/../func/bc-payment-gateway-settlement.php';
     $paid_contexts=['paid_gateway_klasha','paid_gateway_bybit'];
     foreach(array_keys(bc_fintech_api_providers()) as $slug)$paid_contexts[]='paid_module_'.$slug;
     bc_paid_otp_dispatch($get_logged_admin_details,'admin',$paid_contexts);
@@ -188,6 +189,20 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
+    if(isset($_POST["sync-gateway-pricing"])){
+        $sync = bc_pg_sync_live_gateway_pricing($connection_server, (int)$get_logged_admin_details["id"]);
+        $sync_msg = "Default payment gateway pricing loaded.";
+        if (!empty($sync['live_synced'])) {
+            $sync_msg .= " Live pricing refreshed for: " . strtoupper(implode(', ', $sync['live_synced'])) . ".";
+        }
+        if (!empty($sync['default_markups_initialized'])) {
+            $sync_msg .= " Initialized " . (int)$sync['default_markups_initialized'] . " gateway markup(s) to 0.5% default.";
+        }
+        $_SESSION["product_purchase_response"] = $sync_msg;
+        header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit();
+    }
+
     if(isset($_POST["update-gateway-details"])){
         $gateway_name = $_POST["gateway-name"];
         $public_key = $_POST["public-key"];
@@ -208,7 +223,12 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 $each_public_key = mysqli_real_escape_string($connection_server, trim(strip_tags($public_key[$index])));
                 $each_secret_key = mysqli_real_escape_string($connection_server, trim(strip_tags($secret_key[$index])));
                 $each_encrypt_key = mysqli_real_escape_string($connection_server, trim(strip_tags($encrypt_key[$index])));
-                $each_payment_percent = mysqli_real_escape_string($connection_server, trim(strip_tags($payment_percent[$index])));
+                $raw_markup = trim(strip_tags((string)($payment_percent[$index] ?? '')));
+                $clamped_markup = bc_pg_clamp_markup($raw_markup, 0.5);
+                if ($raw_markup !== '' && is_numeric($raw_markup) && ((float)$raw_markup < 0.0 || (float)$raw_markup > 1.0)) {
+                    $gateway_key_warnings[] = strtoupper($each_gateway_name) . " vendor markup must be between 0% and 1% (saved as " . number_format($clamped_markup, 2, '.', '') . "%).";
+                }
+                $each_payment_percent = mysqli_real_escape_string($connection_server, number_format($clamped_markup, 2, '.', ''));
                 
                 //$each_gateway_status_unrefined = mysqli_real_escape_string($connection_server, preg_replace("/[^0-9]+/","",trim(strip_tags( $_POST["gateway-status-".$each_gateway_name] ))));
                 if(isset($_POST["gateway-status-".$each_gateway_name])){
@@ -579,10 +599,21 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
 
             <?php bc_gateway_api_cards($connection_server,$get_logged_admin_details); ?>
             <!-- Payment Gateways Grid -->
+            <?php $pg_default_pricing = bc_pg_default_gateway_pricing($connection_server); ?>
             <div class="card shadow-sm border-0 rounded-4">
-                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0 text-primary">Integrated Payment Gateways</h5>
-                    <div class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3">Auto-Funding</div>
+                <div class="card-header bg-white py-3 border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-primary">Integrated Payment Gateways</h5>
+                        <div class="small text-muted">Gateway processing fees are auto-loaded per provider. Configure your vendor markup (0%–1%, default 0.5%).</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <form method="post" class="m-0">
+                            <button name="sync-gateway-pricing" type="submit" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold">
+                                <i class="bi bi-arrow-repeat me-1"></i>Sync Default Gateway Fees
+                            </button>
+                        </form>
+                        <div class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3">Auto-Funding</div>
+                    </div>
                 </div>
                 <div class="card-body p-4">
                     <form method="post">
@@ -593,6 +624,11 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                 $is_api_locked = in_array($gateway_name, array('flutterwave', 'platnova'), true)
                                     && function_exists('bc_fintech_api_access')
                                     && !bc_fintech_api_access((int)$get_logged_admin_details["id"], $gateway_name);
+                                $raw_db_pct = trim((string)($get_gateway_details["percentage"] ?? ''));
+                                $display_markup = ($raw_db_pct === '' || !is_numeric($raw_db_pct) || (float)$raw_db_pct > 1.0 || (float)$raw_db_pct < 0.0)
+                                    ? '0.50'
+                                    : number_format((float)$raw_db_pct, 2, '.', '');
+                                $gw_pricing_label = $pg_default_pricing[$gateway_name]['label'] ?? 'Standard provider schedule (auto)';
                             ?>
                             <div class="col-md-6">
                                 <div class="card border rounded-4 h-100 mb-0 shadow-none">
@@ -620,8 +656,12 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                             <input name="public-key[]" value="" hidden />
                                             <input name="secret-key[]" value="" hidden />
                                             <input name="encrypt-key[]" value="" hidden />
-                                            <input name="payment-percent[]" value="0" hidden />
+                                            <input name="payment-percent[]" value="0.50" hidden />
                                         <?php else: ?>
+                                            <div class="alert alert-light border rounded-3 py-2 px-3 mb-3 small">
+                                                <span class="fw-bold text-dark"><i class="bi bi-tag me-1 text-primary"></i>Gateway Fee (Auto):</span>
+                                                <span class="text-muted"><?php echo htmlspecialchars($gw_pricing_label, ENT_QUOTES, 'UTF-8'); ?></span>
+                                            </div>
                                             <div class="mb-3">
                                                 <label class="form-label small fw-bold text-muted">PUBLIC KEY</label>
                                                 <input name="public-key[]" type="text" value="<?php echo $get_gateway_details["public_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="Enter Public Key" />
@@ -636,8 +676,9 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                                                     <input name="encrypt-key[]" type="text" value="<?php echo $get_gateway_details["encrypt_key"] ?? ''; ?>" class="form-control rounded-3" placeholder="<?php echo ($gateway_name === 'monnify') ? 'Enter Contract Code' : 'Optional'; ?>" />
                                                 </div>
                                                 <div class="col-6">
-                                                    <label class="form-label small fw-bold text-muted">FEE (%)</label>
-                                                    <input name="payment-percent[]" type="number" step="0.001" value="<?php echo $get_gateway_details["percentage"] ?? '0'; ?>" class="form-control rounded-3" placeholder="0.000" />
+                                                    <label class="form-label small fw-bold text-muted">MARKUP FEE (0%–1%)</label>
+                                                    <input name="payment-percent[]" type="number" min="0" max="1" step="0.01" value="<?php echo htmlspecialchars($display_markup, ENT_QUOTES, 'UTF-8'); ?>" class="form-control rounded-3" placeholder="0.50" />
+                                                    <div class="form-text small" style="font-size:0.72rem;">Your deposit profit (default 0.5%).</div>
                                                 </div>
                                             </div>
                                         <?php endif; ?>

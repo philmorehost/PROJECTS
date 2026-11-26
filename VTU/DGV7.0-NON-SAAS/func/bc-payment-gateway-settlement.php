@@ -35,6 +35,370 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         return ['payhub', 'monnify', 'payvessel', 'beewave', 'paystack'];
     }
 
+    function bc_pg_clamp_markup($value, $default = 0.5)
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return round((float)$default, 2);
+        }
+        $num = (float)$value;
+        if (!is_finite($num) || $num < 0.0) return 0.0;
+        if ($num > 1.0) return 1.0;
+        return round($num, 2);
+    }
+
+    function bc_pg_format_pricing_label(array $rule)
+    {
+        $pct = round((float)($rule['percent'] ?? 0), 2);
+        $flat = round((float)($rule['flat'] ?? 0), 2);
+        $waive = round((float)($rule['waive_flat_below'] ?? 0), 2);
+        $cap = round((float)($rule['cap'] ?? 0), 2);
+        $surcharge = round((float)($rule['checkout_surcharge_percent'] ?? 0), 2);
+        $pct_str = rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.') . '%';
+
+        if (($rule['mode'] ?? '') === 'payhub_contract') {
+            $parts = [];
+            if ($surcharge > 0) {
+                $parts[] = '~' . rtrim(rtrim(number_format($surcharge, 2, '.', ''), '0'), '.') . '% checkout';
+            }
+            $parts[] = $pct_str . ($flat > 0 ? (' + ₦' . number_format($flat, 0)) : '') . ' PayHub fee';
+            if ($cap > 0) {
+                $parts[] = 'cap ₦' . number_format($cap, 0);
+            }
+            return implode(' + ', $parts);
+        }
+
+        $label = $pct_str;
+        if ($flat > 0) {
+            $label .= ' + ₦' . number_format($flat, 0);
+        }
+        $notes = [];
+        if ($flat > 0 && $waive > 0) {
+            $notes[] = '₦' . number_format($flat, 0) . ' waived < ₦' . number_format($waive, 0);
+        }
+        if ($cap > 0) {
+            $notes[] = 'cap ₦' . number_format($cap, 0);
+        }
+        if (!empty($notes)) {
+            $label .= ' (' . implode(', ', $notes) . ')';
+        }
+        return $label;
+    }
+
+    function bc_pg_builtin_gateway_pricing()
+    {
+        $defaults = [
+            'paystack' => [
+                'percent' => 1.5,
+                'flat' => 100.0,
+                'waive_flat_below' => 2500.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+            ],
+            'monnify' => [
+                'percent' => 1.5,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+            ],
+            'flutterwave' => [
+                'percent' => 1.4,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+            ],
+            'beewave' => [
+                'percent' => 1.5,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+            ],
+            'payvessel' => [
+                'percent' => 0.5,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 1000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'va_fee',
+            ],
+            'payhub' => [
+                'percent' => 2.0,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 1.53,
+                'mode' => 'payhub_contract',
+            ],
+            'platnova' => [
+                'percent' => 1.5,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+            ],
+        ];
+        foreach ($defaults as $k => $rule) {
+            $defaults[$k]['label'] = bc_pg_format_pricing_label($rule);
+        }
+        return $defaults;
+    }
+
+    function bc_pg_default_gateway_pricing($db = null)
+    {
+        $defaults = bc_pg_builtin_gateway_pricing();
+        if (!($db instanceof mysqli)) {
+            return $defaults;
+        }
+        static $cached = [];
+        $db_id = function_exists('spl_object_id') ? spl_object_id($db) : 1;
+        if (isset($cached[$db_id])) {
+            return $cached[$db_id];
+        }
+        $q = @mysqli_query($db, "SELECT option_value FROM sas_super_admin_options WHERE option_name='bc_pg_gateway_pricing' LIMIT 1");
+        if ($q && ($row = mysqli_fetch_assoc($q))) {
+            $decoded = json_decode((string)($row['option_value'] ?? ''), true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $gw => $custom) {
+                    $gw_key = strtolower(trim((string)$gw));
+                    if (!isset($defaults[$gw_key]) || !is_array($custom)) continue;
+                    foreach (['percent', 'flat', 'waive_flat_below', 'cap', 'checkout_surcharge_percent'] as $num_key) {
+                        if (isset($custom[$num_key]) && is_numeric($custom[$num_key])) {
+                            $defaults[$gw_key][$num_key] = max(0.0, round((float)$custom[$num_key], 4));
+                        }
+                    }
+                    $defaults[$gw_key]['label'] = bc_pg_format_pricing_label($defaults[$gw_key]);
+                }
+            }
+        }
+        $cached[$db_id] = $defaults;
+        return $defaults;
+    }
+
+    function bc_pg_save_gateway_pricing_overrides($db, array $pricing_map)
+    {
+        if (!($db instanceof mysqli)) return false;
+        $base = bc_pg_builtin_gateway_pricing();
+        $clean = [];
+        foreach ($base as $gw => $def) {
+            $in = is_array($pricing_map[$gw] ?? null) ? $pricing_map[$gw] : [];
+            $clean[$gw] = [
+                'percent' => isset($in['percent']) && is_numeric($in['percent']) ? max(0.0, min(10.0, round((float)$in['percent'], 3))) : $def['percent'],
+                'flat' => isset($in['flat']) && is_numeric($in['flat']) ? max(0.0, min(5000.0, round((float)$in['flat'], 2))) : $def['flat'],
+                'waive_flat_below' => isset($in['waive_flat_below']) && is_numeric($in['waive_flat_below']) ? max(0.0, min(100000.0, round((float)$in['waive_flat_below'], 2))) : $def['waive_flat_below'],
+                'cap' => isset($in['cap']) && is_numeric($in['cap']) ? max(0.0, min(50000.0, round((float)$in['cap'], 2))) : $def['cap'],
+                'checkout_surcharge_percent' => isset($in['checkout_surcharge_percent']) && is_numeric($in['checkout_surcharge_percent']) ? max(0.0, min(10.0, round((float)$in['checkout_surcharge_percent'], 3))) : $def['checkout_surcharge_percent'],
+            ];
+        }
+        $json = mysqli_real_escape_string($db, json_encode($clean));
+        return (bool)@mysqli_query(
+            $db,
+            "INSERT INTO sas_super_admin_options (option_name, option_value)
+             VALUES ('bc_pg_gateway_pricing', '$json')
+             ON DUPLICATE KEY UPDATE option_value='$json'"
+        );
+    }
+
+    function bc_pg_sync_live_gateway_pricing($db, $vendor_id = 0)
+    {
+        $vid = (int)$vendor_id;
+        $pricing = bc_pg_default_gateway_pricing($db);
+        $live_synced = [];
+
+        // If PayHub exposes a pricing/fees endpoint in the active environment, fetch and merge it safely.
+        if (function_exists('makePayhubRequest') && $vid > 0) {
+            try {
+                $raw = makePayhubRequest('GET', 'api/pricing', [], $vid);
+                $outer = is_string($raw) ? json_decode($raw, true) : (is_array($raw) ? $raw : null);
+                $res = (is_array($outer) && !empty($outer['json_result']) && is_string($outer['json_result']))
+                    ? json_decode($outer['json_result'], true)
+                    : $outer;
+                $pdata = is_array($res['data'] ?? null) ? $res['data'] : (is_array($res) ? $res : null);
+                if (is_array($outer) && (($outer['status'] ?? '') === 'success') && is_array($pdata)) {
+                    $updated = false;
+                    if (isset($pdata['percent']) && is_numeric($pdata['percent'])) {
+                        $pricing['payhub']['percent'] = max(0.0, min(10.0, round((float)$pdata['percent'], 3)));
+                        $updated = true;
+                    }
+                    if (isset($pdata['checkout_surcharge_percent']) && is_numeric($pdata['checkout_surcharge_percent'])) {
+                        $pricing['payhub']['checkout_surcharge_percent'] = max(0.0, min(10.0, round((float)$pdata['checkout_surcharge_percent'], 3)));
+                        $updated = true;
+                    }
+                    if (isset($pdata['cap']) && is_numeric($pdata['cap'])) {
+                        $pricing['payhub']['cap'] = max(0.0, min(50000.0, round((float)$pdata['cap'], 2)));
+                        $updated = true;
+                    }
+                    if ($updated) {
+                        bc_pg_save_gateway_pricing_overrides($db, $pricing);
+                        $live_synced[] = 'payhub';
+                    }
+                }
+            } catch (Throwable $e) {
+                // Non-fatal fallback to built-in/super-admin pricing table.
+            }
+        }
+
+        // Initialize any unset or invalid legacy (> 1%) markup on this vendor to default 0.5%.
+        $migrated = 0;
+        if (($db instanceof mysqli) && $vid > 0) {
+            $q = @mysqli_query($db, "SELECT gateway_name, percentage FROM sas_payment_gateways WHERE vendor_id='$vid'");
+            if ($q) {
+                while ($r = mysqli_fetch_assoc($q)) {
+                    $raw_pct = trim((string)($r['percentage'] ?? ''));
+                    if ($raw_pct === '' || !is_numeric($raw_pct) || (float)$raw_pct > 1.0 || (float)$raw_pct < 0.0) {
+                        $gw_esc = mysqli_real_escape_string($db, (string)$r['gateway_name']);
+                        @mysqli_query($db, "UPDATE sas_payment_gateways SET percentage='0.5' WHERE vendor_id='$vid' AND gateway_name='$gw_esc'");
+                        $migrated++;
+                    }
+                }
+            }
+        }
+
+        return [
+            'ok' => true,
+            'live_synced' => $live_synced,
+            'default_markups_initialized' => $migrated,
+            'pricing' => bc_pg_default_gateway_pricing($db),
+        ];
+    }
+
+    function bc_pg_compute_gateway_fee(array $rule, $gross_amount)
+    {
+        $gross = max(0.0, round((float)$gross_amount, 2));
+        if ($gross <= 0.0) return 0.0;
+        $pct = max(0.0, (float)($rule['percent'] ?? 0));
+        $flat = max(0.0, (float)($rule['flat'] ?? 0));
+        $waive_below = max(0.0, (float)($rule['waive_flat_below'] ?? 0));
+        $cap = max(0.0, (float)($rule['cap'] ?? 0));
+
+        $apply_flat = ($flat > 0.0 && ($waive_below <= 0.0 || $gross >= $waive_below)) ? $flat : 0.0;
+        $fee = ($gross * ($pct / 100.0)) + $apply_flat;
+        if ($cap > 0.0) {
+            $fee = min($cap, $fee);
+        }
+        return round(max(0.0, $fee), 2);
+    }
+
+    function bc_pg_solve_gross_for_net(array $rule, $net_needed)
+    {
+        $net = max(0.0, round((float)$net_needed, 2));
+        if ($net <= 0.0) return 0.0;
+        $pct = max(0.0, (float)($rule['percent'] ?? 0));
+        $rate = $pct / 100.0;
+        $flat = max(0.0, (float)($rule['flat'] ?? 0));
+        $waive_below = max(0.0, (float)($rule['waive_flat_below'] ?? 0));
+        $cap = max(0.0, (float)($rule['cap'] ?? 0));
+
+        if ($rate >= 0.99) {
+            return $net;
+        }
+
+        $candidates = [];
+        // Candidate 1: without flat fee (when waived below threshold)
+        if ($rate > 0.0) {
+            $c1 = round($net / (1.0 - $rate), 2);
+            if ($waive_below <= 0.0 || $c1 < $waive_below) {
+                $candidates[] = $c1;
+            }
+        } else {
+            $candidates[] = $net;
+        }
+        // Candidate 2: with flat fee
+        $c2 = round(($net + $flat) / (1.0 - $rate), 2);
+        $candidates[] = $c2;
+        // Candidate 3: capped fee
+        if ($cap > 0.0) {
+            $candidates[] = round($net + $cap, 2);
+        }
+
+        $best = null;
+        foreach ($candidates as $cand) {
+            if ($cand < $net) continue;
+            // Nudge up by at most 2 kobo if rounding made net slightly short
+            for ($k = 0; $k <= 3; $k++) {
+                $try = round($cand + ($k * 0.01), 2);
+                $fee = bc_pg_compute_gateway_fee($rule, $try);
+                if (round($try - $fee, 2) >= $net) {
+                    if ($best === null || $try < $best) {
+                        $best = $try;
+                    }
+                    break;
+                }
+            }
+        }
+        return $best !== null ? $best : $net;
+    }
+
+    function bc_pg_calculate_fee_breakdown($db, $gateway, $entered_amount, $markup_pct = null, $fee_mode = 'customer_pays')
+    {
+        $gw = strtolower(trim((string)$gateway));
+        $entered = max(0.0, round((float)$entered_amount, 2));
+        $fee_mode = ($fee_mode === 'deduct_from_deposit') ? 'deduct_from_deposit' : 'customer_pays';
+
+        $pricing = bc_pg_default_gateway_pricing($db);
+        $rule = $pricing[$gw] ?? [
+            'percent' => 1.5,
+            'flat' => 0.0,
+            'waive_flat_below' => 0.0,
+            'cap' => 2000.0,
+            'checkout_surcharge_percent' => 0.0,
+            'mode' => 'checkout_fee',
+            'label' => '1.5% (capped at ₦2,000)',
+        ];
+
+        $markup = bc_pg_clamp_markup($markup_pct, 0.5);
+        $surcharge_pct = max(0.0, (float)($rule['checkout_surcharge_percent'] ?? 0));
+
+        if ($fee_mode === 'customer_pays') {
+            $wallet_credit = $entered;
+            $vendor_markup = round($wallet_credit * ($markup / 100.0), 2);
+            $net_needed = round($wallet_credit + $vendor_markup, 2);
+            $request_amount = bc_pg_solve_gross_for_net($rule, $net_needed);
+            $gateway_fee = round(max(0.0, $request_amount - $net_needed), 2);
+            $checkout_surcharge = ($surcharge_pct > 0.0) ? round($request_amount * ($surcharge_pct / 100.0), 2) : 0.0;
+            $user_pay_amount = round($request_amount + $checkout_surcharge, 2);
+            $total_fee = round($gateway_fee + $checkout_surcharge + $vendor_markup, 2);
+        } else {
+            $request_amount = $entered;
+            $checkout_surcharge = ($surcharge_pct > 0.0) ? round($request_amount * ($surcharge_pct / 100.0), 2) : 0.0;
+            $user_pay_amount = round($request_amount + $checkout_surcharge, 2);
+            $gateway_fee = bc_pg_compute_gateway_fee($rule, $request_amount);
+            $vendor_markup = round($entered * ($markup / 100.0), 2);
+            $wallet_credit = round(max(0.0, $request_amount - $gateway_fee - $vendor_markup), 2);
+            $total_fee = round($gateway_fee + $checkout_surcharge + $vendor_markup, 2);
+        }
+
+        return [
+            'gateway' => $gw,
+            'fee_mode' => $fee_mode,
+            'entered_amount' => $entered,
+            'markup_percent' => $markup,
+            'gateway_fee' => $gateway_fee,
+            'checkout_surcharge' => $checkout_surcharge,
+            'vendor_markup' => $vendor_markup,
+            'total_fee' => $total_fee,
+            'request_amount' => $request_amount,
+            'charge_amount' => $request_amount,
+            'user_pay_amount' => $user_pay_amount,
+            'wallet_credit' => $wallet_credit,
+            'gateway_fee_label' => (string)($rule['label'] ?? ''),
+            'gateway_fee_rule' => [
+                'percent' => (float)($rule['percent'] ?? 0),
+                'flat' => (float)($rule['flat'] ?? 0),
+                'waive_flat_below' => (float)($rule['waive_flat_below'] ?? 0),
+                'cap' => (float)($rule['cap'] ?? 0),
+                'checkout_surcharge_percent' => $surcharge_pct,
+                'mode' => (string)($rule['mode'] ?? 'checkout_fee'),
+            ],
+        ];
+    }
+
     function bc_pg_ensure_tables($db)
     {
         if (!($db instanceof mysqli)) return false;
@@ -53,6 +417,10 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 currency VARCHAR(10) NOT NULL,
                 amount DECIMAL(20,2) NOT NULL,
                 provider_reference VARCHAR(100) NULL DEFAULT NULL,
+                credit_amount DECIMAL(20,2) NULL DEFAULT NULL,
+                gateway_fee DECIMAL(20,2) NULL DEFAULT NULL,
+                vendor_markup DECIMAL(20,2) NULL DEFAULT NULL,
+                fee_mode VARCHAR(32) NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB",
             "CREATE TABLE IF NOT EXISTS sas_provider_settlement_claims (
@@ -77,9 +445,18 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 return false;
             }
         }
-        $chk_pr = @mysqli_query($db, "SHOW COLUMNS FROM `sas_secure_payment_intents` LIKE 'provider_reference'");
-        if ($chk_pr && mysqli_num_rows($chk_pr) === 0) {
-            @mysqli_query($db, "ALTER TABLE `sas_secure_payment_intents` ADD COLUMN provider_reference VARCHAR(100) NULL DEFAULT NULL AFTER amount");
+        $intent_extra_cols = [
+            'provider_reference' => "VARCHAR(100) NULL DEFAULT NULL AFTER amount",
+            'credit_amount' => "DECIMAL(20,2) NULL DEFAULT NULL AFTER provider_reference",
+            'gateway_fee' => "DECIMAL(20,2) NULL DEFAULT NULL AFTER credit_amount",
+            'vendor_markup' => "DECIMAL(20,2) NULL DEFAULT NULL AFTER gateway_fee",
+            'fee_mode' => "VARCHAR(32) NULL DEFAULT NULL AFTER vendor_markup",
+        ];
+        foreach ($intent_extra_cols as $col_name => $col_def) {
+            $chk_col = @mysqli_query($db, "SHOW COLUMNS FROM `sas_secure_payment_intents` LIKE '$col_name'");
+            if ($chk_col && mysqli_num_rows($chk_col) === 0) {
+                @mysqli_query($db, "ALTER TABLE `sas_secure_payment_intents` ADD COLUMN `$col_name` $col_def");
+            }
         }
         $chk_ar = @mysqli_query($db, "SHOW COLUMNS FROM `sas_transactions` LIKE 'api_reference'");
         if ($chk_ar && mysqli_num_rows($chk_ar) === 0) {
@@ -206,6 +583,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             'flutterwave' => 'Flutterwave (Card / Bank)',
             'beewave' => 'BeeWave Checkout',
         ];
+        $pricing = bc_pg_default_gateway_pricing($db);
         foreach (bc_pg_supported_checkout_gateways() as $gw) {
             if (!bc_pg_is_gateway_enabled($db, $vid, $gw)) continue;
             $cfg = bc_pg_gateway_config($db, $vid, $gw, true);
@@ -216,11 +594,32 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             if ($gw !== 'beewave' && $sec === '') continue;
             if ($gw === 'monnify' && ($pub === '' || trim((string)($cfg['encrypt_key'] ?? '')) === '')) continue;
 
+            $markup = bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
+            $rule = $pricing[$gw] ?? [
+                'percent' => 1.5,
+                'flat' => 0.0,
+                'waive_flat_below' => 0.0,
+                'cap' => 2000.0,
+                'checkout_surcharge_percent' => 0.0,
+                'mode' => 'checkout_fee',
+                'label' => '1.5% (capped at ₦2,000)',
+            ];
             $out[$gw] = [
                 'gateway_name' => $gw,
                 'label' => $labels[$gw] ?? ucfirst($gw),
                 'public_key' => $pub,
-                'percentage' => is_numeric($cfg['percentage'] ?? null) ? (float)$cfg['percentage'] : 0.0,
+                'percentage' => $markup,
+                'markup_percent' => $markup,
+                'gateway_fee_label' => (string)($rule['label'] ?? ''),
+                'gateway_fee_rule' => [
+                    'percent' => (float)($rule['percent'] ?? 0),
+                    'flat' => (float)($rule['flat'] ?? 0),
+                    'waive_flat_below' => (float)($rule['waive_flat_below'] ?? 0),
+                    'cap' => (float)($rule['cap'] ?? 0),
+                    'checkout_surcharge_percent' => (float)($rule['checkout_surcharge_percent'] ?? 0),
+                    'mode' => (string)($rule['mode'] ?? 'checkout_fee'),
+                ],
+                'fee_mode' => 'customer_pays',
             ];
         }
         return $out;
@@ -260,7 +659,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         return $ref;
     }
 
-    function bc_pg_register_intent($db, $vendor_id, $username, $provider, $amount_ngn, $preferred_ref = '')
+    function bc_pg_register_intent($db, $vendor_id, $username, $provider, $amount_ngn, $preferred_ref = '', array $fee_meta = [])
     {
         if (!bc_pg_ensure_tables($db)) {
             return ['ok' => false, 'code' => 'SCHEMA_UNAVAILABLE', 'message' => 'Payment service is temporarily unavailable.'];
@@ -294,6 +693,20 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         $prov_esc = mysqli_real_escape_string($db, $provider);
         $amt_sql = $norm['decimal'];
 
+        $credit_sql = (isset($fee_meta['credit_amount']) && is_numeric($fee_meta['credit_amount']) && (float)$fee_meta['credit_amount'] > 0)
+            ? "'" . number_format((float)$fee_meta['credit_amount'], 2, '.', '') . "'"
+            : 'NULL';
+        $gw_fee_sql = (isset($fee_meta['gateway_fee']) && is_numeric($fee_meta['gateway_fee']) && (float)$fee_meta['gateway_fee'] >= 0)
+            ? "'" . number_format((float)$fee_meta['gateway_fee'], 2, '.', '') . "'"
+            : 'NULL';
+        $markup_sql = (isset($fee_meta['vendor_markup']) && is_numeric($fee_meta['vendor_markup']) && (float)$fee_meta['vendor_markup'] >= 0)
+            ? "'" . number_format((float)$fee_meta['vendor_markup'], 2, '.', '') . "'"
+            : 'NULL';
+        $fee_mode_val = isset($fee_meta['fee_mode']) ? trim((string)$fee_meta['fee_mode']) : '';
+        $fee_mode_sql = $fee_mode_val !== ''
+            ? "'" . mysqli_real_escape_string($db, $fee_mode_val) . "'"
+            : 'NULL';
+
         $existing_q = mysqli_query($db, "SELECT vendor_id, username, provider, amount FROM sas_secure_payment_intents WHERE reference='$ref_esc' LIMIT 1");
         if ($existing_q && mysqli_num_rows($existing_q) === 1) {
             $ex = mysqli_fetch_assoc($existing_q);
@@ -301,13 +714,13 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 return ['ok' => false, 'code' => 'REFERENCE_CONFLICT', 'message' => 'Reference conflict. Please generate a fresh checkout.'];
             }
             if ($provider !== 'pending' && $ex['provider'] === 'pending') {
-                mysqli_query($db, "UPDATE sas_secure_payment_intents SET provider='$prov_esc', amount='$amt_sql' WHERE reference='$ref_esc' AND vendor_id='$vid' AND username='$user_esc' LIMIT 1");
+                mysqli_query($db, "UPDATE sas_secure_payment_intents SET provider='$prov_esc', amount='$amt_sql', credit_amount=$credit_sql, gateway_fee=$gw_fee_sql, vendor_markup=$markup_sql, fee_mode=$fee_mode_sql WHERE reference='$ref_esc' AND vendor_id='$vid' AND username='$user_esc' LIMIT 1");
             }
         } else {
             $ins = mysqli_query(
                 $db,
-                "INSERT INTO sas_secure_payment_intents (reference, vendor_id, username, provider, currency, amount)
-                 VALUES ('$ref_esc', '$vid', '$user_esc', '$prov_esc', 'NGN', '$amt_sql')"
+                "INSERT INTO sas_secure_payment_intents (reference, vendor_id, username, provider, currency, amount, credit_amount, gateway_fee, vendor_markup, fee_mode)
+                 VALUES ('$ref_esc', '$vid', '$user_esc', '$prov_esc', 'NGN', '$amt_sql', $credit_sql, $gw_fee_sql, $markup_sql, $fee_mode_sql)"
             );
             if (!$ins) {
                 return ['ok' => false, 'code' => 'INTENT_WRITE_FAILED', 'message' => 'Could not create payment checkout intent.'];
@@ -425,12 +838,25 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return ['ok' => false, 'code' => 'INVALID_AMOUNT', 'message' => 'Enter an amount between NGN 100 and NGN 1,000,000.'];
         }
 
-        $credit_target = $norm['float'];
-        $pct = is_numeric($cfg['percentage'] ?? null) ? max(0.0, (float)$cfg['percentage']) : 0.0;
-        $fee = ($apply_fee_on_top && $pct > 0) ? round($credit_target * ($pct / 100), 2) : 0.0;
-        $charge_amount = round($credit_target + $fee, 2);
+        $entered_amount = $norm['float'];
+        $markup_pct = bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
+        $fee_mode = $apply_fee_on_top ? 'customer_pays' : 'deduct_from_deposit';
+        $breakdown = bc_pg_calculate_fee_breakdown($db, $provider, $entered_amount, $markup_pct, $fee_mode);
 
-        $intent = bc_pg_register_intent($db, $vid, $username, $provider, $charge_amount, $preferred_ref);
+        $credit_target = $breakdown['wallet_credit'];
+        $charge_amount = $breakdown['charge_amount'];
+        $user_pay_amount = $breakdown['user_pay_amount'];
+        $gateway_fee = $breakdown['gateway_fee'];
+        $vendor_markup = $breakdown['vendor_markup'];
+        $fee = round($gateway_fee + $vendor_markup, 2);
+
+        $intent_fee_meta = [
+            'credit_amount' => $credit_target,
+            'gateway_fee' => $gateway_fee,
+            'vendor_markup' => $vendor_markup,
+            'fee_mode' => $fee_mode,
+        ];
+        $intent = bc_pg_register_intent($db, $vid, $username, $provider, $charge_amount, $preferred_ref, $intent_fee_meta);
         if (empty($intent['ok'])) {
             return $intent;
         }
@@ -464,6 +890,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                     'username' => $username,
                     'reference' => $ref,
                     'credit_amount' => $credit_target,
+                    'gateway_fee' => $gateway_fee,
+                    'vendor_markup' => $vendor_markup,
                     'fee_on_top' => $apply_fee_on_top ? 1 : 0,
                 ],
             ];
@@ -481,8 +909,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'provider' => 'paystack',
                 'reference' => $ref,
                 'charge_amount' => $charge_amount,
+                'user_pay_amount' => $user_pay_amount,
                 'credit_amount' => $credit_target,
                 'fee' => $fee,
+                'gateway_fee' => $gateway_fee,
+                'vendor_markup' => $vendor_markup,
+                'fee_mode' => $fee_mode,
                 'authorization_url' => $auth_url,
             ];
         }
@@ -503,6 +935,9 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                     'target' => 'user',
                     'local_reference' => $ref,
                     'credit_amount' => $credit_target,
+                    'gateway_fee' => $gateway_fee,
+                    'vendor_markup' => $vendor_markup,
+                    'fee_on_top' => $apply_fee_on_top ? 1 : 0,
                 ],
             ];
             $raw_ph = makePayhubRequest('POST', 'api/transaction/initialize', $payload, $vid);
@@ -516,9 +951,9 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             if (!$ph_ok || $auth_url === '' || $ph_ref === '') {
                 return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize PayHub checkout. Please try again.'];
             }
-            // Bind the PayHub-issued reference to the exact same user, vendor, and charge amount,
+            // Bind the PayHub-issued reference to the exact same user, vendor, and fee breakdown,
             // and link provider_reference on the local_reference row for verify-funding polls.
-            bc_pg_register_intent($db, $vid, $username, 'payhub', $charge_amount, $ph_ref);
+            bc_pg_register_intent($db, $vid, $username, 'payhub', $charge_amount, $ph_ref, $intent_fee_meta);
             $loc_esc = mysqli_real_escape_string($db, $ref);
             $ph_esc = mysqli_real_escape_string($db, $ph_ref);
             @mysqli_query($db, "UPDATE sas_secure_payment_intents SET provider_reference='$ph_esc' WHERE reference='$loc_esc' AND vendor_id='$vid' LIMIT 1");
@@ -529,8 +964,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'reference' => $ph_ref,
                 'local_reference' => $ref,
                 'charge_amount' => $charge_amount,
+                'user_pay_amount' => $user_pay_amount,
                 'credit_amount' => $credit_target,
                 'fee' => $fee,
+                'gateway_fee' => $gateway_fee,
+                'vendor_markup' => $vendor_markup,
+                'fee_mode' => $fee_mode,
                 'authorization_url' => $auth_url,
             ];
         }
@@ -554,6 +993,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                     'username' => $username,
                     'reference' => $ref,
                     'credit_amount' => $credit_target,
+                    'gateway_fee' => $gateway_fee,
+                    'vendor_markup' => $vendor_markup,
                     'fee_on_top' => $apply_fee_on_top ? 1 : 0,
                 ],
             ];
@@ -571,8 +1012,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'provider' => 'flutterwave',
                 'reference' => $ref,
                 'charge_amount' => $charge_amount,
+                'user_pay_amount' => $user_pay_amount,
                 'credit_amount' => $credit_target,
                 'fee' => $fee,
+                'gateway_fee' => $gateway_fee,
+                'vendor_markup' => $vendor_markup,
+                'fee_mode' => $fee_mode,
                 'authorization_url' => $link,
             ];
         }
@@ -603,6 +1048,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                     'vendor_id' => (string)$vid,
                     'username' => $username,
                     'credit_amount' => (string)$credit_target,
+                    'gateway_fee' => (string)$gateway_fee,
+                    'vendor_markup' => (string)$vendor_markup,
                     'fee_on_top' => $apply_fee_on_top ? '1' : '0',
                 ],
             ];
@@ -620,8 +1067,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'provider' => 'monnify',
                 'reference' => $ref,
                 'charge_amount' => $charge_amount,
+                'user_pay_amount' => $user_pay_amount,
                 'credit_amount' => $credit_target,
                 'fee' => $fee,
+                'gateway_fee' => $gateway_fee,
+                'vendor_markup' => $vendor_markup,
+                'fee_mode' => $fee_mode,
                 'authorization_url' => $checkout_url,
             ];
         }
@@ -636,8 +1087,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'provider' => 'beewave',
                 'reference' => $ref,
                 'charge_amount' => $charge_amount,
+                'user_pay_amount' => $user_pay_amount,
                 'credit_amount' => $credit_target,
                 'fee' => $fee,
+                'gateway_fee' => $gateway_fee,
+                'vendor_markup' => $vendor_markup,
+                'fee_mode' => $fee_mode,
                 'public_key' => $pub,
                 'email' => $email,
                 'name' => $full_name,
@@ -675,6 +1130,54 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         return array_values(array_unique($secrets));
     }
 
+    function bc_pg_resolve_settlement_amounts($db, $provider, $gross_amount, $markup_pct, $intent = null, array $meta = [], $provider_settled = 0.0)
+    {
+        $provider = strtolower(trim((string)$provider));
+        $gross = max(0.0, round((float)$gross_amount, 2));
+        $settled = max(0.0, round((float)$provider_settled, 2));
+        $markup = bc_pg_clamp_markup($markup_pct, 0.5);
+
+        $credit_meta = isset($meta['credit_amount']) && is_numeric($meta['credit_amount']) ? (float)$meta['credit_amount'] : 0.0;
+        $intent_credit = (is_array($intent) && isset($intent['credit_amount']) && is_numeric($intent['credit_amount'])) ? (float)$intent['credit_amount'] : 0.0;
+        $intent_expected = (is_array($intent) && isset($intent['amount']) && is_numeric($intent['amount'])) ? (float)$intent['amount'] : 0.0;
+        $intent_mode = is_array($intent) ? trim((string)($intent['fee_mode'] ?? '')) : '';
+        $intent_markup = (is_array($intent) && isset($intent['vendor_markup']) && is_numeric($intent['vendor_markup'])) ? (float)$intent['vendor_markup'] : null;
+
+        $target_credit = $intent_credit > 0 ? $intent_credit : $credit_meta;
+        $is_customer_pays = ($intent_mode === 'customer_pays' && $target_credit > 0) || (!empty($meta['fee_on_top']) && $credit_meta > 0);
+
+        if ($is_customer_pays && $target_credit > 0) {
+            if ($provider === 'payhub' && $settled > 0) {
+                $v_markup = $intent_markup !== null ? $intent_markup : round($target_credit * ($markup / 100.0), 2);
+                $safe_credit = max(0.0, round($settled - $v_markup, 2));
+                $credit = min(round($target_credit, 2), $safe_credit);
+                $fee = round(max(0.0, $gross - $credit), 2);
+                return ['credit_amount' => $credit, 'fee' => $fee, 'vendor_markup' => $v_markup];
+            }
+            $expected_floor = $intent_expected > 0 ? $intent_expected : $target_credit;
+            if (($gross + 0.01) >= $expected_floor) {
+                $credit = min($gross, round($target_credit, 2));
+                $fee = round(max(0.0, $gross - $credit), 2);
+                $v_markup = $intent_markup !== null ? $intent_markup : round($credit * ($markup / 100.0), 2);
+                return ['credit_amount' => $credit, 'fee' => $fee, 'vendor_markup' => $v_markup];
+            }
+        }
+
+        if ($settled > 0 && $settled <= $gross) {
+            $v_markup = ($intent_markup !== null && $intent_mode === 'deduct_from_deposit')
+                ? $intent_markup
+                : round($settled * ($markup / 100.0), 2);
+            $credit = max(0.0, round($settled - $v_markup, 2));
+            $fee = round(max(0.0, $gross - $credit), 2);
+            return ['credit_amount' => $credit, 'fee' => $fee, 'vendor_markup' => $v_markup];
+        }
+
+        $bd = bc_pg_calculate_fee_breakdown($db, $provider, $gross, $markup, 'deduct_from_deposit');
+        $credit = $bd['wallet_credit'];
+        $fee = round(max(0.0, $gross - $credit), 2);
+        return ['credit_amount' => $credit, 'fee' => $fee, 'vendor_markup' => $bd['vendor_markup']];
+    }
+
     function bc_pg_verify_with_provider($db, $vendor_id, $provider, $reference, array $extra = [])
     {
         $vid = (int)$vendor_id;
@@ -695,7 +1198,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         }
         $pub = trim((string)($cfg['public_key'] ?? ''));
         $sec = trim((string)($cfg['secret_key'] ?? ''));
-        $pct = is_numeric($cfg['percentage'] ?? null) ? max(0.0, (float)$cfg['percentage']) : 0.0;
+        $pct = bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
+        $intent = ($db instanceof mysqli) ? bc_pg_lookup_intent($db, $reference, $vid) : null;
 
         if ($provider === 'paystack') {
             if ($sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Paystack secret key missing.'];
@@ -718,15 +1222,13 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             }
             $gross = ((float)($data['amount'] ?? 0)) / 100.0;
             $meta = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
-            $credit_meta = isset($meta['credit_amount']) && is_numeric($meta['credit_amount']) ? (float)$meta['credit_amount'] : 0.0;
-            $fee_on_top = !empty($meta['fee_on_top']);
-            if ($fee_on_top && $credit_meta > 0 && $credit_meta <= $gross + 0.01) {
-                $credit = min($gross, round($credit_meta, 2));
-                $fee = round(max(0.0, $gross - $credit), 2);
-            } else {
-                $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
-                $credit = round($gross - $fee, 2);
+            if (!$intent && ($db instanceof mysqli)) {
+                $loc_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ($meta['reference'] ?? '')));
+                if ($loc_ref !== '') $intent = bc_pg_lookup_intent($db, $loc_ref, $vid);
             }
+            $settled_calc = bc_pg_resolve_settlement_amounts($db, 'paystack', $gross, $pct, $intent, $meta, 0.0);
+            $credit = $settled_calc['credit_amount'];
+            $fee = $settled_calc['fee'];
             return [
                 'ok' => ($credit > 0),
                 'provider' => 'paystack',
@@ -787,13 +1289,20 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             $gross_raw = is_numeric($data['gateway_amount'] ?? null) ? (float)$data['gateway_amount'] : (is_numeric($data['amount'] ?? null) ? (float)$data['amount'] : 0.0);
             $settled_raw = is_numeric($data['settled_amount'] ?? null) ? (float)$data['settled_amount'] : 0.0;
             $gross = round($gross_raw / $div, 2);
-            if ($settled_raw > 0) {
-                $credit = min($gross, round($settled_raw / $div, 2));
-                $fee = round(max(0.0, $gross - $credit), 2);
-            } else {
-                $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
-                $credit = round($gross - $fee, 2);
+            $provider_settled = $settled_raw > 0 ? round($settled_raw / $div, 2) : 0.0;
+            $meta = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+            if ((!$intent || empty($intent['credit_amount'])) && ($db instanceof mysqli)) {
+                $ph_intent = bc_pg_lookup_intent($db, $verify_ref, $vid);
+                if ($ph_intent && !empty($ph_intent['credit_amount'])) {
+                    $intent = $ph_intent;
+                } elseif (!empty($meta['local_reference'])) {
+                    $loc_intent = bc_pg_lookup_intent($db, (string)$meta['local_reference'], $vid);
+                    if ($loc_intent) $intent = $loc_intent;
+                }
             }
+            $settled_calc = bc_pg_resolve_settlement_amounts($db, 'payhub', $gross, $pct, $intent, $meta, $provider_settled);
+            $credit = $settled_calc['credit_amount'];
+            $fee = $settled_calc['fee'];
             return [
                 'ok' => ($credit > 0),
                 'provider' => 'payhub',
@@ -803,7 +1312,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 'credit_amount' => $credit,
                 'fee' => $fee,
                 'currency' => strtoupper((string)($data['currency'] ?? 'NGN')),
-                'metadata' => is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+                'metadata' => $meta,
                 'raw_data' => $data,
             ];
         }
@@ -833,14 +1342,13 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             }
             $gross = round((float)($data['amount'] ?? 0), 2);
             $meta = is_array($data['meta'] ?? null) ? $data['meta'] : [];
-            $credit_meta = isset($meta['credit_amount']) && is_numeric($meta['credit_amount']) ? (float)$meta['credit_amount'] : 0.0;
-            if (!empty($meta['fee_on_top']) && $credit_meta > 0 && $credit_meta <= $gross + 0.01) {
-                $credit = min($gross, round($credit_meta, 2));
-                $fee = round(max(0.0, $gross - $credit), 2);
-            } else {
-                $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : round((float)($data['app_fee'] ?? 0), 2);
-                $credit = round(max(0.0, $gross - $fee), 2);
+            if (!$intent && ($db instanceof mysqli)) {
+                $loc_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ($meta['reference'] ?? '')));
+                if ($loc_ref !== '') $intent = bc_pg_lookup_intent($db, $loc_ref, $vid);
             }
+            $settled_calc = bc_pg_resolve_settlement_amounts($db, 'flutterwave', $gross, $pct, $intent, $meta, 0.0);
+            $credit = $settled_calc['credit_amount'];
+            $fee = $settled_calc['fee'];
             return [
                 'ok' => ($credit > 0),
                 'provider' => 'flutterwave',
@@ -895,14 +1403,13 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             }
             $gross = round((float)($body['amountPaid'] ?? ($body['totalPayable'] ?? 0)), 2);
             $meta = is_array($body['metaData'] ?? null) ? $body['metaData'] : [];
-            $credit_meta = isset($meta['credit_amount']) && is_numeric($meta['credit_amount']) ? (float)$meta['credit_amount'] : 0.0;
-            if (!empty($meta['fee_on_top']) && $credit_meta > 0 && $credit_meta <= $gross + 0.01) {
-                $credit = min($gross, round($credit_meta, 2));
-                $fee = round(max(0.0, $gross - $credit), 2);
-            } else {
-                $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
-                $credit = round(max(0.0, $gross - $fee), 2);
+            if (!$intent && ($db instanceof mysqli)) {
+                $loc_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ''));
+                if ($loc_ref !== '') $intent = bc_pg_lookup_intent($db, $loc_ref, $vid);
             }
+            $settled_calc = bc_pg_resolve_settlement_amounts($db, 'monnify', $gross, $pct, $intent, $meta, 0.0);
+            $credit = $settled_calc['credit_amount'];
+            $fee = $settled_calc['fee'];
             return [
                 'ok' => ($credit > 0),
                 'provider' => 'monnify',
@@ -1424,15 +1931,11 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return;
         }
 
-        $pct = is_numeric($cfg['percentage'] ?? null) ? max(0.0, (float)$cfg['percentage']) : 0.0;
+        $pct = bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
         $settled_raw = is_numeric($data['settlement_amount'] ?? null) ? (float)$data['settlement_amount'] : 0.0;
-        if ($settled_raw > 0 && $settled_raw <= $gross) {
-            $credit = round($settled_raw, 2);
-            $fee = round($gross - $credit, 2);
-        } else {
-            $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
-            $credit = round(max(0.0, $gross - $fee), 2);
-        }
+        $settled_calc = bc_pg_resolve_settlement_amounts($db, 'beewave', $gross, $pct, $intent, $meta, $settled_raw);
+        $credit = $settled_calc['credit_amount'];
+        $fee = $settled_calc['fee'];
 
         $event_id = (string)($data['id'] ?? ($data['transaction_id'] ?? $ref));
         $canonical_ref = $ref !== '' ? $ref : ('BW_' . $event_id);
@@ -1480,19 +1983,15 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         $gross = is_numeric($payload['order']['amount'] ?? null) ? (float)$payload['order']['amount'] : 0.0;
         $settled = is_numeric($payload['order']['settlement_amount'] ?? null) ? (float)$payload['order']['settlement_amount'] : 0.0;
-        $pct = is_numeric($cfg['percentage'] ?? null) ? max(0.0, (float)$cfg['percentage']) : 0.0;
+        $pct = bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
         if ($gross <= 0 && $settled <= 0) {
             bc_pg_emit_webhook_json(422, ['status' => 'error', 'code' => 'INVALID_AMOUNT', 'message' => 'Positive amount required']);
             return;
         }
         if ($gross <= 0) $gross = $settled;
-        if ($settled > 0 && $settled <= $gross) {
-            $credit = round($settled, 2);
-            $fee = round($gross - $credit, 2);
-        } else {
-            $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
-            $credit = round(max(0.0, $gross - $fee), 2);
-        }
+        $settled_calc = bc_pg_resolve_settlement_amounts($db, 'payvessel', $gross, $pct, null, [], $settled);
+        $credit = $settled_calc['credit_amount'];
+        $fee = $settled_calc['fee'];
 
         $event_id = $ref !== '' ? $ref : hash('sha256', $raw);
         $canonical_ref = $ref !== '' ? $ref : ('PV_' . substr($event_id, 0, 24));
