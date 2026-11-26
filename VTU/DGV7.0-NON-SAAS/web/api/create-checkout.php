@@ -70,6 +70,9 @@ if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
 $gateway = strtolower(trim((string)($input['gateway'] ?? ($input['provider'] ?? ''))));
 $amount = $input['amount'] ?? null;
 $preferred_ref = trim((string)($input['reference'] ?? ''));
+$fee_mode_raw = strtolower(trim((string)($input['fee_mode'] ?? '')));
+$apply_fee_on_top = ($fee_mode_raw === 'customer_pays') || !empty($input['apply_fee_on_top']);
+$fee_mode = $apply_fee_on_top ? 'customer_pays' : 'deduct_from_deposit';
 
 if ($gateway === 'payhub') {
     $init = bc_pg_init_gateway_checkout(
@@ -80,7 +83,7 @@ if ($gateway === 'payhub') {
         $amount,
         bc_pg_scheme_host(),
         $preferred_ref,
-        false
+        $apply_fee_on_top
     );
     if (empty($init['ok'])) {
         http_response_code(422);
@@ -96,18 +99,45 @@ if ($gateway === 'payhub') {
         'reference' => $init['local_reference'] ?: $init['reference'],
         'payhub_reference' => $init['reference'],
         'amount' => number_format((float)$init['charge_amount'], 2, '.', ''),
+        'user_pay_amount' => number_format((float)($init['user_pay_amount'] ?? $init['charge_amount']), 2, '.', ''),
+        'credit_amount' => number_format((float)$init['credit_amount'], 2, '.', ''),
+        'gateway_fee' => number_format((float)($init['gateway_fee'] ?? 0), 2, '.', ''),
+        'vendor_markup' => number_format((float)($init['vendor_markup'] ?? 0), 2, '.', ''),
+        'total_fee' => number_format((float)($init['fee'] ?? 0), 2, '.', ''),
+        'fee_mode' => $fee_mode,
         'authorization_url' => $init['authorization_url'],
     ]);
     exit;
 }
+
+$norm_amt = bc_pg_normalize_amount($amount);
+if ($norm_amt === null) {
+    http_response_code(422);
+    echo json_encode([
+        'status' => 'error',
+        'code' => 'INVALID_INPUT',
+        'message' => 'Valid amount (NGN 100 - NGN 1,000,000) is required.',
+    ]);
+    exit;
+}
+
+$gw_cfg = ($gateway !== '' && $gateway !== 'pending') ? bc_pg_gateway_config($connection_server, $vendor_id, $gateway, true) : null;
+$markup_pct = bc_pg_clamp_markup($gw_cfg['percentage'] ?? null, 0.5);
+$breakdown = bc_pg_calculate_fee_breakdown($connection_server, $gateway, $norm_amt['float'], $markup_pct, $fee_mode);
 
 $intent = bc_pg_register_intent(
     $connection_server,
     $vendor_id,
     (string)$user['username'],
     $gateway,
-    $amount,
-    $preferred_ref
+    $breakdown['charge_amount'],
+    $preferred_ref,
+    [
+        'credit_amount' => $breakdown['wallet_credit'],
+        'gateway_fee' => $breakdown['gateway_fee'],
+        'vendor_markup' => $breakdown['vendor_markup'],
+        'fee_mode' => $fee_mode,
+    ]
 );
 
 if (empty($intent['ok'])) {
@@ -125,5 +155,11 @@ echo json_encode([
     'status' => 'success',
     'reference' => $intent['reference'],
     'amount' => $intent['amount'],
+    'user_pay_amount' => number_format((float)$breakdown['user_pay_amount'], 2, '.', ''),
+    'credit_amount' => number_format((float)$breakdown['wallet_credit'], 2, '.', ''),
+    'gateway_fee' => number_format((float)$breakdown['gateway_fee'], 2, '.', ''),
+    'vendor_markup' => number_format((float)$breakdown['vendor_markup'], 2, '.', ''),
+    'total_fee' => number_format((float)$breakdown['total_fee'], 2, '.', ''),
+    'fee_mode' => $fee_mode,
     'provider' => $intent['provider'],
 ]);

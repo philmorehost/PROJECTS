@@ -134,10 +134,28 @@ class CheckoutTabFragment : Fragment() {
     private lateinit var containerGateways: android.widget.LinearLayout
     private lateinit var tvNoGateways: android.widget.TextView
     private lateinit var etAmount: com.google.android.material.textfield.TextInputEditText
+    private var feePreviewCard: android.widget.LinearLayout? = null
+    private var tvBreakdownTitle: android.widget.TextView? = null
+    private var tvBreakdownCredit: android.widget.TextView? = null
+    private var tvBreakdownGatewayFee: android.widget.TextView? = null
+    private var tvBreakdownMarkup: android.widget.TextView? = null
+    private var tvBreakdownTotalPay: android.widget.TextView? = null
+    private val gatewayButtons = mutableListOf<Pair<Map<String, Any>, com.google.android.material.button.MaterialButton>>()
 
     private var fundingConfig: Map<String, Any>? = null
     private var activeGateway = ""
     private var activeReference = ""
+
+    private data class FeeBreakdown(
+        val walletCredit: Double,
+        val gatewayFee: Double,
+        val checkoutSurcharge: Double,
+        val vendorMarkup: Double,
+        val requestAmount: Double,
+        val userPayAmount: Double,
+        val markupPercent: Double,
+        val gatewayFeeLabel: String
+    )
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         inflater.inflate(R.layout.tab_checkout, container, false)
@@ -178,12 +196,197 @@ class CheckoutTabFragment : Fragment() {
         }
 
         btnCloseWebView.setOnClickListener { showForm() }
+        attachFeePreviewCard()
+        etAmount.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                refreshFeePreview()
+            }
+        })
         loadGateways()
+    }
+
+    private fun attachFeePreviewCard() {
+        val innerLayout = (scrollForm as? android.widget.ScrollView)?.getChildAt(0) as? android.widget.LinearLayout ?: return
+        val ctx = requireContext()
+        val card = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(16.dpToPx(), 12.dpToPx(), 16.dpToPx(), 12.dpToPx())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(android.graphics.Color.parseColor("#F8FAFC"))
+                setStroke(1.dpToPx(), android.graphics.Color.parseColor("#CBD5E1"))
+                cornerRadius = 10.dpToPx().toFloat()
+            }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = 16.dpToPx() }
+            visibility = View.GONE
+        }
+
+        fun makeRow(label: String, bold: Boolean = false): Pair<android.widget.TextView, android.widget.TextView> {
+            val row = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                ).also { it.bottomMargin = 4.dpToPx() }
+            }
+            val tvL = android.widget.TextView(ctx).apply {
+                text = label
+                textSize = 13f
+                setTextColor(android.graphics.Color.parseColor(if (bold) "#0F172A" else "#475569"))
+                if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val tvV = android.widget.TextView(ctx).apply {
+                text = "₦0.00"
+                textSize = 13f
+                setTextColor(android.graphics.Color.parseColor(if (bold) "#0F172A" else "#1E293B"))
+                if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
+            }
+            row.addView(tvL)
+            row.addView(tvV)
+            card.addView(row)
+            return tvL to tvV
+        }
+
+        val title = android.widget.TextView(ctx).apply {
+            text = "Deposit Fee Breakdown"
+            textSize = 13f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(android.graphics.Color.parseColor("#0F172A"))
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = 8.dpToPx() }
+        }
+        card.addView(title)
+        tvBreakdownTitle = title
+        tvBreakdownCredit = makeRow("Wallet Credited").second
+        tvBreakdownGatewayFee = makeRow("Gateway Fee (Auto)").second
+        tvBreakdownMarkup = makeRow("Service Markup").second
+        tvBreakdownTotalPay = makeRow("Total You Pay", bold = true).second
+
+        val idx = innerLayout.indexOfChild(containerGateways)
+        if (idx >= 0) {
+            innerLayout.addView(card, idx)
+        } else {
+            innerLayout.addView(card)
+        }
+        feePreviewCard = card
+    }
+
+    private fun round2(value: Double): Double = kotlin.math.round(value * 100.0) / 100.0
+
+    private fun formatNaira(value: Double): String = "₦" + String.format(java.util.Locale.US, "%,.2f", value)
+
+    private fun computeGatewayFee(rule: Map<*, *>?, gross: Double): Double {
+        val g = maxOf(0.0, round2(gross))
+        if (g <= 0.0 || rule == null) return 0.0
+        val pct = maxOf(0.0, (rule["percent"] as? Number)?.toDouble() ?: 0.0)
+        val flat = maxOf(0.0, (rule["flat"] as? Number)?.toDouble() ?: 0.0)
+        val waive = maxOf(0.0, (rule["waive_flat_below"] as? Number)?.toDouble() ?: 0.0)
+        val cap = maxOf(0.0, (rule["cap"] as? Number)?.toDouble() ?: 0.0)
+        val applyFlat = if (flat > 0.0 && (waive <= 0.0 || g >= waive)) flat else 0.0
+        var fee = (g * (pct / 100.0)) + applyFlat
+        if (cap > 0.0) fee = minOf(cap, fee)
+        return maxOf(0.0, round2(fee))
+    }
+
+    private fun solveGrossForNet(rule: Map<*, *>?, netNeeded: Double): Double {
+        val net = maxOf(0.0, round2(netNeeded))
+        if (net <= 0.0 || rule == null) return net
+        val rate = maxOf(0.0, (rule["percent"] as? Number)?.toDouble() ?: 0.0) / 100.0
+        val flat = maxOf(0.0, (rule["flat"] as? Number)?.toDouble() ?: 0.0)
+        val waive = maxOf(0.0, (rule["waive_flat_below"] as? Number)?.toDouble() ?: 0.0)
+        val cap = maxOf(0.0, (rule["cap"] as? Number)?.toDouble() ?: 0.0)
+        if (rate >= 0.99) return net
+        val candidates = mutableListOf<Double>()
+        if (rate > 0.0) {
+            val c1 = round2(net / (1.0 - rate))
+            if (waive <= 0.0 || c1 < waive) candidates.add(c1)
+        } else {
+            candidates.add(net)
+        }
+        candidates.add(round2((net + flat) / (1.0 - rate)))
+        if (cap > 0.0) candidates.add(round2(net + cap))
+        var best: Double? = null
+        for (cand in candidates) {
+            if (cand < net) continue
+            for (k in 0..3) {
+                val t = round2(cand + k * 0.01)
+                val f = computeGatewayFee(rule, t)
+                if (round2(t - f) >= net) {
+                    if (best == null || t < best) best = t
+                    break
+                }
+            }
+        }
+        return best ?: net
+    }
+
+    private fun computeBreakdown(gw: Map<String, Any>, enteredAmount: Double): FeeBreakdown {
+        val rawMarkup = (gw["markup_percent"] as? Number)?.toDouble()
+            ?: (gw["percentage"]?.toString()?.toDoubleOrNull())
+            ?: 0.5
+        val markup = round2(rawMarkup.coerceIn(0.0, 1.0))
+        val rule = gw["gateway_fee_rule"] as? Map<*, *>
+        val credit = round2(enteredAmount)
+        val vendorMarkup = round2(credit * (markup / 100.0))
+        val netNeeded = round2(credit + vendorMarkup)
+        val requestAmount = if (rule != null) solveGrossForNet(rule, netNeeded) else netNeeded
+        val gwFee = maxOf(0.0, round2(requestAmount - netNeeded))
+        val surchargePct = maxOf(0.0, (rule?.get("checkout_surcharge_percent") as? Number)?.toDouble() ?: 0.0)
+        val surcharge = if (surchargePct > 0.0) round2(requestAmount * (surchargePct / 100.0)) else 0.0
+        val userPay = round2(requestAmount + surcharge)
+        val gwLabel = (gw["gateway_fee_label"] as? String).orEmpty()
+        return FeeBreakdown(
+            walletCredit = credit,
+            gatewayFee = gwFee,
+            checkoutSurcharge = surcharge,
+            vendorMarkup = vendorMarkup,
+            requestAmount = requestAmount,
+            userPayAmount = userPay,
+            markupPercent = markup,
+            gatewayFeeLabel = gwLabel
+        )
+    }
+
+    private fun refreshFeePreview() {
+        val amount = etAmount.text?.toString()?.trim()?.toDoubleOrNull()
+        val firstGw = gatewayButtons.firstOrNull()?.first
+        if (amount == null || amount < 100.0 || firstGw == null) {
+            feePreviewCard?.visibility = View.GONE
+            gatewayButtons.forEach { (gw, btn) ->
+                val name = (gw["gateway_name"] as? String ?: "").replaceFirstChar { it.uppercase() }
+                btn.text = "Pay with $name"
+            }
+            return
+        }
+
+        val previewGw = gatewayButtons.find { (it.first["gateway_name"] as? String) == activeGateway }?.first ?: firstGw
+        val bd = computeBreakdown(previewGw, amount)
+        val previewName = (previewGw["gateway_name"] as? String ?: "").replaceFirstChar { it.uppercase() }
+        tvBreakdownTitle?.text = "$previewName Deposit Preview"
+        tvBreakdownCredit?.text = formatNaira(bd.walletCredit)
+        tvBreakdownGatewayFee?.text = formatNaira(round2(bd.gatewayFee + bd.checkoutSurcharge))
+        tvBreakdownMarkup?.text = "${formatNaira(bd.vendorMarkup)} (${String.format(java.util.Locale.US, "%.2f", bd.markupPercent)}%)"
+        tvBreakdownTotalPay?.text = formatNaira(bd.userPayAmount)
+        feePreviewCard?.visibility = View.VISIBLE
+
+        gatewayButtons.forEach { (gw, btn) ->
+            val name = (gw["gateway_name"] as? String ?: "").replaceFirstChar { it.uppercase() }
+            val gwBd = computeBreakdown(gw, amount)
+            btn.text = "Pay with $name — ${formatNaira(gwBd.userPayAmount)} (Credit ${formatNaira(gwBd.walletCredit)})"
+        }
     }
 
     private fun loadGateways() {
         progressGateways.visibility = View.VISIBLE
         containerGateways.removeAllViews()
+        gatewayButtons.clear()
         lifecycleScope.launch {
             try {
                 val prefs = PreferenceManager(requireContext())
@@ -201,8 +404,9 @@ class CheckoutTabFragment : Fragment() {
                     } else {
                         gateways.forEach { gw ->
                             val name = gw["gateway_name"] as? String ?: return@forEach
-                            addGatewayButton(name)
+                            addGatewayButton(gw, name)
                         }
+                        refreshFeePreview()
                     }
                 }
             } catch (e: Exception) {
@@ -214,7 +418,7 @@ class CheckoutTabFragment : Fragment() {
         }
     }
 
-    private fun addGatewayButton(name: String) {
+    private fun addGatewayButton(gw: Map<String, Any>, name: String) {
         val label = name.replaceFirstChar { it.uppercase() }
         val btn = com.google.android.material.button.MaterialButton(requireContext()).apply {
             text = "Pay with $label"
@@ -222,15 +426,20 @@ class CheckoutTabFragment : Fragment() {
                 android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                 android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
             ).also { it.bottomMargin = 12.dpToPx() }
-            setOnClickListener { launchGateway(name) }
+            setOnClickListener {
+                activeGateway = name
+                refreshFeePreview()
+                launchGateway(name)
+            }
         }
+        gatewayButtons.add(gw to btn)
         containerGateways.addView(btn)
     }
 
     private fun launchGateway(gatewayName: String) {
         val amountStr = etAmount.text?.toString()?.trim() ?: ""
         val amount = amountStr.toDoubleOrNull()
-        if (amount == null || amount <= 0) { snack("Enter a valid amount"); return }
+        if (amount == null || amount < 100.0) { snack("Enter a valid amount (minimum ₦100)"); return }
 
         val config = fundingConfig ?: run { snack("Gateway config not loaded"); return }
         @Suppress("UNCHECKED_CAST")
@@ -245,6 +454,7 @@ class CheckoutTabFragment : Fragment() {
         val userName = config["name"] as? String ?: ""
         val phone = config["phone"] as? String ?: ""
         val reference = "APP_${System.currentTimeMillis()}_${(100..999).random()}"
+        val localBreakdown = computeBreakdown(gw, amount)
 
         // Register server-bound checkout intent before opening gateway
         lifecycleScope.launch {
@@ -254,7 +464,8 @@ class CheckoutTabFragment : Fragment() {
                     "api_key" to prefs.getApiKey(),
                     "reference" to reference,
                     "amount" to amount,
-                    "gateway" to gatewayName
+                    "gateway" to gatewayName,
+                    "fee_mode" to "customer_pays"
                 ))
                 val body = resp.body()
                 val status = body?.get("status") as? String ?: ""
@@ -266,6 +477,7 @@ class CheckoutTabFragment : Fragment() {
                 val serverRef = (body?.get("payhub_reference") as? String)?.takeIf { it.isNotBlank() }
                     ?: (body?.get("reference") as? String)?.takeIf { it.isNotBlank() }
                     ?: reference
+                val chargeAmount = (body?.get("amount")?.toString()?.toDoubleOrNull()) ?: localBreakdown.requestAmount
                 val authUrl = body?.get("authorization_url") as? String ?: ""
                 activeGateway = gatewayName
                 activeReference = serverRef
@@ -276,7 +488,7 @@ class CheckoutTabFragment : Fragment() {
                         btnCloseWebView.visibility = View.VISIBLE
                         webView.loadUrl(authUrl)
                     } else {
-                        openGatewayWebView(gatewayName, publicKey, contractCode, email, userName, phone, serverRef, amount)
+                        openGatewayWebView(gatewayName, publicKey, contractCode, email, userName, phone, serverRef, chargeAmount)
                     }
                 }
             } catch (e: Exception) {
@@ -291,7 +503,7 @@ class CheckoutTabFragment : Fragment() {
         email: String, userName: String, phone: String, reference: String, amount: Double
     ) {
         val baseUrl = Constants.BASE_URL
-        val amountKobo = (amount * 100).toInt()
+        val amountKobo = kotlin.math.round(amount * 100.0).toInt()
         val html = buildCheckoutHtml(gateway, publicKey, contractCode, email, userName, phone, reference, amount, amountKobo, baseUrl)
 
         scrollForm.visibility = View.GONE
@@ -419,8 +631,10 @@ window.onload = function() {
                     val status = resp.body()?.get("status") as? String ?: ""
                     val msg = resp.body()?.get("message") as? String ?: ""
                     activity?.runOnUiThread {
-                        if (status == "success" || status == "pending") {
-                            snack(if (status == "success") "✅ Wallet funded successfully!" else "Payment submitted. Wallet will be funded shortly.")
+                        if (status == "success") {
+                            snack(if (msg.isNotBlank()) "✅ $msg" else "✅ Wallet funded successfully!")
+                        } else if (status == "pending") {
+                            snack("Payment submitted. Wallet will be funded shortly.")
                         } else if (msg.isNotEmpty()) {
                             snack("Payment recorded: $msg")
                         }

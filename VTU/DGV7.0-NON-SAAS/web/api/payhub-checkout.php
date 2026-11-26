@@ -77,6 +77,7 @@ if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
 }
 
 // If a pre-registered intent exists for this reference, bind to its authoritative amount & owner.
+$apply_fee_on_top = false;
 if ($ref !== '') {
     $intent = bc_pg_lookup_intent($connection_server, $ref, $vendor_id);
     if ($intent) {
@@ -98,7 +99,7 @@ $init = bc_pg_init_gateway_checkout(
     $amount,
     bc_pg_scheme_host(),
     $ref,
-    false
+    $apply_fee_on_top
 );
 
 if (empty($init['ok'])) {

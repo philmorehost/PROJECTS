@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.26-innodb-wallet-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.26-pg-markup-1');
 
 if (!function_exists('bc_ensure_wallet_transactional_schema')) {
     function bc_ensure_wallet_transactional_schema($connection_server) {
@@ -895,6 +895,13 @@ $bc_webhook_secret_column = mysqli_query($connection_server, "SHOW COLUMNS FROM 
 if ($bc_webhook_secret_column && mysqli_num_rows($bc_webhook_secret_column) == 0) {
     mysqli_query($connection_server, "ALTER TABLE sas_payment_gateways ADD COLUMN webhook_secret VARCHAR(500) NULL DEFAULT NULL AFTER encrypt_key");
 }
+// One-time migration: gateway processing fees are now auto-loaded per provider, while
+// sas_payment_gateways.percentage holds the vendor markup (0%–1%, default 0.5%).
+$bc_pg_markup_mig = @mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='bc_pg_markup_migrated_v1' LIMIT 1");
+if ($bc_pg_markup_mig && mysqli_num_rows($bc_pg_markup_mig) === 0) {
+    @mysqli_query($connection_server, "UPDATE sas_payment_gateways SET percentage='0.5' WHERE TRIM(COALESCE(percentage,''))='' OR CAST(percentage AS DECIMAL(10,4)) > 1 OR CAST(percentage AS DECIMAL(10,4)) < 0");
+    @mysqli_query($connection_server, "INSERT INTO sas_super_admin_options (option_name, option_value) VALUES ('bc_pg_markup_migrated_v1', '1') ON DUPLICATE KEY UPDATE option_value='1'");
+}
 
 //Create Bank Transfer Gateway Table
 $create_bank_transfer_gateway_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_bank_transfer_gateways (vendor_id INT UNSIGNED NOT NULL, gateway_name VARCHAR(225) NOT NULL, public_key VARCHAR(500) NOT NULL, secret_key VARCHAR(500) NOT NULL, encrypt_key VARCHAR(500) NOT NULL, transfer_fee VARCHAR(225) NOT NULL, status INT UNSIGNED NOT NULL, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (vendor_id, gateway_name))");
@@ -950,7 +957,7 @@ if ($create_admin_payment_gateway_table) {
         // Also ensure Vendor 1 (default admin) has these records to prevent "Not Found" during user syncs
         $check_v = mysqli_query($connection_server, "SELECT gateway_name FROM sas_payment_gateways WHERE vendor_id='1' AND (LOWER(TRIM(gateway_name))='$g' OR gateway_name LIKE '%$g%') LIMIT 1");
         if ($check_v && mysqli_num_rows($check_v) == 0) {
-            mysqli_query($connection_server, "INSERT INTO sas_payment_gateways (vendor_id, gateway_name, public_key, secret_key, encrypt_key, percentage, status) VALUES ('1', '$g', '', '', '', '0', '2')");
+            mysqli_query($connection_server, "INSERT INTO sas_payment_gateways (vendor_id, gateway_name, public_key, secret_key, encrypt_key, percentage, status) VALUES ('1', '$g', '', '', '', '0.5', '2')");
         }
     }
 }

@@ -187,7 +187,83 @@ if (is_file($androidApps[0])) {
         pcheck(strpos($kt, 'if (url.contains("payhub-success.php"))') !== false, "Android allows payhub-success.php to execute ($ktPath)");
         pcheck(strpos($kt, '"gateway" to gatewayName') !== false, "Android sends gateway in createCheckout ($ktPath)");
         pcheck(strpos($kt, 'reference: \'$reference\'') !== false, "Android passes reference to BeeWave checkout ($ktPath)");
+        pcheck(strpos($kt, '"fee_mode" to "customer_pays"') !== false, "Android sends fee_mode=customer_pays ($ktPath)");
+        pcheck(strpos($kt, 'attachFeePreviewCard()') !== false && strpos($kt, 'tvBreakdownTotalPay') !== false, "Android renders live fee & wallet credit breakdown ($ktPath)");
     }
 }
+
+// ── 7. Gateway Default Pricing + Vendor Markup (0%-1%, default 0.5%) ──────────
+pcheck(bc_pg_clamp_markup(null) === 0.5, 'clamp_markup defaults null to 0.5');
+pcheck(bc_pg_clamp_markup('') === 0.5, 'clamp_markup defaults empty to 0.5');
+pcheck(bc_pg_clamp_markup('0') === 0.0, 'clamp_markup preserves explicit 0');
+pcheck(bc_pg_clamp_markup('0.5') === 0.5, 'clamp_markup preserves 0.5');
+pcheck(bc_pg_clamp_markup('1') === 1.0, 'clamp_markup preserves 1');
+pcheck(bc_pg_clamp_markup('2.5') === 1.0, 'clamp_markup caps > 1 at 1.0');
+pcheck(bc_pg_clamp_markup('-0.5') === 0.0, 'clamp_markup floors < 0 at 0.0');
+
+$pricing = bc_pg_default_gateway_pricing(null);
+pcheck(isset($pricing['paystack']) && $pricing['paystack']['percent'] === 1.5 && $pricing['paystack']['flat'] === 100.0 && $pricing['paystack']['waive_flat_below'] === 2500.0 && $pricing['paystack']['cap'] === 2000.0, 'Paystack default pricing structure');
+pcheck(isset($pricing['monnify']) && $pricing['monnify']['percent'] === 1.5 && $pricing['monnify']['cap'] === 2000.0, 'Monnify default pricing structure');
+pcheck(isset($pricing['flutterwave']) && $pricing['flutterwave']['percent'] === 1.4 && $pricing['flutterwave']['cap'] === 2000.0, 'Flutterwave default pricing structure');
+pcheck(isset($pricing['payhub']) && $pricing['payhub']['checkout_surcharge_percent'] === 1.53, 'PayHub default pricing structure');
+
+// Paystack < NGN 2,500 (flat N100 waived), 0.5% markup, customer_pays
+$bdPsSmall = bc_pg_calculate_fee_breakdown(null, 'paystack', 1000, 0.5, 'customer_pays');
+pcheck($bdPsSmall['wallet_credit'] === 1000.0, 'Paystack 1000 customer_pays credits exact 1000');
+pcheck($bdPsSmall['vendor_markup'] === 5.0, 'Paystack 1000 at 0.5% has 5.00 vendor markup');
+pcheck($bdPsSmall['charge_amount'] === 1020.30, 'Paystack 1000 gross-up charges 1020.30 (15.30 gateway + 5.00 markup)');
+
+// Paystack >= NGN 2,500 (includes N100 flat), 0.5% markup, customer_pays
+$bdPsMid = bc_pg_calculate_fee_breakdown(null, 'paystack', 10000, 0.5, 'customer_pays');
+pcheck($bdPsMid['wallet_credit'] === 10000.0 && $bdPsMid['vendor_markup'] === 50.0, 'Paystack 10000 credits exact 10000 with 50 markup');
+pcheck(round($bdPsMid['charge_amount'] - bc_pg_compute_gateway_fee($pricing['paystack'], $bdPsMid['charge_amount']), 2) >= 10050.0, 'Paystack 10000 net after gateway fee covers credit + markup');
+
+// Paystack NGN 500,000 hits N2,000 cap, 0.5% markup
+$bdPsCap = bc_pg_calculate_fee_breakdown(null, 'paystack', 500000, 0.5, 'customer_pays');
+pcheck($bdPsCap['gateway_fee'] === 2000.0 && $bdPsCap['vendor_markup'] === 2500.0 && $bdPsCap['charge_amount'] === 504500.0, 'Paystack 500000 respects 2000 fee cap');
+
+// PayHub customer_pays + deduct_from_deposit
+$bdPh = bc_pg_calculate_fee_breakdown(null, 'payhub', 1000, 0.5, 'customer_pays');
+pcheck($bdPh['wallet_credit'] === 1000.0 && $bdPh['vendor_markup'] === 5.0 && $bdPh['request_amount'] > 1005.0 && $bdPh['user_pay_amount'] > $bdPh['request_amount'], 'PayHub breakdown covers settlement + checkout surcharge');
+
+$bdDeduct = bc_pg_calculate_fee_breakdown(null, 'monnify', 1000, 0.5, 'deduct_from_deposit');
+pcheck($bdDeduct['charge_amount'] === 1000.0 && $bdDeduct['gateway_fee'] === 15.0 && $bdDeduct['vendor_markup'] === 5.0 && $bdDeduct['wallet_credit'] === 980.0, 'Monnify deduct_from_deposit deducts 15 gateway + 5 markup = 980 credit');
+
+// Settlement math verification (zero double-charging on PayHub/BeeWave/PayVessel)
+$settlePhTop = bc_pg_resolve_settlement_amounts(null, 'payhub', $bdPh['user_pay_amount'], 0.5, [
+    'amount' => $bdPh['request_amount'],
+    'credit_amount' => 1000.0,
+    'vendor_markup' => 5.0,
+    'fee_mode' => 'customer_pays',
+], [], 1005.0);
+pcheck($settlePhTop['credit_amount'] === 1000.0, 'PayHub customer_pays settlement credits exact 1000 and preserves 5.00 markup');
+
+$settlePhDirect = bc_pg_resolve_settlement_amounts(null, 'payhub', 101.53, 0.5, null, [], 98.0);
+pcheck($settlePhDirect['credit_amount'] === 97.51, 'PayHub deduct settlement deducts only 0.5% markup from settled 98.00 (no double gateway fee)');
+
+$settlePv = bc_pg_resolve_settlement_amounts(null, 'payvessel', 1000.0, 0.5, null, [], 995.0);
+pcheck($settlePv['credit_amount'] === 990.02, 'PayVessel deducts 0.5% vendor markup from settlement_amount without double-charging VA fee');
+
+$settlePsTop = bc_pg_resolve_settlement_amounts(null, 'paystack', 1020.30, 0.5, [
+    'amount' => 1020.30,
+    'credit_amount' => 1000.0,
+    'vendor_markup' => 5.0,
+    'fee_mode' => 'customer_pays',
+], [], 0.0);
+pcheck($settlePsTop['credit_amount'] === 1000.0 && $settlePsTop['fee'] === 20.30, 'Paystack customer_pays settlement credits exact 1000');
+
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $adminPg = file_get_contents("$root/$ed/bc-admin/PaymentGateway.php");
+    pcheck(strpos($adminPg, 'bc_pg_clamp_markup(') !== false && strpos($adminPg, 'MARKUP FEE (0%–1%)') !== false, "$ed admin PaymentGateway uses clamped 0%-1% vendor markup");
+    pcheck(strpos($adminPg, 'sync-gateway-pricing') !== false && strpos($adminPg, 'Gateway Fee (Auto)') !== false, "$ed admin PaymentGateway auto-loads and syncs default gateway fees");
+    $fc = file_get_contents("$root/$ed/web/api/funding-config.php");
+    pcheck(strpos($fc, 'gateway_fee_rule') !== false && strpos($fc, 'markup_percent') !== false, "$ed funding-config returns gateway_fee_rule & markup_percent");
+    $wf = file_get_contents("$root/$ed/func/bc-wallet-funding-page.php");
+    pcheck(strpos($wf, 'data-fee-preview') !== false && strpos($wf, 'Total You Will Pay') !== false, "$ed web funding page shows user pay vs wallet credit breakdown");
+    $tbl = file_get_contents("$root/$ed/func/bc-tables.php");
+    pcheck(strpos($tbl, 'bc_pg_markup_migrated_v1') !== false, "$ed bc-tables migrates legacy gateway percentages to 0.5% markup default");
+}
+$spPg = file_get_contents("$root/DGV7.0-SAAS/bc-spadmin/PaymentGateway.php");
+pcheck(strpos($spPg, 'save-default-gateway-pricing') !== false, 'SAAS spadmin PaymentGateway manages default gateway fee schedule');
 
 echo "PASS $checks payment orders, gateway settlement, Service Control, and mobile checks\n";

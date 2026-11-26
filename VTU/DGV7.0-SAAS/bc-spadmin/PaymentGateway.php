@@ -6,7 +6,22 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
     require_once __DIR__.'/../func/bc-paid-security.php';
     require_once __DIR__.'/../func/bc-gateway-api-settings.php';
+    require_once __DIR__.'/../func/bc-payment-gateway-settlement.php';
     bc_paid_otp_dispatch($get_logged_spadmin_details,'spadmin',['paid_gateway_prices']);
+    if(isset($_POST['save-default-gateway-pricing'])){
+        $in_pricing = is_array($_POST['pg_pricing'] ?? null) ? $_POST['pg_pricing'] : [];
+        if (bc_pg_save_gateway_pricing_overrides($connection_server, $in_pricing)) {
+            $_SESSION['product_purchase_response'] = 'Default payment gateway pricing schedule updated.';
+        } else {
+            $_SESSION['product_purchase_response'] = 'Could not update default payment gateway pricing schedule.';
+        }
+        header('Location: PaymentGateway.php');exit;
+    }
+    if(isset($_POST['reset-default-gateway-pricing'])){
+        mysqli_query($connection_server, "DELETE FROM sas_super_admin_options WHERE option_name='bc_pg_gateway_pricing'");
+        $_SESSION['product_purchase_response'] = 'Default payment gateway pricing restored to built-in provider schedules.';
+        header('Location: PaymentGateway.php');exit;
+    }
     if(isset($_POST['save-fintech-prices'])){
         bc_validate_csrf();
         $error=bc_paid_verify($get_logged_spadmin_details,'spadmin','paid_gateway_prices',$_POST);
@@ -598,6 +613,55 @@ bc_adm_head('', array("area" => "spadmin"));
                                 <i class="bi bi-save2 me-2"></i>Save Platform Payout Keys
                             </button>
                         </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Default Gateway Fee Schedule Card -->
+            <?php $sa_pg_pricing = bc_pg_default_gateway_pricing($connection_server); ?>
+            <div class="card shadow-sm border-0 rounded-4 mb-4">
+                <div class="card-header bg-white py-3 border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-primary">Default Payment Gateway Fee Schedule</h5>
+                        <div class="small text-muted">Vendors inherit these gateway fees automatically and add their own 0%–1% markup (default 0.5%).</div>
+                    </div>
+                    <form method="post" class="m-0">
+                        <button name="reset-default-gateway-pricing" type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-bold">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Provider Defaults
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-3">
+                                <thead>
+                                    <tr class="small text-muted">
+                                        <th>Gateway</th>
+                                        <th>Percent (%)</th>
+                                        <th>Flat Fee (₦)</th>
+                                        <th>Waive Flat &lt; (₦)</th>
+                                        <th>Fee Cap (₦)</th>
+                                        <th>Checkout Surcharge (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($sa_pg_pricing as $pg_key => $pg_rule): ?>
+                                    <tr>
+                                        <td class="fw-bold text-uppercase small"><?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?></td>
+                                        <td><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" name="pg_pricing[<?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?>][percent]" value="<?php echo htmlspecialchars((string)$pg_rule['percent'], ENT_QUOTES, 'UTF-8'); ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" max="5000" class="form-control form-control-sm" name="pg_pricing[<?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?>][flat]" value="<?php echo htmlspecialchars((string)$pg_rule['flat'], ENT_QUOTES, 'UTF-8'); ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" max="100000" class="form-control form-control-sm" name="pg_pricing[<?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?>][waive_flat_below]" value="<?php echo htmlspecialchars((string)$pg_rule['waive_flat_below'], ENT_QUOTES, 'UTF-8'); ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" max="50000" class="form-control form-control-sm" name="pg_pricing[<?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?>][cap]" value="<?php echo htmlspecialchars((string)$pg_rule['cap'], ENT_QUOTES, 'UTF-8'); ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" name="pg_pricing[<?php echo htmlspecialchars($pg_key, ENT_QUOTES, 'UTF-8'); ?>][checkout_surcharge_percent]" value="<?php echo htmlspecialchars((string)$pg_rule['checkout_surcharge_percent'], ENT_QUOTES, 'UTF-8'); ?>"></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button name="save-default-gateway-pricing" type="submit" class="btn btn-primary rounded-pill px-4 fw-bold">
+                            <i class="bi bi-save2 me-1"></i>Save Default Gateway Pricing
+                        </button>
                     </form>
                 </div>
             </div>

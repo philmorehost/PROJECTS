@@ -80,6 +80,8 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         $payment_gateway_public_key_assoc_array = array();
         $payment_gateway_secret_key_assoc_array = array();
         $payment_gateway_encrypt_key_assoc_array = array();
+        $payment_gateway_fees_assoc_array = array();
+        $pg_default_pricing = bc_pg_default_gateway_pricing($connection_server);
         $check_payment_gateway = mysqli_query($connection_server, "SELECT * FROM sas_payment_gateways WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND status = 1");
         if ($check_payment_gateway && mysqli_num_rows($check_payment_gateway) >= 1) {
             while ($payment_gateway = mysqli_fetch_assoc($check_payment_gateway)) {
@@ -87,10 +89,25 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                 if (!bc_pg_is_gateway_enabled($connection_server, (int)$select_vendor_table["id"], $gw_key)) {
                     continue;
                 }
+                $gw_markup = bc_pg_clamp_markup($payment_gateway["percentage"] ?? null, 0.5);
+                $gw_rule = $pg_default_pricing[$gw_key] ?? array();
                 array_push($payment_gateway_assoc_array, $payment_gateway_url_array[$gw_key] ?? $gw_key);
                 array_push($payment_gateway_public_key_assoc_array, $payment_gateway["public_key"]);
                 array_push($payment_gateway_secret_key_assoc_array, "");
                 array_push($payment_gateway_encrypt_key_assoc_array, $payment_gateway["encrypt_key"]);
+                $payment_gateway_fees_assoc_array[$gw_key] = array(
+                    "markup_percent" => $gw_markup,
+                    "gateway_fee_label" => (string)($gw_rule["label"] ?? ""),
+                    "gateway_fee_rule" => array(
+                        "percent" => (float)($gw_rule["percent"] ?? 0),
+                        "flat" => (float)($gw_rule["flat"] ?? 0),
+                        "waive_flat_below" => (float)($gw_rule["waive_flat_below"] ?? 0),
+                        "cap" => (float)($gw_rule["cap"] ?? 0),
+                        "checkout_surcharge_percent" => (float)($gw_rule["checkout_surcharge_percent"] ?? 0),
+                        "mode" => (string)($gw_rule["mode"] ?? "checkout_fee"),
+                    ),
+                    "fee_mode" => "customer_pays",
+                );
             }
         }
 
@@ -795,6 +812,7 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
             // APK take over the vendor's payment gateway.
             "payment-gateway-secret-key" => array(),
             "payment-gateway-encrypt-key" => array(),
+            "payment-gateway-fees" => $payment_gateway_fees_assoc_array,
             "user-info" => $user_assoc_array,
             "services" => $services_assoc_array
         );
