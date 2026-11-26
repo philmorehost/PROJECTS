@@ -23,9 +23,8 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $apk_download_url = $cachedStyle['apk_download_url'] ?? $apk_download_url;
             $header_image_url = $cachedStyle['header_image'] ?? $header_image_url;
         } else {
-            $template_name_pattern = '%template-3%';
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id AND vst.template_name LIKE ? WHERE sd.vendor_id = ? LIMIT 1");
-            mysqli_stmt_bind_param($stmt_site, "si", $template_name_pattern, $vendor_account_details["id"]);
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
+            mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
             mysqli_stmt_execute($stmt_site);
             $result_site = mysqli_stmt_get_result($stmt_site);
             if ($site_row = mysqli_fetch_assoc($result_site)) {
@@ -68,6 +67,20 @@ if (!empty($header_image_url) && file_exists("uploaded-image/" . $header_image_u
 // Social Share URLs
 $current_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
 $share_text = urlencode("Check out " . $site_title . " for automated billing services!");
+require_once __DIR__ . '/func/bc-theme.php';
+$t3_primary = '#00f5ff';
+if (!empty($site_details['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $site_details['primary_color'])) {
+    $t3_primary = $site_details['primary_color'];
+}
+$t3_dark = bc_theme_palette($t3_primary)['modes']['dark'];
+$t3_rgb = '0, 245, 255';
+$t3_secondary = '#bd00ff';
+if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
+    $t3_rgb = "$r3, $g3, $b3";
+    if (strtolower($t3_primary) !== '#00f5ff') {
+        $t3_secondary = sprintf('#%02x%02x%02x', max(0, (int)($r3 * 0.72)), max(0, (int)($g3 * 0.72)), max(0, (int)($b3 * 0.72)));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -88,10 +101,13 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
     <style>
         /* ── Dark Premium Cyberpunk Design System ───────────────────────── */
         :root {
-            --primary: #00f5ff;
-            --primary-glow: rgba(0, 245, 255, 0.15);
-            --secondary: #bd00ff;
-            --secondary-glow: rgba(189, 0, 255, 0.15);
+            --primary: <?php echo $t3_primary; ?>;
+            --primary-rgb: <?php echo $t3_rgb; ?>;
+            --primary-ink: <?php echo $t3_dark['primary_text']; ?>;
+            --on-primary: <?php echo $t3_dark['on_primary']; ?>;
+            --primary-glow: rgba(<?php echo $t3_rgb; ?>, 0.15);
+            --secondary: <?php echo $t3_secondary; ?>;
+            --secondary-glow: rgba(<?php echo $t3_rgb; ?>, 0.15);
             --dark: #0b0f19;
             --card-bg: #131926;
             --light-text: #f3f4f6;
@@ -132,7 +148,7 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
         }
         #siteHeader.scrolled {
             box-shadow: var(--shadow);
-            border-bottom-color: rgba(0, 245, 255, 0.2);
+            border-bottom-color: rgba(var(--primary-rgb), 0.2);
         }
         .header-inner {
             display: flex;
@@ -162,7 +178,7 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
         
         .nav-cta {
             background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
-            color: var(--dark) !important;
+            color: var(--on-primary) !important;
             padding: 12px 28px;
             border-radius: 50px;
             font-weight: 800 !important;
@@ -219,8 +235,8 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(0, 245, 255, 0.05);
-            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary-ink);
             padding: 8px 18px;
             border-radius: 50px;
             font-size: 0.85rem;
@@ -228,7 +244,7 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 24px;
-            border: 1px solid rgba(0, 245, 255, 0.15);
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
         }
         .hero-badge .dot {
             width: 8px; height: 8px;
@@ -277,7 +293,7 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
         }
         .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: var(--dark);
+            color: var(--on-primary);
             box-shadow: 0 8px 20px var(--primary-glow);
         }
         .btn-primary:hover {
@@ -330,12 +346,12 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            color: var(--primary);
-            background: rgba(0, 245, 255, 0.05);
+            color: var(--primary-ink);
+            background: rgba(var(--primary-rgb), 0.08);
             padding: 6px 16px;
             border-radius: 50px;
             margin-bottom: 16px;
-            border: 1px solid rgba(0, 245, 255, 0.1);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
         }
         .section-header h2 { font-size: clamp(2rem, 3.5vw, 2.8rem); font-weight: 800; color: white; margin-bottom: 16px; letter-spacing: -0.01em; }
         .section-header p { color: var(--gray-text); font-size: 1.08rem; max-width: 600px; margin: 0 auto; }
@@ -361,11 +377,11 @@ $share_text = urlencode("Check out " . $site_title . " for automated billing ser
         .service-icon-wrap {
             width: 70px; height: 70px;
             margin: 0 auto 24px;
-            background: rgba(0, 245, 255, 0.05);
+            background: rgba(var(--primary-rgb), 0.08);
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.85rem; color: var(--primary);
-            border: 1px solid rgba(0, 245, 255, 0.1);
+            font-size: 1.85rem; color: var(--primary-ink);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
         }
         .service-card h3 { font-size: 1.15rem; font-weight: 700; color: white; margin-bottom: 8px; }
         .service-card p { color: var(--gray-text); font-size: 0.88rem; }

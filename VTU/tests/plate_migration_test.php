@@ -306,6 +306,14 @@ foreach ($editions as $edition) {
             continue;
         }
 
+        if ($name === 'VirtualBanks.php') {
+            chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses shell sidebar");
+            chk(strpos($cur, 'bc_pg_bank_account_allowed(') !== false, "$label enforces Service Control on virtual bank accounts");
+            chk(strpos($cur, "isServiceEnabled('virtual_bank_display'") !== false && strpos($cur, "isServiceEnabled('manual_funding'") !== false, "$label enforces virtual_bank_display and manual_funding switches");
+            chk(strpos($cur, 'bc_validate_csrf()') !== false, "$label protects manual deposit notification with CSRF");
+            continue;
+        }
+
         if (in_array($rel, $handDone, true)) {
             chk(strpos($cur, 'bc_app_sidebar(') !== false, "$label uses the shell sidebar");
             continue;

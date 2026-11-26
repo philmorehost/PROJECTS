@@ -766,7 +766,10 @@ if ($connection_server && isset($select_vendor_table["id"])) {
                 $css_style_template_location = $style_template_location;
             }
         }
-        $vendor_primary_color = $tpl_data["primary_color"] ?? "#287bff";
+        $cand_color = (string)($tpl_data["primary_color"] ?? "");
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $cand_color)) {
+            $vendor_primary_color = $cand_color;
+        }
     }
 }
 

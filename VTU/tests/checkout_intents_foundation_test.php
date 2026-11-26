@@ -13,11 +13,13 @@ foreach (['SAAS', 'NON-SAAS'] as $edition) {
     if (preg_match('/curl_|file_get_contents\s*\(\s*[\'"]https?:/i', $src)) {
         throw new RuntimeException('Network call found in ' . $edition);
     }
-    foreach (['create-checkout.php', 'payhub-checkout.php'] as $ep) {
-        $gate = file_get_contents(__DIR__ . '/../DGV7.0-' . $edition . '/web/api/' . $ep);
-        if (strpos($gate, 'PAYMENT_INTENT_REQUIRED') === false) {
-            throw new RuntimeException('Checkout hold missing in ' . $edition . '/' . $ep);
-        }
+    $ccGate = file_get_contents(__DIR__ . '/../DGV7.0-' . $edition . '/web/api/create-checkout.php');
+    $pcGate = file_get_contents(__DIR__ . '/../DGV7.0-' . $edition . '/web/api/payhub-checkout.php');
+    if (strpos($ccGate, 'bc_pg_register_intent(') === false) {
+        throw new RuntimeException('Server intent binding missing in ' . $edition . '/create-checkout.php');
+    }
+    if (strpos($pcGate, 'PAYMENT_INTENT_REQUIRED') === false || strpos($pcGate, 'bc_pg_init_gateway_checkout(') === false) {
+        throw new RuntimeException('Checkout intent guard missing in ' . $edition . '/payhub-checkout.php');
     }
 }
 

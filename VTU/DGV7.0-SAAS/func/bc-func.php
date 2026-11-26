@@ -983,15 +983,32 @@ function getUserVirtualBank($vid = 0, $uname = "")
 	if($vid <= 0 || empty($uname)) return false;
 
     $vid = (int)$vid;
+    if (function_exists('isServiceEnabled') && !isServiceEnabled('virtual_bank_display', $vid)) {
+        return false;
+    }
     $uname = mysqli_real_escape_string($connection_server, $uname);
 
 	$select_banks = mysqli_query($connection_server, "SELECT * FROM sas_user_banks WHERE vendor_id='$vid' AND username='$uname' AND status=1");
 	if (($select_banks == true) && (mysqli_num_rows($select_banks) >= 1)) {
 		$banks_json_array_list = array();
 		while ($get_bank_details = mysqli_fetch_array($select_banks)) {
-            // Check if gateway is enabled (if gateway_name is set)
-            if (!empty($get_bank_details['gateway_name'])) {
-                if (!isServiceEnabled($get_bank_details['gateway_name'], $vid)) continue;
+            $gw = strtolower(trim((string)($get_bank_details['gateway_name'] ?? '')));
+            if ($gw === '') {
+                $bc = strtoupper(trim((string)($get_bank_details['bank_code'] ?? '')));
+                $bn = strtoupper(trim((string)($get_bank_details['bank_name'] ?? '')));
+                $an = strtoupper(trim((string)($get_bank_details['account_name'] ?? '')));
+                $rf = strtoupper(trim((string)($get_bank_details['reference'] ?? '')));
+                if ($bc === 'PAYHUB' || strpos($bn, 'PAYHUB') !== false || strpos($rf, 'PAYHUB') !== false) $gw = 'payhub';
+                elseif ($bc === '110072' || strpos($bn, 'BEEWAVE') !== false || strpos($an, 'BEEWAVE') !== false) $gw = 'beewave';
+                elseif (strpos($bn, 'PAYSTACK') !== false || $bc === 'PAYSTACK') $gw = 'paystack';
+                elseif ($bc === '101' || $bc === '120001' || strpos($bn, 'GLOBUS') !== false || strpos($bn, 'TITAN') !== false || strpos($bn, 'PAYVESSEL') !== false) $gw = 'payvessel';
+                elseif (strpos($bn, 'WEMA') !== false || strpos($bn, 'VFD') !== false || strpos($bn, 'MONNIFY') !== false || strpos($bn, 'STERLING') !== false || strpos($bn, 'MONIEPOINT') !== false) $gw = 'monnify';
+            }
+            if ($gw !== '') {
+                if (function_exists('isServiceEnabled') && !isServiceEnabled($gw, $vid)) continue;
+                $gw_esc = mysqli_real_escape_string($connection_server, $gw);
+                $gw_q = mysqli_query($connection_server, "SELECT status FROM sas_payment_gateways WHERE vendor_id='$vid' AND LOWER(TRIM(gateway_name))='$gw_esc' AND status=1 LIMIT 1");
+                if (!$gw_q || mysqli_num_rows($gw_q) !== 1) continue;
             }
 
 			$banks_json_array = array("reference" => $get_bank_details["reference"], "bank_code" => $get_bank_details["bank_code"], "bank_name" => $get_bank_details["bank_name"], "account_name" => $get_bank_details["account_name"], "account_number" => $get_bank_details["account_number"]);
@@ -6585,8 +6602,8 @@ function setVendorOption($vid, $name, $value) {
 function getSuperAdminOption($name, $default = '') {
     global $connection_server;
     static $admin_options_cache = [];
-    // Security policy and temporary portal host changes must reach existing sessions immediately.
-    $always_fresh = in_array($name, ['temporary_vendor_domain', 'force_user_login_otp'], true);
+    // Security policy, temporary portal host, and brand style cache version changes must reach existing sessions immediately.
+    $always_fresh = in_array($name, ['temporary_vendor_domain', 'force_user_login_otp', 'brand_style_cache_ver'], true);
 
     if (!$always_fresh && isset($admin_options_cache[$name])) return $admin_options_cache[$name];
 

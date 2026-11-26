@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/../../func/bc-secure-session.php';
- bc_secure_session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
+require_once(__DIR__ . "/../../func/bc-payment-gateway-settlement.php");
 
 $input = json_decode(file_get_contents('php://input'), true);
 if (empty($input)) $input = $_REQUEST;
@@ -24,17 +25,31 @@ if (!$get_vendor) {
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+        echo json_encode(["status" => "error", "message" => "Account is not active"]);
+        exit;
+    }
 
     $gateways = [];
     $gateway_names = ["monnify", "paystack", "flutterwave", "beewave", "payhub"];
 
-    foreach($gateway_names as $name) {
-        if (!isServiceEnabled($name)) continue;
+    foreach ($gateway_names as $name) {
+        if (!bc_pg_is_gateway_enabled($connection_server, $vendor_id, $name)) continue;
 
-        $q = mysqli_query($connection_server, "SELECT gateway_name, public_key, encrypt_key as contract_code, percentage FROM sas_payment_gateways WHERE vendor_id='$vendor_id' AND gateway_name='$name' AND status=1");
-        if($r = mysqli_fetch_assoc($q)) {
-            $gateways[] = $r;
-        }
+        $cfg = bc_pg_gateway_config($connection_server, $vendor_id, $name, true);
+        if (!$cfg) continue;
+        $pub = trim((string)($cfg['public_key'] ?? ''));
+        $sec = trim((string)($cfg['secret_key'] ?? ''));
+        if ($name === 'beewave' && $pub === '') continue;
+        if ($name !== 'beewave' && $sec === '') continue;
+        if ($name === 'monnify' && ($pub === '' || trim((string)($cfg['encrypt_key'] ?? '')) === '')) continue;
+
+        $gateways[] = [
+            "gateway_name" => $cfg["gateway_name"],
+            "public_key" => $cfg["public_key"],
+            "contract_code" => $cfg["encrypt_key"],
+            "percentage" => $cfg["percentage"],
+        ];
     }
 
     echo json_encode([
@@ -43,7 +58,9 @@ if (mysqli_num_rows($check_user) == 1) {
         "username" => $user['username'],
         "email" => $user['email'],
         "phone" => $user['phone_number'],
-        "name" => $user['firstname'] . " " . $user['lastname'],
+        "name" => trim($user['firstname'] . " " . $user['lastname']),
+        "virtual_bank_enabled" => isServiceEnabled('virtual_bank_display', $vendor_id),
+        "manual_funding_enabled" => isServiceEnabled('manual_funding', $vendor_id),
         "gateways" => $gateways
     ]);
 } else {

@@ -189,9 +189,9 @@ bc_adm_head("AI Control Center | " . ($get_all_super_admin_site_details["site_ti
 ?>
 <style>
         :root { 
-            --ai-primary: #6366f1; --ai-secondary: #a855f7; 
+            --ai-primary: var(--brand); --ai-secondary: var(--brand-dark); 
             --ai-dark: #0f172a; --ai-glass: rgba(255, 255, 255, 0.9);
-            --ai-accent: <?php echo $vendor_primary_color ?? '#6366f1'; ?>;
+            --ai-accent: var(--brand);
         }
         body { background: #f8fafc; font-family: 'Inter', sans-serif; }
         .ai-header-banner {

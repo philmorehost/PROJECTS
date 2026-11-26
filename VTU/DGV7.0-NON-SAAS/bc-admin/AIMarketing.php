@@ -200,7 +200,7 @@ bc_adm_head(($title), array("area" => "admin"));
 .pk-app__wrap .prompt-chip{border-radius:999px}
 </style>
 <style>
-        .studio-header { background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 2rem; padding: 3rem; color: white; margin-bottom: 2rem; position: relative; overflow: hidden; }
+        .studio-header { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); border-radius: 2rem; padding: 3rem; color: var(--brand-fg); margin-bottom: 2rem; position: relative; overflow: hidden; }
         .studio-header::after { content: '✨'; position: absolute; right: 5%; top: 50%; transform: translateY(-50%); font-size: 5rem; opacity: 0.2; }
         .fintech-card { border: none; border-radius: 2rem; box-shadow: 0 10px 40px rgba(0,0,0,0.05); background: #fff; transition: 0.3s; }
         .fintech-card:hover { transform: translateY(-5px); }
@@ -208,9 +208,9 @@ bc_adm_head(($title), array("area" => "admin"));
         .flyer-preview { width: 100%; max-width: 350px; aspect-ratio: 9/16; border-radius: 2.5rem; background: <?php echo $bg_templates[$current_bg]['css']; ?>; padding: 2rem; display: flex; flex-direction: column; justify-content: center; text-align: center; color: white; position: relative; border: 8px solid #1e293b; <?php echo $bg_templates[$current_bg]['blur'] ?? ''; ?> }
         .flyer-overlay { background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); border-radius: 1.5rem; padding: 1.5rem; height: 80%; display: flex; flex-direction: column; justify-content: space-between; }
         .nav-pills-studio .nav-link { border-radius: 2rem; padding: 0.8rem 2rem; font-weight: 700; color: #64748b; }
-        .nav-pills-studio .nav-link.active { background: #6366f1 !important; color: white !important; }
+        .nav-pills-studio .nav-link.active { background: var(--brand) !important; color: var(--brand-fg) !important; }
         .prompt-chip { border: 1.5px solid #e2e8f0; background: #fff; border-radius: 2rem; padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 600; color: #475569; cursor: pointer; transition: 0.2s; }
-        .prompt-chip:hover { border-color: #6366f1; color: #6366f1; background: #f5f3ff; }
+        .prompt-chip:hover { border-color: var(--brand-ink); color: var(--brand-ink); background: rgba(var(--bs-primary-rgb), .08); }
         .refine-btn { border-radius: 2rem; font-size: 0.78rem; font-weight: 700; }
         .campaign-progress-bar { height: 10px; border-radius: 1rem; }
         .campaign-row { font-size: 0.85rem; }
@@ -257,7 +257,7 @@ bc_adm_head(($title), array("area" => "admin"));
                         <div class="col-4 text-center">
                             <form method="post">
                                 <input type="hidden" name="bg_name" value="<?php echo $key; ?>">
-                                <div onclick="this.parentElement.submit()" class="rounded-4 mb-1" style="height:50px; background:<?php echo $tpl['css']; ?>; cursor:pointer; border:2px solid <?php echo $key==$current_bg?'#6366f1':'transparent'; ?>"></div>
+                                <div onclick="this.parentElement.submit()" class="rounded-4 mb-1" style="height:50px; background:<?php echo $tpl['css']; ?>; cursor:pointer; border:2px solid <?php echo $key==$current_bg?'var(--brand)':'transparent'; ?>"></div>
                                 <small class="fw-bold" style="font-size:10px;"><?php echo $tpl['name']; ?></small>
                                 <input type="hidden" name="set-bg" value="1">
                             </form>

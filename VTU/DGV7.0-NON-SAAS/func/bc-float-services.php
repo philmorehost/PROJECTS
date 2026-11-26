@@ -24,7 +24,15 @@ function bc_float_services_render() {
         }
     }
     if(!$items)return;
-    echo '<style>.bc-float-services{position:fixed;right:16px;bottom:90px;z-index:900;max-width:min(320px,85vw);font:14px system-ui}.bc-float-services summary{cursor:pointer;background:#0f766e;color:white;padding:12px 18px;border-radius:24px;box-shadow:0 4px 18px #0003}.bc-float-services nav{display:grid;gap:8px;background:white;padding:12px;border:1px solid #ddd;border-radius:14px;max-height:50vh;overflow:auto}.bc-float-services a{display:flex;gap:10px;padding:8px;color:#123;text-decoration:none}.bc-float-services a:focus-visible{outline:3px solid #0f766e}</style><details class="bc-float-services"><summary>Quick services</summary><nav aria-label="Floating service shortcuts">';
+    $brand = function_exists('bc_app_colour') ? bc_app_colour() : ((!empty($GLOBALS['vendor_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['vendor_primary_color'])) ? (string)$GLOBALS['vendor_primary_color'] : '#0f766e');
+    $fg = function_exists('bc_theme_on') ? bc_theme_on($brand) : '#ffffff';
+    $ink = $brand;
+    if (function_exists('bc_theme_palette')) {
+        $pal = bc_theme_palette($brand);
+        $fg = $pal['modes']['light']['on_primary'] ?? $fg;
+        $ink = $pal['modes']['light']['primary_text'] ?? $ink;
+    }
+    echo '<style>.bc-float-services{position:fixed;right:16px;bottom:90px;z-index:900;max-width:min(320px,85vw);font:14px system-ui}.bc-float-services summary{cursor:pointer;background:var(--brand,' . $brand . ');color:var(--brand-fg,' . $fg . ');padding:12px 18px;border-radius:24px;box-shadow:0 4px 18px #0003}.bc-float-services nav{display:grid;gap:8px;background:white;padding:12px;border:1px solid #ddd;border-radius:14px;max-height:50vh;overflow:auto}.bc-float-services a{display:flex;gap:10px;padding:8px;color:#123;text-decoration:none}.bc-float-services a:focus-visible{outline:3px solid var(--brand-ink,' . $ink . ')}</style><details class="bc-float-services"><summary>Quick services</summary><nav aria-label="Floating service shortcuts">';
     foreach($items as $item) {
         echo '<a href="'.htmlspecialchars(bc_app_url($item['href']),ENT_QUOTES,'UTF-8').'">'.bc_app_icon($item['icon']).'<span>'.htmlspecialchars($item['label'],ENT_QUOTES,'UTF-8').'</span></a>';
     }

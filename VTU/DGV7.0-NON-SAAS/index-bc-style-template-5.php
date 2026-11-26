@@ -8,6 +8,7 @@ $apk_download_url = '';
 $meta_keywords    = '';
 $custom_header    = '';
 $custom_footer    = '';
+$template_primary = '';
 
 // Check if vendor details are available from index.php
 if (isset($vendor_account_details) && is_array($vendor_account_details)) {
@@ -24,8 +25,9 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $meta_keywords    = $cachedStyle['meta_keywords'] ?? '';
             $custom_header    = $cachedStyle['custom_header_code'] ?? '';
             $custom_footer    = $cachedStyle['custom_footer_code'] ?? '';
+            $template_primary = $cachedStyle['primary_color'] ?? '';
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? LIMIT 1");
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
             if ($stmt_site) {
                 mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
                 mysqli_stmt_execute($stmt_site);
@@ -37,6 +39,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                     $meta_keywords    = $site_row['meta_keywords'] ?: '';
                     $custom_header    = $site_row['custom_head_code'] ?: '';
                     $custom_footer    = $site_row['custom_footer_code'] ?: '';
+                    $template_primary = $site_row['primary_color'] ?? '';
 
                     if (function_exists('bc_cache_set')) {
                         bc_cache_set($cacheKey, [
@@ -46,6 +49,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                             'meta_keywords' => $meta_keywords,
                             'custom_header_code' => $custom_header,
                             'custom_footer_code' => $custom_footer,
+                            'primary_color' => $template_primary,
                         ]);
                     }
                 }
@@ -88,6 +92,22 @@ $share_text = urlencode("Check out " . $site_title . " for Digital Payments Made
 $facebook_share = "https://www.facebook.com/sharer/sharer.php?u=" . urlencode($current_url);
 $twitter_share = "https://twitter.com/intent/tweet?url=" . urlencode($current_url) . "&text=" . $share_text;
 $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlencode($current_url);
+require_once __DIR__ . '/func/bc-theme.php';
+$t5_primary = '#4f46e5';
+if (!empty($template_primary) && preg_match('/^#[0-9a-fA-F]{6}$/', $template_primary)) {
+    $t5_primary = $template_primary;
+}
+$t5_light = bc_theme_palette($t5_primary)['modes']['light'];
+$t5_rgb = '79, 70, 229';
+$t5_secondary = '#d946ef';
+$t5_dark = '#312e81';
+if (sscanf($t5_primary, '#%02x%02x%02x', $r5, $g5, $b5) === 3) {
+    $t5_rgb = "$r5, $g5, $b5";
+    if (strtolower($t5_primary) !== '#4f46e5') {
+        $t5_dark = sprintf('#%02x%02x%02x', max(0, (int)($r5 * 0.75)), max(0, (int)($g5 * 0.75)), max(0, (int)($b5 * 0.75)));
+        $t5_secondary = $t5_dark;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -110,6 +130,14 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
     
     <style>
         /* ── Vibrant Gradient Flow Style ── */
+        :root {
+            --primary: <?php echo $t5_primary; ?>;
+            --primary-dark: <?php echo $t5_dark; ?>;
+            --secondary: <?php echo $t5_secondary; ?>;
+            --primary-rgb: <?php echo $t5_rgb; ?>;
+            --primary-ink: <?php echo $t5_light['primary_text']; ?>;
+            --on-primary: <?php echo $t5_light['on_primary']; ?>;
+        }
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
@@ -126,7 +154,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             z-index: 1000;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
         }
         .container {
             max-width: 1200px;
@@ -141,23 +169,23 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .logo-img { height: 38px; }
         .nav-links { display: flex; gap: 32px; list-style: none; }
-        .nav-links a { text-decoration: none; color: #4338ca; font-weight: 600; font-size: 15px; transition: all 0.2s; }
-        .nav-links a:hover { color: #818cf8; }
+        .nav-links a { text-decoration: none; color: var(--primary-ink); font-weight: 600; font-size: 15px; transition: all 0.2s; }
+        .nav-links a:hover { color: var(--primary); }
         .nav-cta {
-            background: linear-gradient(135deg, #4f46e5 0%, #312e81 100%);
-            color: white !important;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--on-primary) !important;
             padding: 10px 26px;
             border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.25);
+            box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.25);
             transition: all 0.2s;
         }
-        .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4); }
+        .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.4); }
 
         /* Hero */
         .hero {
             padding: 140px 0 100px;
             position: relative;
-            background: radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.15) 0%, rgba(255, 255, 255, 0) 50%);
+            background: radial-gradient(circle at 80% 20%, rgba(var(--primary-rgb), 0.15) 0%, rgba(255, 255, 255, 0) 50%);
         }
         .hero-grid {
             display: grid;
@@ -170,7 +198,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             font-weight: 800;
             line-height: 1.1;
             margin-bottom: 24px;
-            background: linear-gradient(135deg, #312e81 0%, #4f46e5 50%, #d946ef 100%);
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--secondary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             letter-spacing: -1.5px;
@@ -189,26 +217,26 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             transition: all 0.3s;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #4f46e5 0%, #d946ef 100%);
-            color: white;
-            box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: var(--on-primary);
+            box-shadow: 0 4px 20px rgba(var(--primary-rgb), 0.3);
         }
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 26px rgba(79, 70, 229, 0.5);
+            box-shadow: 0 8px 26px rgba(var(--primary-rgb), 0.5);
         }
         .btn-secondary {
-            background: #f5f3ff;
-            color: #4f46e5;
-            border: 1px solid rgba(79, 70, 229, 0.15);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary-ink);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
         }
-        .btn-secondary:hover { background: #ede9fe; transform: translateY(-2px); }
+        .btn-secondary:hover { background: rgba(var(--primary-rgb), 0.14); transform: translateY(-2px); }
 
         .hero-img-container {
             border-radius: 30px;
             overflow: hidden;
-            box-shadow: 0 25px 60px rgba(79, 70, 229, 0.15);
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(217, 70, 239, 0.1) 100%);
+            box-shadow: 0 25px 60px rgba(var(--primary-rgb), 0.15);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1) 0%, rgba(var(--primary-rgb), 0.05) 100%);
             padding: 10px;
         }
         .hero-img-container img { width: 100%; display: block; border-radius: 20px; }
@@ -224,22 +252,22 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .feature-card {
             background: white;
-            border: 1px solid rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(var(--primary-rgb), 0.08);
             border-radius: 24px;
             padding: 40px 30px;
             transition: all 0.3s;
-            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.02);
+            box-shadow: 0 10px 30px rgba(var(--primary-rgb), 0.02);
         }
         .feature-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.08);
-            border-color: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 20px 40px rgba(var(--primary-rgb), 0.08);
+            border-color: rgba(var(--primary-rgb), 0.2);
         }
         .feature-icon {
             width: 54px; height: 54px;
             border-radius: 50%;
-            background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(217, 70, 239, 0.1) 100%);
-            color: #4f46e5;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1) 0%, rgba(var(--primary-rgb), 0.18) 100%);
+            color: var(--primary-ink);
             display: inline-flex;
             align-items: center;
             justify-content: center;

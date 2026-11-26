@@ -8,6 +8,7 @@ $apk_download_url = '';
 $meta_keywords    = '';
 $custom_header    = '';
 $custom_footer    = '';
+$template_primary = '';
 
 // Check if vendor details are available from index.php
 if (isset($vendor_account_details) && is_array($vendor_account_details)) {
@@ -24,8 +25,9 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $meta_keywords    = $cachedStyle['meta_keywords'] ?? '';
             $custom_header    = $cachedStyle['custom_header_code'] ?? '';
             $custom_footer    = $cachedStyle['custom_footer_code'] ?? '';
+            $template_primary = $cachedStyle['primary_color'] ?? '';
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? LIMIT 1");
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
             if ($stmt_site) {
                 mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
                 mysqli_stmt_execute($stmt_site);
@@ -37,6 +39,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                     $meta_keywords    = $site_row['meta_keywords'] ?: '';
                     $custom_header    = $site_row['custom_head_code'] ?: '';
                     $custom_footer    = $site_row['custom_footer_code'] ?: '';
+                    $template_primary = $site_row['primary_color'] ?? '';
 
                     if (function_exists('bc_cache_set')) {
                         bc_cache_set($cacheKey, [
@@ -46,6 +49,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                             'meta_keywords' => $meta_keywords,
                             'custom_header_code' => $custom_header,
                             'custom_footer_code' => $custom_footer,
+                            'primary_color' => $template_primary,
                         ]);
                     }
                 }
@@ -88,6 +92,16 @@ $share_text = urlencode("Check out " . $site_title . " for Digital Payments Made
 $facebook_share = "https://www.facebook.com/sharer/sharer.php?u=" . urlencode($current_url);
 $twitter_share = "https://twitter.com/intent/tweet?url=" . urlencode($current_url) . "&text=" . $share_text;
 $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlencode($current_url);
+require_once __DIR__ . '/func/bc-theme.php';
+$t4_primary = '#0f172a';
+if (!empty($template_primary) && preg_match('/^#[0-9a-fA-F]{6}$/', $template_primary)) {
+    $t4_primary = $template_primary;
+}
+$t4_light = bc_theme_palette($t4_primary)['modes']['light'];
+$t4_dark = '#1e293b';
+if (sscanf($t4_primary, '#%02x%02x%02x', $r4, $g4, $b4) === 3 && strtolower($t4_primary) !== '#0f172a') {
+    $t4_dark = sprintf('#%02x%02x%02x', max(0, (int)($r4 * 0.80)), max(0, (int)($g4 * 0.80)), max(0, (int)($b4 * 0.80)));
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -110,6 +124,12 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
     
     <style>
         /* ── Minimalist SaaS Style ── */
+        :root {
+            --primary: <?php echo $t4_primary; ?>;
+            --primary-dark: <?php echo $t4_dark; ?>;
+            --primary-ink: <?php echo $t4_light['primary_text']; ?>;
+            --on-primary: <?php echo $t4_light['on_primary']; ?>;
+        }
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
@@ -141,16 +161,16 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .logo-img { height: 32px; }
         .nav-links { display: flex; gap: 40px; list-style: none; }
         .nav-links a { text-decoration: none; color: #475569; font-weight: 500; font-size: 15px; transition: color 0.2s; }
-        .nav-links a:hover { color: #000000; }
+        .nav-links a:hover { color: var(--primary-ink); }
         .nav-cta {
-            background: #0f172a;
-            color: #ffffff !important;
+            background: var(--primary);
+            color: var(--on-primary) !important;
             padding: 8px 20px;
             border-radius: 6px;
             font-weight: 600;
             transition: background 0.2s;
         }
-        .nav-cta:hover { background: #1e293b; }
+        .nav-cta:hover { background: var(--primary-dark); }
 
         /* Hero */
         .hero { padding: 100px 0 70px; background: #fafafa; border-bottom: 1px solid #f1f5f9; }
@@ -175,8 +195,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             gap: 8px;
             transition: all 0.2s;
         }
-        .btn-primary { background: #0f172a; color: #ffffff; }
-        .btn-primary:hover { background: #1e293b; transform: translateY(-1px); }
+        .btn-primary { background: var(--primary); color: var(--on-primary); }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
         .btn-secondary { background: #ffffff; color: #475569; border: 1px solid #e2e8f0; }
         .btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); }
 
@@ -204,10 +224,10 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             padding: 30px;
             transition: border-color 0.2s;
         }
-        .feature-card:hover { border-color: #cbd5e1; }
+        .feature-card:hover { border-color: var(--primary); }
         .feature-icon {
             font-size: 24px;
-            color: #0f172a;
+            color: var(--primary-ink);
             margin-bottom: 16px;
         }
         .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: #0f172a; }

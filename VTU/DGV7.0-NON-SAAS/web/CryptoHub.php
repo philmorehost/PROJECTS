@@ -621,7 +621,7 @@ bc_app_head("Crypto | " . ($get_all_site_details["site_title"]));
                         showCancelButton: showCancel,
                         confirmButtonText: confirmBtn,
                         cancelButtonText: 'Stay Here',
-                        confirmButtonColor: '#287bff'
+                        confirmButtonColor: <?php echo json_encode(bc_app_colour()); ?>
                     }).then((result) => {
                         if (result.isConfirmed && to === 'NGN') {
                             window.location.href = 'SendFund.php';

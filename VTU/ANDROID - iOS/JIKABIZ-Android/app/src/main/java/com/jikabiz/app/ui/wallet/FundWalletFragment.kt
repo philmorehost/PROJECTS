@@ -91,10 +91,14 @@ class VirtualBanksTabFragment : Fragment() {
                 val resp = api.getVirtualBanks(body)
                 @Suppress("UNCHECKED_CAST")
                 val banks = resp.body()?.get("data") as? List<Map<String, Any>>
+                val serverMsg = resp.body()?.get("message") as? String
                 activity?.runOnUiThread {
                     progress.visibility = View.GONE
                     if (banks.isNullOrEmpty()) {
                         tvEmpty.visibility = View.VISIBLE
+                        if (!serverMsg.isNullOrBlank()) {
+                            tvEmpty.text = serverMsg
+                        }
                     } else {
                         banks.forEach { bank ->
                             val card = layoutInflater.inflate(R.layout.item_bank_card, container, false)
@@ -133,6 +137,7 @@ class CheckoutTabFragment : Fragment() {
 
     private var fundingConfig: Map<String, Any>? = null
     private var activeGateway = ""
+    private var activeReference = ""
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         inflater.inflate(R.layout.tab_checkout, container, false)
@@ -155,9 +160,17 @@ class CheckoutTabFragment : Fragment() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
-                if (url.contains("Dashboard") || url.contains("Fund") || url.contains("success")) {
-                    showForm()
-                    snack("Payment completed — wallet will be updated shortly.")
+                if (url.contains("payhub-success.php")) {
+                    return false
+                }
+                if (url.contains("Dashboard") || url.contains("Fund")) {
+                    val ref = activeReference
+                    if (ref.isNotEmpty() && activeGateway.isNotEmpty()) {
+                        CheckoutBridge().onSuccess(ref)
+                    } else {
+                        showForm()
+                        snack("Payment completed — wallet will be updated shortly.")
+                    }
                     return true
                 }
                 return false
@@ -233,18 +246,42 @@ class CheckoutTabFragment : Fragment() {
         val phone = config["phone"] as? String ?: ""
         val reference = "APP_${System.currentTimeMillis()}_${(100..999).random()}"
 
-        // Log checkout on server then open gateway
+        // Register server-bound checkout intent before opening gateway
         lifecycleScope.launch {
             try {
                 val prefs = PreferenceManager(requireContext())
-                RetrofitClient.getService().createCheckout(mapOf(
+                val resp = RetrofitClient.getService().createCheckout(mapOf(
                     "api_key" to prefs.getApiKey(),
                     "reference" to reference,
-                    "amount" to amount
+                    "amount" to amount,
+                    "gateway" to gatewayName
                 ))
-            } catch (_: Exception) {}
-            activeGateway = gatewayName
-            activity?.runOnUiThread { openGatewayWebView(gatewayName, publicKey, contractCode, email, userName, phone, reference, amount) }
+                val body = resp.body()
+                val status = body?.get("status") as? String ?: ""
+                if (!resp.isSuccessful || status.equals("error", ignoreCase = true)) {
+                    val errMsg = body?.get("message") as? String ?: "Unable to initialize $gatewayName checkout."
+                    activity?.runOnUiThread { snack(errMsg) }
+                    return@launch
+                }
+                val serverRef = (body?.get("payhub_reference") as? String)?.takeIf { it.isNotBlank() }
+                    ?: (body?.get("reference") as? String)?.takeIf { it.isNotBlank() }
+                    ?: reference
+                val authUrl = body?.get("authorization_url") as? String ?: ""
+                activeGateway = gatewayName
+                activeReference = serverRef
+                activity?.runOnUiThread {
+                    if (authUrl.isNotBlank()) {
+                        scrollForm.visibility = View.GONE
+                        webView.visibility = View.VISIBLE
+                        btnCloseWebView.visibility = View.VISIBLE
+                        webView.loadUrl(authUrl)
+                    } else {
+                        openGatewayWebView(gatewayName, publicKey, contractCode, email, userName, phone, serverRef, amount)
+                    }
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread { snack("Unable to initialize checkout: ${e.message ?: "network error"}") }
+            }
         }
     }
 
@@ -323,7 +360,8 @@ class CheckoutTabFragment : Fragment() {
                     name: '$userName',
                     email: '$email',
                     phone: '$phone',
-                    amount: $amount
+                    amount: $amount,
+                    reference: '$reference'
                 });
             """.trimIndent()
             "payhub" -> """
@@ -435,11 +473,17 @@ class ManualDepositTabFragment : Fragment() {
                 val resp = api.getPlatformBanks(mapOf("api_key" to prefs.getApiKey()))
                 @Suppress("UNCHECKED_CAST")
                 val data = resp.body()?.get("data") as? Map<String, Any>
+                val isDisabled = (resp.body()?.get("disabled") as? Boolean) == true
+                val disabledMsg = resp.body()?.get("message") as? String
                 @Suppress("UNCHECKED_CAST")
                 val banks = data?.get("banks") as? List<Map<String, Any>>
                 activity?.runOnUiThread {
                     progress.visibility = View.GONE
-                    if (banks.isNullOrEmpty()) {
+                    if (isDisabled) {
+                        tvNone.visibility = View.VISIBLE
+                        tvNone.text = disabledMsg ?: "Manual bank funding is currently disabled."
+                        btnSubmit.isEnabled = false
+                    } else if (banks.isNullOrEmpty()) {
                         tvNone.visibility = View.VISIBLE
                     } else {
                         banks.forEach { bank ->

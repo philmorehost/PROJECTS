@@ -97,7 +97,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 								} else {
 									// Revert claim back to pending if wallet mutation did not succeed.
 									mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='2' WHERE reference='".$reference."' AND status='1' LIMIT 1");
-									$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
+										$json_response_array = array("desc" => "Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify the vendor account is active and wallet tables are ready.");
 									$json_response_encode = json_encode($json_response_array,true);
 								}
 							}

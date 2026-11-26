@@ -59,9 +59,11 @@ if ($vendor_account_details) {
 // Respect the saved design rather than collapsing every selection into one homepage.
 require_once __DIR__.'/func/bc-public-template.php';
 $public_saved_template=null;
+$public_saved_primary_color=null;
 if(!empty($vendor_account_details['id'])){
-    $public_style=bc_q_row('SELECT template_name FROM sas_vendor_style_templates WHERE vendor_id=? LIMIT 1',[(int)$vendor_account_details['id']]);
+    $public_style=bc_q_row('SELECT template_name, primary_color FROM sas_vendor_style_templates WHERE vendor_id=? LIMIT 1',[(int)$vendor_account_details['id']]);
     $public_saved_template=$public_style['template_name']??null;
+    $public_saved_primary_color=$public_style['primary_color']??null;
 }
 $css_style_template_location=bc_public_template_file($public_saved_template,defined('BC_PUBLIC_FREELANCERS')&&BC_PUBLIC_FREELANCERS);
 include __DIR__.'/'.$css_style_template_location;
@@ -69,6 +71,10 @@ include __DIR__.'/'.$css_style_template_location;
 // Soft "Prompt" mode: show a dismissible interstitial offering the app, remembered via
 // cookie for 30 days. Only for anonymous visitors when the vendor selected "prompt".
 if (!defined('BC_PUBLIC_FREELANCERS') && $app_redirect['mode'] === 'prompt' && !empty($app_redirect['link']) && !isset($_SESSION['admin_session']) && !isset($_SESSION['user_session'])) {
+    require_once __DIR__ . '/func/bc-theme.php';
+    $app_prompt_theme = bc_theme_palette($public_saved_primary_color)['modes']['light'];
+    $app_prompt_bg = htmlspecialchars($app_prompt_theme['primary'], ENT_QUOTES);
+    $app_prompt_fg = htmlspecialchars($app_prompt_theme['on_primary'], ENT_QUOTES);
     $app_link_attr = htmlspecialchars($app_redirect['link'], ENT_QUOTES);
     echo '<!-- App Prompt (soft redirect mode) -->
 <div id="appPromptOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.75);z-index:2147483647;align-items:center;justify-content:center;padding:16px;">
@@ -76,7 +82,7 @@ if (!defined('BC_PUBLIC_FREELANCERS') && $app_redirect['mode'] === 'prompt' && !
         <div style="font-size:44px;line-height:1;">&#128241;</div>
         <h3 style="margin:14px 0 6px;color:#0f172a;font-size:18px;font-weight:700;">Get the App for the Best Experience</h3>
         <p style="margin:0 0 22px;color:#64748b;font-size:14px;line-height:1.55;">Use our mobile app for faster transactions, instant alerts and exclusive offers &mdash; or continue on the website.</p>
-        <a href="' . $app_link_attr . '" style="display:block;background:#287bff;color:#ffffff !important;text-decoration:none;padding:13px;border-radius:10px;font-weight:700;margin-bottom:10px;">Continue to App</a>
+        <a href="' . $app_link_attr . '" style="display:block;background:' . $app_prompt_bg . ';color:' . $app_prompt_fg . ' !important;text-decoration:none;padding:13px;border-radius:10px;font-weight:700;margin-bottom:10px;">Continue to App</a>
         <button type="button" id="appPromptStay" style="display:block;width:100%;background:transparent;border:1px solid #cbd5e1;color:#334155;padding:12px;border-radius:10px;font-weight:600;cursor:pointer;">Stay on Website</button>
     </div>
 </div>

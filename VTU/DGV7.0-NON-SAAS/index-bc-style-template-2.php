@@ -9,6 +9,7 @@ $apk_download_url = '';
 $meta_keywords    = '';
 $custom_header    = '';
 $custom_footer    = '';
+$template_primary = '';
 
 // Check if vendor details are available from index.php
 if (isset($vendor_account_details) && is_array($vendor_account_details)) {
@@ -25,8 +26,9 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $meta_keywords    = $cachedStyle['meta_keywords'] ?? '';
             $custom_header    = $cachedStyle['custom_header_code'] ?? '';
             $custom_footer    = $cachedStyle['custom_footer_code'] ?? '';
+            $template_primary = $cachedStyle['primary_color'] ?? '';
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? LIMIT 1");
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
             if ($stmt_site) {
                 mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
                 mysqli_stmt_execute($stmt_site);
@@ -38,6 +40,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                     $meta_keywords    = $site_row['meta_keywords'] ?: '';
                     $custom_header    = $site_row['custom_head_code'] ?: '';
                     $custom_footer    = $site_row['custom_footer_code'] ?: '';
+                    $template_primary = $site_row['primary_color'] ?? '';
 
                     if (function_exists('bc_cache_set')) {
                         bc_cache_set($cacheKey, [
@@ -47,6 +50,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                             'meta_keywords' => $meta_keywords,
                             'custom_header_code' => $custom_header,
                             'custom_footer_code' => $custom_footer,
+                            'primary_color' => $template_primary,
                         ]);
                     }
                 }
@@ -89,6 +93,20 @@ $share_text = urlencode("Check out " . $site_title . " for Digital Payments Made
 $facebook_share = "https://www.facebook.com/sharer/sharer.php?u=" . urlencode($current_url);
 $twitter_share = "https://twitter.com/intent/tweet?url=" . urlencode($current_url) . "&text=" . $share_text;
 $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlencode($current_url);
+require_once __DIR__ . '/func/bc-theme.php';
+$t2_primary = '#2563eb';
+if (!empty($template_primary) && preg_match('/^#[0-9a-fA-F]{6}$/', $template_primary)) {
+    $t2_primary = $template_primary;
+}
+$t2_light = bc_theme_palette($t2_primary)['modes']['light'];
+$t2_rgb = '37, 99, 235';
+$t2_dark = '#1d4ed8';
+if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
+    $t2_rgb = "$r2, $g2, $b2";
+    if (strtolower($t2_primary) !== '#2563eb') {
+        $t2_dark = sprintf('#%02x%02x%02x', max(0, (int)($r2 * 0.78)), max(0, (int)($g2 * 0.78)), max(0, (int)($b2 * 0.78)));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -111,6 +129,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
     
     <style>
         /* ── Glassmorphism UI Style ── */
+        :root {
+            --primary: <?php echo $t2_primary; ?>;
+            --primary-dark: <?php echo $t2_dark; ?>;
+            --primary-rgb: <?php echo $t2_rgb; ?>;
+            --primary-ink: <?php echo $t2_light['primary_text']; ?>;
+            --on-primary: <?php echo $t2_light['on_primary']; ?>;
+        }
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
@@ -135,7 +160,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             filter: blur(100px);
             opacity: 0.15;
         }
-        .shape-1 { top: -10%; left: 5%; width: 500px; height: 500px; background: #3b82f6; }
+        .shape-1 { top: -10%; left: 5%; width: 500px; height: 500px; background: var(--primary); }
         .shape-2 { top: 20%; right: -5%; width: 600px; height: 600px; background: #a855f7; }
         .shape-3 { top: 50%; left: -10%; width: 400px; height: 400px; background: #06b6d4; }
 
@@ -163,16 +188,16 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .logo-img { height: 40px; }
         .nav-links { display: flex; gap: 32px; list-style: none; }
         .nav-links a { text-decoration: none; color: #1e293b; font-weight: 500; transition: color 0.3s; }
-        .nav-links a:hover { color: #2563eb; }
+        .nav-links a:hover { color: var(--primary-ink); }
         .nav-cta {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            color: white !important;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--on-primary) !important;
             padding: 10px 24px;
             border-radius: 50px;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+            box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.2);
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        .nav-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35); }
+        .nav-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.35); }
 
         /* Glass Hero Card */
         .hero { padding: 120px 0 80px; position: relative; }
@@ -206,13 +231,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             transition: all 0.3s;
         }
         .btn-primary {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            color: white;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--on-primary);
+            box-shadow: 0 4px 14px rgba(var(--primary-rgb), 0.3);
         }
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45);
+            box-shadow: 0 8px 24px rgba(var(--primary-rgb), 0.45);
         }
         .btn-secondary {
             background: rgba(255, 255, 255, 0.6);
@@ -257,8 +282,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .feature-icon {
             width: 60px; height: 60px;
             border-radius: 16px;
-            background: rgba(37, 99, 235, 0.1);
-            color: #2563eb;
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary-ink);
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -281,13 +306,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             gap: 40px;
             margin-bottom: 40px;
         }
-        .footer-logo { font-size: 24px; font-weight: 800; color: #2563eb; margin-bottom: 16px; }
+        .footer-logo { font-size: 24px; font-weight: 800; color: var(--primary-ink); margin-bottom: 16px; }
         .footer-desc { color: #475569; font-size: 14px; }
         .footer-col h4 { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #0f172a; }
         .footer-col ul { list-style: none; }
         .footer-col ul li { margin-bottom: 12px; }
         .footer-col ul li a { text-decoration: none; color: #475569; font-size: 14px; transition: color 0.3s; }
-        .footer-col ul li a:hover { color: #2563eb; }
+        .footer-col ul li a:hover { color: var(--primary-ink); }
 
         .footer-bottom {
             border-top: 1px solid rgba(0,0,0,0.05);

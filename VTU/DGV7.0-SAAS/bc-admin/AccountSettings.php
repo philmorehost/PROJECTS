@@ -274,8 +274,17 @@ if (isset($_POST["update-theme"])) {
         // included) so signed-in customers pick up the new colour on their
         // next page load instead of keeping the session-cached old one.
         if (!empty($theme_saved)) {
+            $vid_cache = (int)$get_logged_admin_details["id"];
+            $check_sd_color = mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_site_details` LIKE 'primary_color'");
+            if ($check_sd_color && mysqli_num_rows($check_sd_color) > 0) {
+                mysqli_query($connection_server, "UPDATE sas_site_details SET primary_color='$primary_color' WHERE vendor_id='$vid_cache'");
+            }
             if (function_exists("setSuperAdminOption")) { setSuperAdminOption("brand_style_cache_ver", time()); }
-            unset($_SESSION["vendor_style_template_cache"]);
+            unset($_SESSION["vendor_style_template_cache"], $_SESSION["site_details_cache"], $_SESSION["admin_site_details_cache"]);
+            if (function_exists("bc_cache_directory")) {
+                $style_cache_file = bc_cache_directory() . '/vendor_site_style_' . md5((string)$vid_cache) . '.json';
+                if (is_file($style_cache_file)) { @unlink($style_cache_file); }
+            }
         }
     } else {
         if (empty($template)) {
@@ -1552,7 +1561,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                     <div class="col-md-4">
                                         <label class="form-label small fw-bold text-muted">PRIMARY THEME COLOR</label>
                                         <input type="color" name="primary-color" value="<?php echo $current_theme['primary_color'] ?? '#287bff'; ?>" class="form-control form-control-color w-100 rounded-3 mb-1" title="Choose your primary color">
-                                        <div class="form-text small text-muted">Controls Meridian-1 Personal glassmorphism &amp; mobile apps.</div>
+                                        <div class="form-text small text-muted">Controls your website template, admin panel, user portal, auth pages &amp; mobile apps.</div>
                                     </div>
                                 </div>
                                 <button name="update-theme" class="btn btn-primary px-5 rounded-pill fw-bold">Save Custom Branding</button>

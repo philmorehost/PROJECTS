@@ -8,7 +8,7 @@ function eb_chk($cond, $label) {
     global $checks;
     $checks++;
     if (!$cond) {
-        fwrite(STDERR, "FAIL: $label\n");
+        echo "FAIL: $label\n";
         exit(1);
     }
 }
@@ -47,8 +47,8 @@ foreach (['SAAS', 'NON-SAAS'] as $ed) {
 
     $cc = file_get_contents("$base/web/api/create-checkout.php");
     $pc = file_get_contents("$base/web/api/payhub-checkout.php");
-    eb_chk(strpos($cc, "getenv('BC_CHECKOUT_EXECUTION_ENABLED') !== '1'") !== false, "$ed create-checkout fails closed unless BC_CHECKOUT_EXECUTION_ENABLED=1");
-    eb_chk(strpos($pc, "getenv('BC_CHECKOUT_EXECUTION_ENABLED') !== '1'") !== false, "$ed payhub-checkout fails closed unless BC_CHECKOUT_EXECUTION_ENABLED=1");
+    eb_chk(strpos($cc, 'bc-payment-gateway-settlement.php') !== false && strpos($cc, 'bc_pg_register_intent(') !== false, "$ed create-checkout binds server-side payment intents");
+    eb_chk(strpos($pc, 'bc-payment-gateway-settlement.php') !== false && strpos($pc, 'bc_pg_init_gateway_checkout(') !== false && strpos($pc, 'PAYMENT_INTENT_REQUIRED') !== false, "$ed payhub-checkout binds server-side intents and refuses unauthenticated requests");
 
     $vc2 = file_get_contents("$base/web/api/virtual-card-v2.php");
     eb_chk(strpos($vc2, "getenv('BC_VIRTUALCARD_WORKER_ENABLED') !== '1'") !== false, "$ed virtual-card-v2 fails closed unless BC_VIRTUALCARD_WORKER_ENABLED=1");

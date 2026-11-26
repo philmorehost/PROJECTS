@@ -36,7 +36,7 @@ if (is_file(__DIR__ . '/uploaded-image/' . $home_logo_file)) $home_logo = '/uplo
 
 <link rel="preconnect" href="https://fonts.googleapis.com/"><style>
 body{margin:0;background:#F7F7F8}
-a{color:#D90012}a:hover{color:#A8000E}
+a{color:var(--home-ink)}a:hover{color:var(--home-brand)}
 .mz-ticker{display:flex;gap:48px;white-space:nowrap;animation:mzscroll 28s linear infinite}
 @keyframes mzscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .mz-feed{animation:mzfeed 9s linear infinite}
@@ -71,8 +71,8 @@ a{color:#D90012}a:hover{color:#A8000E}
 @media (prefers-reduced-motion: reduce){.mz-up,.mz-down{animation:none}}
 @media (prefers-reduced-motion: reduce){.mz-slide-l,.mz-slide-r,.mz-tilt-a,.mz-tilt-b,.mz-spin3d{animation:none}}
 @media (prefers-reduced-motion: reduce){.mz-ticker,.mz-feed,.mz-orbit,.mz-upright,.mz-flash,.mz-blink,.mz-ring,.mz-glow1,.mz-glow2,.mz-glow3,.mz-glow4{animation:none}}
-input:focus,select:focus{outline:3px solid #D90012;outline-offset:1px}
-</style><style>#send select{width:142px;max-width:42%;min-width:90px}#send output{min-width:0;overflow-wrap:anywhere}html{scroll-behavior:smooth}.home-brand{font:800 28px/1.1 Inter,system-ui;color:#d90012;white-space:nowrap}.home-brand img{max-height:48px;max-width:180px;width:auto}a:focus-visible,button:focus-visible{outline:3px solid #d90012;outline-offset:4px}section{scroll-margin-top:20px}@media(max-width:600px){nav{gap:12px!important;padding:14px 16px!important}section{padding-left:16px!important;padding-right:16px!important}footer .public-directory{min-width:0}#download>div{padding:36px 22px!important;border-radius:24px!important}}</style><style>
+input:focus,select:focus{outline:3px solid var(--home-ink);outline-offset:1px}
+</style><style>#send select{width:142px;max-width:42%;min-width:90px}#send output{min-width:0;overflow-wrap:anywhere}html{scroll-behavior:smooth}.home-brand{font:800 28px/1.1 Inter,system-ui;color:var(--home-ink);white-space:nowrap}.home-brand img{max-height:48px;max-width:180px;width:auto}a:focus-visible,button:focus-visible{outline:3px solid var(--home-ink);outline-offset:4px}section{scroll-margin-top:20px}@media(max-width:600px){nav{gap:12px!important;padding:14px 16px!important}section{padding-left:16px!important;padding-right:16px!important}footer .public-directory{min-width:0}#download>div{padding:36px 22px!important;border-radius:24px!important}}</style><style>
 :root{--home-brand:<?php echo $home_theme['primary']; ?>;--home-ink:<?php echo $home_theme['primary_text']; ?>;--home-on-brand:<?php echo $home_theme['on_primary']; ?>}
 [style*="background: var(--home-brand)"]{color:var(--home-on-brand)!important;border:1px solid var(--home-ink)}
 [style*="background: var(--home-brand)"] *{color:inherit!important}

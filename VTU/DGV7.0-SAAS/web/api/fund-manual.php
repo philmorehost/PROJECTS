@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../../func/bc-secure-session.php';
- bc_secure_session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
@@ -26,19 +26,29 @@ if (!$get_vendor) {
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
-    $username = $user['username'];
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+        echo json_encode(["status" => "error", "message" => "Account is not active"]);
+        exit;
+    }
+    if (!isServiceEnabled('manual_funding', $vendor_id)) {
+        http_response_code(403);
+        echo json_encode(["status" => "error", "message" => "Manual bank funding is currently disabled."]);
+        exit;
+    }
 
+    $username = mysqli_real_escape_string($connection_server, $user['username']);
     $amount = (float)($input["amount"] ?? 0);
-    $gateway = mysqli_real_escape_string($connection_server, $input["gateway"] ?? 'Manual Bank Deposit');
+    $gateway = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($input["gateway"] ?? 'Manual Bank Deposit'))));
     $reference = "MAN_" . time() . rand(100, 999);
-    // sas_transactions.api_website is NOT NULL with no default. Every other writer fills it with the
-    // host the request came through (see the chargeOtherUser() call below, and the existing rows in
-    // the table). Omitting it made MySQL reject the INSERT outright, so the app showed
-    // "Field 'api_website' doesn't have a default value" instead of filing the request.
     $api_website = mysqli_real_escape_string($connection_server, $_SERVER["HTTP_HOST"] ?? 'APP');
 
-    if ($amount < 1) {
-        echo json_encode(["status" => "error", "message" => "Invalid amount"]);
+    $q_limits = mysqli_query($connection_server, "SELECT min_amount, max_amount FROM sas_admin_payment_orders WHERE vendor_id='$vendor_id' LIMIT 1");
+    $limits = $q_limits ? mysqli_fetch_assoc($q_limits) : null;
+    $min_amt = isset($limits['min_amount']) && is_numeric($limits['min_amount']) ? max(1.0, (float)$limits['min_amount']) : 100.0;
+    $max_amt = isset($limits['max_amount']) && is_numeric($limits['max_amount']) ? (float)$limits['max_amount'] : 1000000.0;
+
+    if (!is_finite($amount) || $amount < $min_amt || $amount > $max_amt) {
+        echo json_encode(["status" => "error", "message" => "Amount must be between NGN " . number_format($min_amt, 2) . " and NGN " . number_format($max_amt, 2)]);
         exit;
     }
 
@@ -47,9 +57,6 @@ if (mysqli_num_rows($check_user) == 1) {
         "SELECT amount_charged FROM sas_admin_payments WHERE vendor_id='$vendor_id' LIMIT 1"));
     $charge_fee = (float)($admin_payment['amount_charged'] ?? 0);
 
-    // sas_transactions.balance_before / balance_after are NOT NULL with no default.
-    // This is a pending funding request (status 2): the wallet is not touched until an
-    // admin approves it, so record the current balance for both.
     $balance_before = (float)($user['balance'] ?? 0);
     $balance_after  = $balance_before;
 
@@ -63,11 +70,10 @@ if (mysqli_num_rows($check_user) == 1) {
             "charge_fee" => $charge_fee
         ];
 
-        // If a charge fee is configured and the user has sufficient balance, deduct it immediately
         if ($charge_fee > 0 && (float)$user['balance'] >= $charge_fee) {
             $fee_ref = "FEE_" . time() . rand(100, 999);
             $fee_deducted = chargeOtherUser(
-                $username, "debit", "manual_bank_charge", "Manual Deposit Fee",
+                $user['username'], "debit", "manual_bank_charge", "Manual Deposit Fee",
                 $fee_ref, "", $charge_fee, $charge_fee,
                 "Service charge for Manual Bank Deposit: $reference",
                 "APP", $_SERVER["HTTP_HOST"] ?? "APP", "1"
@@ -83,7 +89,7 @@ if (mysqli_num_rows($check_user) == 1) {
 
         echo json_encode($response);
     } else {
-        echo json_encode(["status" => "error", "message" => "Failed to submit request: " . mysqli_error($connection_server)]);
+        echo json_encode(["status" => "error", "message" => "Failed to submit request."]);
     }
 } else {
     echo json_encode(["status" => "error", "message" => "Invalid API Key"]);

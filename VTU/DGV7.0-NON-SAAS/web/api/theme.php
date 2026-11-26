@@ -15,6 +15,10 @@ if ($host && $connection_server) {
         if(mysqli_stmt_execute($stmt)) { $q=mysqli_stmt_get_result($stmt); if($q)$vendor=mysqli_fetch_assoc($q); }
         mysqli_stmt_close($stmt);
     }
+    if (!$vendor) {
+        $q_fb = mysqli_query($connection_server, 'SELECT v.id, s.primary_color FROM sas_vendors v LEFT JOIN sas_vendor_style_templates s ON s.vendor_id=v.id WHERE v.status=1 ORDER BY v.id ASC LIMIT 1');
+        if ($q_fb) $vendor = mysqli_fetch_assoc($q_fb);
+    }
 }
 if (!$vendor) { http_response_code(404); echo json_encode(array('status'=>'error','message'=>'Platform not found')); exit; }
 echo json_encode(array('status'=>'success','data'=>bc_theme_palette($vendor['primary_color'] ?? null)));
