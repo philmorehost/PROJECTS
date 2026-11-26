@@ -86,7 +86,32 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
 $po = file_get_contents("$root/DGV7.0-SAAS/bc-admin/PaymentOrders.php");
 pcheck(strpos($po, 'unset($is_payment_order);') !== false, 'PaymentOrders: unsets $is_payment_order before App Pending');
 pcheck(strpos($po, '$po_redirect_url') !== false && strpos($po, 'HTTP_REFERER') !== false, 'PaymentOrders: preserves tab/searchq across redirects');
-pcheck(strpos($po, 'Cannot Proceed Processing Transaction (" . (string)$app_credit') !== false, 'PaymentOrders: surfaces chargeOtherUser failure details');
+pcheck(strpos($po, "bc_charge_failure_reason") !== false && strpos($po, 'bc_ensure_wallet_transactional_schema') !== false, 'PaymentOrders: ensures wallet schema and surfaces bc_charge_failure_reason');
+pcheck(strpos($po, "\$GLOBALS['vendor_id'] = \$admin_vid") !== false, 'PaymentOrders: pins vendor_id to logged admin before chargeOtherUser');
+
+require_once "$root/DGV7.0-SAAS/func/bc-incident-wallet.php";
+if (!function_exists('bc_normalize_mysql_decimal')) {
+    function bc_normalize_mysql_decimal($value) {
+        if (!is_string($value)) return $value;
+        $trimmed = trim($value);
+        if (preg_match('/^([0-9]+)\.([0-9]+)$/', $trimmed, $m)) {
+            $frac = rtrim($m[2], '0');
+            $whole = ltrim($m[1], '0');
+            if ($whole === '') $whole = '0';
+            return $frac === '' ? $whole : ($whole . '.' . $frac);
+        }
+        return $value;
+    }
+}
+pcheck(bc_incident_decimal(bc_normalize_mysql_decimal('1000.000000000000000000000000000000')) === '1000', 'DECIMAL(65,30) 1000.000...30 accepted by bc_incident_decimal');
+pcheck(bc_incident_decimal(bc_normalize_mysql_decimal('1250.500000000000000000000000000000')) === '1250.5', 'DECIMAL(65,30) 1250.500...30 accepted by bc_incident_decimal');
+pcheck(bc_incident_decimal(bc_normalize_mysql_decimal('0.0000000001')) === null, 'Excess precision 0.0000000001 still refused');
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $fnSrc = file_get_contents("$root/$ed/func/bc-func.php");
+    pcheck(strpos($fnSrc, 'bc_normalize_mysql_decimal($amount)') !== false, "$ed bc-func normalizes DECIMAL(65,30) amounts before wallet post");
+    $tblSrc = file_get_contents("$root/$ed/func/bc-tables.php");
+    pcheck(strpos($tblSrc, 'function bc_ensure_wallet_transactional_schema(') !== false, "$ed bc-tables defines bc_ensure_wallet_transactional_schema");
+}
 
 // ── 4. Functional unit checks on bc-payment-gateway-settlement.php ────────────
 require_once "$root/DGV7.0-SAAS/func/bc-payment-gateway-settlement.php";

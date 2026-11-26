@@ -16,7 +16,50 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.18-autoheal-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.26-innodb-wallet-1');
+
+if (!function_exists('bc_ensure_wallet_transactional_schema')) {
+    function bc_ensure_wallet_transactional_schema($connection_server) {
+        if (!($connection_server instanceof mysqli)) return;
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_wallet_mutation_events (
+            event_key CHAR(64) NOT NULL PRIMARY KEY, payload_hash CHAR(64) NOT NULL,
+            vendor_id INT UNSIGNED NOT NULL, actor VARCHAR(240) NOT NULL,
+            direction VARCHAR(6) NOT NULL, reference VARCHAR(225) NOT NULL,
+            amount DECIMAL(30,8) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX wallet_event_lookup(vendor_id,reference)
+        ) ENGINE=InnoDB");
+
+        $chk_api_ref = @mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_transactions` LIKE 'api_reference'");
+        if ($chk_api_ref && mysqli_num_rows($chk_api_ref) === 0) {
+            @mysqli_query($connection_server, "ALTER TABLE `sas_transactions` ADD COLUMN api_reference VARCHAR(225) AFTER reference");
+        }
+
+        $wallet_tables = ['sas_users', 'sas_vendors', 'sas_transactions', 'sas_vendor_transactions', 'sas_wallet_mutation_events'];
+        $in_list = "'" . implode("','", $wallet_tables) . "'";
+        $q_eng = @mysqli_query($connection_server, "SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ($in_list)");
+        if ($q_eng) {
+            $non_innodb = [];
+            while ($r_eng = mysqli_fetch_assoc($q_eng)) {
+                if (strtoupper((string)($r_eng['ENGINE'] ?? '')) !== 'INNODB') {
+                    $non_innodb[] = $r_eng['TABLE_NAME'];
+                }
+            }
+            mysqli_free_result($q_eng);
+            if (!empty($non_innodb)) {
+                $orig_mode = null;
+                $qm = @mysqli_query($connection_server, "SELECT @@SESSION.sql_mode AS m");
+                if ($qm && ($rm = mysqli_fetch_assoc($qm))) $orig_mode = $rm['m'];
+                foreach ($non_innodb as $tbl) {
+                    if (!@mysqli_query($connection_server, "ALTER TABLE `$tbl` ENGINE=InnoDB")) {
+                        if ($orig_mode !== null) @mysqli_query($connection_server, "SET SESSION sql_mode=''");
+                        @mysqli_query($connection_server, "ALTER TABLE `$tbl` ENGINE=InnoDB");
+                        if ($orig_mode !== null) @mysqli_query($connection_server, "SET SESSION sql_mode='" . mysqli_real_escape_string($connection_server, $orig_mode) . "'");
+                    }
+                }
+            }
+        }
+    }
+}
 
 if ($connection_server && empty($GLOBALS['bc_tables_force_run'])) {
     // Two cheap statements instead of hundreds: an options lookup and one data-dictionary probe.
@@ -2364,6 +2407,8 @@ if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_wallet_mut
  amount DECIMAL(30,8) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  INDEX wallet_event_lookup(vendor_id,reference)
 ) ENGINE=InnoDB")) { error_log('Wallet security migration failed; wallet writes will fail closed.'); return; }
+
+bc_ensure_wallet_transactional_schema($connection_server);
 
 // Encrypted per-vendor API configuration; no service is activated by this storage.
 if (!mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_gateway_api_credentials (

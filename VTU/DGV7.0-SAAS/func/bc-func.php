@@ -911,24 +911,38 @@ function bc_charge_failure($reason, $context = array())
     return 'failed';
 }
 
+if (!function_exists('bc_normalize_mysql_decimal')) {
+    function bc_normalize_mysql_decimal($value) {
+        if (!is_string($value)) return $value;
+        $trimmed = trim($value);
+        if (preg_match('/^([0-9]+)\.([0-9]+)$/', $trimmed, $m)) {
+            $frac = rtrim($m[2], '0');
+            $whole = ltrim($m[1], '0');
+            if ($whole === '') $whole = '0';
+            return $frac === '' ? $whole : ($whole . '.' . $frac);
+        }
+        return $value;
+    }
+}
+
 function chargeUser($type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-    return bc_incident_wallet_post(resolveVendorID(), $GLOBALS['get_logged_user_details']['username'] ?? ($_SESSION['user_session'] ?? ''), $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status, false);
+    return bc_incident_wallet_post(resolveVendorID(), $GLOBALS['get_logged_user_details']['username'] ?? ($_SESSION['user_session'] ?? ''), $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
 }
 
 function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-    return bc_incident_wallet_post(resolveVendorID(), $user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status, false);
+    return bc_incident_wallet_post(resolveVendorID(), $user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
 }
 
 function chargeVendor($type, $product_unique_id, $type_alternative, $reference, $amount, $discounted_amount, $description, $api_website, $status)
 {
-    return bc_incident_wallet_post(resolveVendorID(), '', $type, $product_unique_id, $type_alternative, $reference, '', $amount, $discounted_amount, $description, 'WEB', $api_website, $status, true);
+    return bc_incident_wallet_post(resolveVendorID(), '', $type, $product_unique_id, $type_alternative, $reference, '', bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, 'WEB', $api_website, $status, true);
 }
 
 function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternative, $reference, $amount, $discounted_amount, $description, $api_website, $status)
 {
-    return bc_incident_wallet_post($vendor_id, '', $type, $product_unique_id, $type_alternative, $reference, '', $amount, $discounted_amount, $description, 'WEB', $api_website, $status, true);
+    return bc_incident_wallet_post($vendor_id, '', $type, $product_unique_id, $type_alternative, $reference, '', bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, 'WEB', $api_website, $status, true);
 }
 
 function addUserVirtualBank($reference, $bank_code, $bank_name, $account_number, $account_name, $vid = 0, $username = "", $gateway_name = "")
