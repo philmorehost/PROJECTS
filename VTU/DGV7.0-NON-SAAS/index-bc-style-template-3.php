@@ -9,6 +9,7 @@ $apk_download_url = '';
 $meta_keywords    = '';
 $custom_header    = '';
 $custom_footer    = '';
+$template_primary = '';
 
 // Check if vendor details are available from index.php
 if (isset($vendor_account_details) && is_array($vendor_account_details)) {
@@ -25,8 +26,9 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $meta_keywords    = $cachedStyle['meta_keywords'] ?? '';
             $custom_header    = $cachedStyle['custom_header_code'] ?? '';
             $custom_footer    = $cachedStyle['custom_footer_code'] ?? '';
+            $template_primary = $cachedStyle['primary_color'] ?? '';
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? LIMIT 1");
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
             if ($stmt_site) {
                 mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
                 mysqli_stmt_execute($stmt_site);
@@ -38,6 +40,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                     $meta_keywords    = $site_row['meta_keywords'] ?: '';
                     $custom_header    = $site_row['custom_head_code'] ?: '';
                     $custom_footer    = $site_row['custom_footer_code'] ?: '';
+                    $template_primary = $site_row['primary_color'] ?? '';
 
                     if (function_exists('bc_cache_set')) {
                         bc_cache_set($cacheKey, [
@@ -47,6 +50,7 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
                             'meta_keywords' => $meta_keywords,
                             'custom_header_code' => $custom_header,
                             'custom_footer_code' => $custom_footer,
+                            'primary_color' => $template_primary,
                         ]);
                     }
                 }
@@ -89,6 +93,22 @@ $share_text = urlencode("Check out " . $site_title . " for Digital Payments Made
 $facebook_share = "https://www.facebook.com/sharer/sharer.php?u=" . urlencode($current_url);
 $twitter_share = "https://twitter.com/intent/tweet?url=" . urlencode($current_url) . "&text=" . $share_text;
 $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlencode($current_url);
+require_once __DIR__ . '/func/bc-theme.php';
+$t3_primary = '#00f0ff';
+if (!empty($template_primary) && preg_match('/^#[0-9a-fA-F]{6}$/', $template_primary)) {
+    $t3_primary = $template_primary;
+}
+$t3_dark = bc_theme_palette($t3_primary)['modes']['dark'];
+$t3_rgb = '0, 240, 255';
+$t3_accent = '#ff007f';
+$t3_accent_rgb = '255, 0, 127';
+if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
+    $t3_rgb = "$r3, $g3, $b3";
+    if (strtolower($t3_primary) !== '#00f0ff') {
+        $t3_accent = $t3_primary;
+        $t3_accent_rgb = $t3_rgb;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -111,6 +131,14 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
     
     <style>
         /* ── Cyberpunk Neon Style ── */
+        :root {
+            --primary: <?php echo $t3_primary; ?>;
+            --primary-rgb: <?php echo $t3_rgb; ?>;
+            --primary-ink: <?php echo $t3_dark['primary_text']; ?>;
+            --on-primary: <?php echo $t3_dark['on_primary']; ?>;
+            --accent: <?php echo $t3_accent; ?>;
+            --accent-rgb: <?php echo $t3_accent_rgb; ?>;
+        }
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
@@ -125,8 +153,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .cyber-grid {
             position: absolute;
             top: 0; left: 0; right: 0; height: 100%;
-            background-image: linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+            background-image: linear-gradient(rgba(var(--primary-rgb), 0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(var(--primary-rgb), 0.03) 1px, transparent 1px);
             background-size: 40px 40px;
             z-index: -2;
             pointer-events: none;
@@ -136,7 +164,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             position: absolute;
             top: -150px; right: 10%;
             width: 350px; height: 350px;
-            background: rgba(255, 0, 127, 0.2);
+            background: rgba(var(--accent-rgb), 0.2);
             filter: blur(140px);
             border-radius: 50%;
             z-index: -1;
@@ -149,8 +177,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             background: rgba(2, 2, 5, 0.85);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border-bottom: 2px solid #00f0ff;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+            border-bottom: 2px solid var(--primary);
+            box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.15);
         }
         .container {
             max-width: 1200px;
@@ -163,25 +191,25 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             align-items: center;
             height: 80px;
         }
-        .logo-img { height: 40px; filter: drop-shadow(0 0 5px rgba(255, 0, 127, 0.7)); }
+        .logo-img { height: 40px; filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), 0.7)); }
         .nav-links { display: flex; gap: 32px; list-style: none; }
         .nav-links a { text-decoration: none; color: #94a3b8; font-weight: 500; transition: all 0.3s; }
-        .nav-links a:hover { color: #00f0ff; text-shadow: 0 0 8px #00f0ff; }
+        .nav-links a:hover { color: var(--primary-ink); text-shadow: 0 0 8px var(--primary); }
         .nav-cta {
             background: transparent;
-            color: #ff007f !important;
-            border: 2px solid #ff007f;
+            color: var(--accent) !important;
+            border: 2px solid var(--accent);
             padding: 8px 24px;
             border-radius: 4px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            box-shadow: 0 0 10px rgba(255, 0, 127, 0.2);
+            box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.2);
             transition: all 0.3s;
         }
         .nav-cta:hover {
-            background: #ff007f;
-            color: white !important;
-            box-shadow: 0 0 20px #ff007f;
+            background: var(--primary);
+            color: var(--on-primary) !important;
+            box-shadow: 0 0 20px rgba(var(--primary-rgb), 0.5);
             transform: translateY(-1px);
         }
 
@@ -195,21 +223,21 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .cyber-card {
             background: rgba(10, 10, 18, 0.8);
-            border: 2px solid rgba(0, 240, 255, 0.3);
+            border: 2px solid rgba(var(--primary-rgb), 0.3);
             border-radius: 12px;
             padding: 40px;
-            box-shadow: 0 0 30px rgba(0, 240, 255, 0.05);
+            box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.05);
             position: relative;
         }
         .cyber-card::after {
             content: '';
             position: absolute;
             top: -2px; right: -2px; width: 20px; height: 20px;
-            border-top: 4px solid #ff007f;
-            border-right: 4px solid #ff007f;
+            border-top: 4px solid var(--accent);
+            border-right: 4px solid var(--accent);
         }
         .hero h1 { font-size: 48px; font-weight: 800; line-height: 1.1; margin-bottom: 20px; text-transform: uppercase; }
-        .hero h1 span { color: #00f0ff; text-shadow: 0 0 10px rgba(0, 240, 255, 0.5); }
+        .hero h1 span { color: var(--primary-ink); text-shadow: 0 0 10px rgba(var(--primary-rgb), 0.5); }
         .hero p { font-size: 18px; color: #94a3b8; margin-bottom: 30px; }
         
         .btn-group { display: flex; gap: 16px; }
@@ -226,13 +254,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             transition: all 0.3s;
         }
         .btn-primary {
-            background: #00f0ff;
-            color: #020205;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+            background: var(--primary);
+            color: var(--on-primary);
+            box-shadow: 0 0 15px rgba(var(--primary-rgb), 0.4);
         }
         .btn-primary:hover {
-            background: #00c8d6;
-            box-shadow: 0 0 25px rgba(0, 240, 255, 0.7);
+            background: var(--primary);
+            box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.7);
             transform: translateY(-2px);
         }
         .btn-secondary {
@@ -240,13 +268,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             color: #e2e8f0;
             border: 2px solid rgba(255, 255, 255, 0.2);
         }
-        .btn-secondary:hover { border-color: #ff007f; color: #ff007f; box-shadow: 0 0 15px rgba(255, 0, 127, 0.3); transform: translateY(-2px); }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--primary-ink); box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.3); transform: translateY(-2px); }
 
         .hero-img-container {
-            border: 2px solid #ff007f;
+            border: 2px solid var(--accent);
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 0 30px rgba(255, 0, 127, 0.25);
+            box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.25);
         }
         .hero-img-container img { width: 100%; display: block; filter: saturate(1.2); }
 
@@ -254,7 +282,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .features { padding: 80px 0; }
         .section-header { text-align: center; max-width: 600px; margin: 0 auto 50px; }
         .section-header h2 { font-size: 36px; font-weight: 800; margin-bottom: 12px; text-transform: uppercase; }
-        .section-header h2 span { color: #ff007f; }
+        .section-header h2 span { color: var(--primary-ink); }
         .features-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -262,7 +290,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .feature-card {
             background: rgba(10, 10, 18, 0.9);
-            border: 1px solid rgba(0, 240, 255, 0.2);
+            border: 1px solid rgba(var(--primary-rgb), 0.2);
             border-radius: 8px;
             padding: 30px;
             transition: all 0.3s;
@@ -270,26 +298,26 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .feature-card:hover {
             transform: translateY(-5px);
-            border-color: #ff007f;
-            box-shadow: 0 0 20px rgba(255, 0, 127, 0.3);
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.3);
         }
         .feature-icon {
             width: 60px; height: 60px;
             border-radius: 8px;
-            background: rgba(0, 240, 255, 0.1);
-            color: #00f0ff;
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary-ink);
             display: inline-flex;
             align-items: center;
             justify-content: center;
             font-size: 24px;
             margin-bottom: 20px;
-            text-shadow: 0 0 5px #00f0ff;
+            text-shadow: 0 0 5px var(--primary);
         }
 
         /* Footer */
         footer {
             background: #05050a;
-            border-top: 2px solid #ff007f;
+            border-top: 2px solid var(--accent);
             padding: 60px 0 30px;
             margin-top: 80px;
         }
@@ -299,13 +327,13 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             gap: 40px;
             margin-bottom: 40px;
         }
-        .footer-logo { font-size: 24px; font-weight: 800; color: #ff007f; margin-bottom: 16px; text-transform: uppercase; text-shadow: 0 0 8px #ff007f; }
+        .footer-logo { font-size: 24px; font-weight: 800; color: var(--primary-ink); margin-bottom: 16px; text-transform: uppercase; text-shadow: 0 0 8px var(--accent); }
         .footer-desc { color: #94a3b8; font-size: 14px; }
-        .footer-col h4 { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #00f0ff; text-transform: uppercase; }
+        .footer-col h4 { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: var(--primary-ink); text-transform: uppercase; }
         .footer-col ul { list-style: none; }
         .footer-col ul li { margin-bottom: 12px; }
         .footer-col ul li a { text-decoration: none; color: #94a3b8; font-size: 14px; transition: color 0.3s; }
-        .footer-col ul li a:hover { color: #ff007f; }
+        .footer-col ul li a:hover { color: var(--primary-ink); }
 
         .footer-bottom {
             border-top: 1px solid rgba(255,255,255,0.05);

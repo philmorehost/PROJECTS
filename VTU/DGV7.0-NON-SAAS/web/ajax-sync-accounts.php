@@ -3,6 +3,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 
 bc_secure_session_start();
 include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-payment-gateway-settlement.php");
 
 header('Content-Type: application/json');
 
@@ -12,6 +13,10 @@ if (!isset($_SESSION["user_session"])) {
 }
 
 $vendor_id = (int)$get_logged_user_details['vendor_id'];
+if (!isServiceEnabled('virtual_bank_display', $vendor_id)) {
+    echo json_encode(["status" => "skipped", "message" => "Virtual bank accounts are disabled for this platform."]);
+    exit();
+}
 $email = mysqli_real_escape_string($connection_server, $get_logged_user_details['email']);
 $username = mysqli_real_escape_string($connection_server, $get_logged_user_details['username']);
 
@@ -76,9 +81,10 @@ if (is_array($user_banks)) {
 //   b) Manual sync requested
 //   c) Source is virtual_banks and user has no PayHub account at all (DG6.8: always try on this page)
 $no_payhub_account = !in_array("PayHub", $registered_banks);
-$should_sync_payhub = ($is_kyc_compliant && $no_payhub_account)
+$payhub_enabled = bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'payhub');
+$should_sync_payhub = $payhub_enabled && (($is_kyc_compliant && $no_payhub_account)
     || $is_manual
-    || ($source === 'virtual_banks' && $no_payhub_account);
+    || ($source === 'virtual_banks' && $no_payhub_account));
 
 if ($should_sync_payhub) {
     $log("Attempting PayHub Sync... (source=$source, manual=" . ($is_manual?'1':'0') . ", kyc=" . ($is_kyc_compliant?'1':'0') . ")");
@@ -91,8 +97,7 @@ if ($should_sync_payhub) {
 }
 
 // 3. Paystack Sync
-$paystack_gateway_check = mysqli_query($connection_server, "SELECT status FROM sas_payment_gateways WHERE vendor_id='$vendor_id' AND gateway_name='paystack' LIMIT 1");
-$paystack_enabled = ($paystack_gateway_check && mysqli_fetch_assoc($paystack_gateway_check)['status'] == 1);
+$paystack_enabled = bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'paystack');
 
 if (($paystack_enabled && !in_array("Paystack", $registered_banks)) || ($paystack_enabled && $is_manual)) {
     $log("Attempting Paystack Sync...");
@@ -145,9 +150,8 @@ if (($paystack_enabled && !in_array("Paystack", $registered_banks)) || ($paystac
 }
 
 // 4. Monnify Sync
-$monnify_gateway_check = mysqli_query($connection_server, "SELECT status, encrypt_key FROM sas_payment_gateways WHERE vendor_id='$vendor_id' AND gateway_name='monnify' LIMIT 1");
-$monnify_row = mysqli_fetch_assoc($monnify_gateway_check);
-$monnify_enabled = ($monnify_row && $monnify_row['status'] == 1);
+$monnify_row = bc_pg_gateway_config($connection_server, $vendor_id, 'monnify', true);
+$monnify_enabled = ($monnify_row && bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'monnify'));
 
 if ($monnify_enabled && ($is_kyc_compliant || $is_manual)) {
     // Monnify check logic (simplified for AJAX)
@@ -198,9 +202,8 @@ if ($monnify_enabled && ($is_kyc_compliant || $is_manual)) {
 }
 
 // 5. Payvessel Sync
-$payvessel_gateway_check = mysqli_query($connection_server, "SELECT status, encrypt_key FROM sas_payment_gateways WHERE vendor_id='$vendor_id' AND gateway_name='payvessel' LIMIT 1");
-$payvessel_row = mysqli_fetch_assoc($payvessel_gateway_check);
-$payvessel_enabled = ($payvessel_row && $payvessel_row['status'] == 1);
+$payvessel_row = bc_pg_gateway_config($connection_server, $vendor_id, 'payvessel', true);
+$payvessel_enabled = ($payvessel_row && bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'payvessel'));
 
 if ($payvessel_enabled && ($is_kyc_compliant || $is_manual)) {
     $pv_codes = ["101", "120001"];

@@ -25,13 +25,13 @@ include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("AI Smart Budgeting");
 ?>
     <style>
-        :root { --primary: #6366f1; --bg: #0f172a; --card: #1e293b; }
+        :root { --primary: var(--brand); --bg: #0f172a; --card: #1e293b; }
         body { background: var(--bg); color: white; font-family: 'Inter', sans-serif; padding: 2rem; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
         .card { background: var(--card); padding: 1.5rem; border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); }
-        .ai-badge { background: linear-gradient(45deg, #6366f1, #a855f7); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
+        .ai-badge { background: linear-gradient(45deg, var(--brand), var(--brand-dark)); color: var(--brand-fg); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
         .savings { color: #10b981; font-size: 1.5rem; font-weight: bold; }
-        .btn-opt { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        .btn-opt { background: var(--brand); color: var(--brand-fg); border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
     </style>
 <?php bc_app_sidebar(); ?>
 <?php bc_app_topbar(array("title" => "AI SMART BUDGETING", "crumb" => "Home / AI Smart Budgeting")); ?>
@@ -76,7 +76,7 @@ bc_app_head("AI Smart Budgeting");
                 datasets: [{
                     label: 'Projected Spending',
                     data: [<?php echo $total_spent/4; ?>, <?php echo $total_spent/3.5; ?>, <?php echo $total_spent/4.2; ?>, <?php echo $total_spent/3.8; ?>],
-                    borderColor: '#6366f1',
+                    borderColor: <?php echo json_encode(bc_app_colour()); ?>,
                     tension: 0.4
                 }]
             },

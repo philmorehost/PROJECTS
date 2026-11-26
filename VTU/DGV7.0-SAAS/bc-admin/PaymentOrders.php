@@ -39,6 +39,22 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
     }
 
+    $po_redirect_qs = array();
+    $po_ref_qs = array();
+    if (!empty($_SERVER['HTTP_REFERER'])) {
+        $ref_query = parse_url((string)$_SERVER['HTTP_REFERER'], PHP_URL_QUERY);
+        if (is_string($ref_query) && $ref_query !== '') parse_str($ref_query, $po_ref_qs);
+    }
+    $cand_tab = $_POST['return_tab'] ?? ($_GET['tab'] ?? ($po_ref_qs['tab'] ?? ''));
+    if ($cand_tab !== '' && in_array($cand_tab, array('pending', 'approved', 'rejected'), true)) {
+        $po_redirect_qs['tab'] = $cand_tab;
+    }
+    $cand_sq = $_POST['return_searchq'] ?? ($_GET['searchq'] ?? ($po_ref_qs['searchq'] ?? ''));
+    if (is_string($cand_sq) && trim($cand_sq) !== '') {
+        $po_redirect_qs['searchq'] = trim(strip_tags($cand_sq));
+    }
+    $po_redirect_url = '/bc-admin/PaymentOrders.php' . (!empty($po_redirect_qs) ? '?' . http_build_query($po_redirect_qs) : '');
+
 
     // App (mobile) payment requests: mobile-app manual bank deposits are stored in
     // sas_transactions with product_unique_id='manual_funding' (status 2 = pending),
@@ -57,7 +73,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                     $sec29_err = sec29_require_stepup($get_logged_admin_details, 'payment_order_approve');
                     if ($sec29_err !== '') {
                         $_SESSION["product_purchase_response"] = $sec29_err;
-                        header("Location: /bc-admin/PaymentOrders.php");
+                        header("Location: " . $po_redirect_url);
                         exit();
                     }
                     // Atomic claim: exactly one concurrent request may move status 2 -> 1.
@@ -72,7 +88,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                             $json_response_array = array("desc" => ucwords($get_app_order["username"]." credited with N".toDecimal($get_app_order["discounted_amount"], 2)." successfully"));
                         } else {
                             mysqli_query($connection_server, "UPDATE sas_transactions SET status='2' WHERE vendor_id='$admin_vid' AND reference='".$app_ref."' AND product_unique_id='manual_funding' AND status='1' LIMIT 1");
-                            $json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
+                            $json_response_array = array("desc" => "Cannot Proceed Processing Transaction (" . (string)$app_credit . "). Verify user account is active and wallet tables are ready.");
                         }
                     }
                 } else {
@@ -85,7 +101,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                     $sec29_pin_err = sec29_verify_admin_pin_only($get_logged_admin_details, $_POST, 'payment_order_reject');
                     if ($sec29_pin_err !== '') {
                         $_SESSION["product_purchase_response"] = $sec29_pin_err;
-                        header("Location: /bc-admin/PaymentOrders.php");
+                        header("Location: " . $po_redirect_url);
                         exit();
                     }
                     mysqli_query($connection_server, "UPDATE sas_transactions SET status='3' WHERE vendor_id='$admin_vid' AND reference='".$app_ref."' AND product_unique_id='manual_funding' AND status='2' LIMIT 1");
@@ -101,7 +117,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             $json_response_array = array("desc" => "Order Not Exists");
         }
         $_SESSION["product_purchase_response"] = $json_response_array["desc"];
-        header("Location: /bc-admin/PaymentOrders.php");
+        header("Location: " . $po_redirect_url);
         exit();
     }
 
@@ -112,7 +128,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], 'payment_order_approve', 'Payment Approval')
             : 'Verification is unavailable.';
         $_SESSION["product_purchase_response"] = $send_err === '' ? "Verification code sent to your email. Enter it with your PIN in the action row." : "Error: $send_err";
-        header("Location: /bc-admin/PaymentOrders.php");
+        header("Location: " . $po_redirect_url);
         exit();
     }
 
@@ -177,7 +193,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 										$json_response_encode = json_encode($json_response_array,true);
 									} else {
 										mysqli_query($connection_server, "UPDATE sas_submitted_payments SET status='2' WHERE vendor_id='$admin_vid' AND reference='".$reference."' AND status='1' LIMIT 1");
-										$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
+										$json_response_array = array("desc" => "Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify user account is active and wallet tables are ready.");
 										$json_response_encode = json_encode($json_response_array,true);
 									}
 								}
@@ -212,7 +228,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         }
         $json_response_decode = json_decode($json_response_encode,true);
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
-        header("Location: /bc-admin/PaymentOrders.php");
+        header("Location: " . $po_redirect_url);
 	exit();
     }
 ?>
@@ -365,6 +381,7 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                         $query_result = $get_user_pending_transaction_details;
                                         $is_admin = true; $is_payment_order = true;
                                         include("../func/history-table.php");
+                                        unset($is_payment_order);
                                     ?>
                                     </div>
                                 </div>
@@ -392,6 +409,7 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                         $query_result = $get_user_successful_transaction_details;
                                         $is_admin = true; $is_payment_order = true;
                                         include("../func/history-table.php");
+                                        unset($is_payment_order);
                                     ?>
                                     </div>
                                 </div>
@@ -418,6 +436,7 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                         $query_result = $get_user_failed_transaction_details;
                                         $is_admin = true; $is_payment_order = true;
                                         include("../func/history-table.php");
+                                        unset($is_payment_order);
                                     ?>
                                     </div>
                                 </div>

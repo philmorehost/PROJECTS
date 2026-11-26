@@ -23,9 +23,8 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $apk_download_url = $cachedStyle['apk_download_url'] ?? $apk_download_url;
             $header_image_url = $cachedStyle['header_image'] ?? $header_image_url;
         } else {
-            $template_name_pattern = '%template-2%';
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id AND vst.template_name LIKE ? WHERE sd.vendor_id = ? LIMIT 1");
-            mysqli_stmt_bind_param($stmt_site, "si", $template_name_pattern, $vendor_account_details["id"]);
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
+            mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
             mysqli_stmt_execute($stmt_site);
             $result_site = mysqli_stmt_get_result($stmt_site);
             if ($site_row = mysqli_fetch_assoc($result_site)) {
@@ -71,6 +70,20 @@ $share_text = urlencode("Check out " . $site_title . " for Premium Digital Payme
 $facebook_share = "https://www.facebook.com/sharer/sharer.php?u=" . urlencode($current_url);
 $twitter_share = "https://twitter.com/intent/tweet?url=" . urlencode($current_url) . "&text=" . $share_text;
 $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlencode($current_url);
+require_once __DIR__ . '/func/bc-theme.php';
+$t2_primary = '#6366f1';
+if (!empty($site_details['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $site_details['primary_color'])) {
+    $t2_primary = $site_details['primary_color'];
+}
+$t2_light = bc_theme_palette($t2_primary)['modes']['light'];
+$t2_rgb = '99, 102, 241';
+$t2_secondary = '#7c3aed';
+if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
+    $t2_rgb = "$r2, $g2, $b2";
+    if (strtolower($t2_primary) !== '#6366f1') {
+        $t2_secondary = sprintf('#%02x%02x%02x', max(0, (int)($r2 * 0.78)), max(0, (int)($g2 * 0.78)), max(0, (int)($b2 * 0.78)));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -91,16 +104,18 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
     <style>
         /* ── Premium Modern Design System ────────────────────────────── */
         :root {
-            --primary: #6366f1;
-            --primary-rgb: 99, 102, 241;
-            --secondary: #7c3aed;
+            --primary: <?php echo $t2_primary; ?>;
+            --primary-rgb: <?php echo $t2_rgb; ?>;
+            --primary-ink: <?php echo $t2_light['primary_text']; ?>;
+            --on-primary: <?php echo $t2_light['on_primary']; ?>;
+            --secondary: <?php echo $t2_secondary; ?>;
             --success: #10b981;
             --dark: #0f172a;
             --light: #f8fafc;
             --gray: #64748b;
             --glass-bg: rgba(255, 255, 255, 0.7);
             --glass-border: rgba(255, 255, 255, 0.5);
-            --shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.12);
+            --shadow: 0 20px 40px -15px rgba(var(--primary-rgb), 0.12);
         }
 
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -165,16 +180,16 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         
         .nav-cta {
             background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
-            color: white !important;
+            color: var(--on-primary) !important;
             padding: 12px 28px;
             border-radius: 50px;
             font-weight: 700 !important;
-            box-shadow: 0 10px 20px -8px rgba(99, 102, 241, 0.4);
+            box-shadow: 0 10px 20px -8px rgba(var(--primary-rgb), 0.4);
             transition: all 0.3s ease !important;
         }
         .nav-cta:hover { 
             transform: translateY(-2px); 
-            box-shadow: 0 15px 25px -5px rgba(99, 102, 241, 0.5); 
+            box-shadow: 0 15px 25px -5px rgba(var(--primary-rgb), 0.5); 
         }
 
         .nav-toggle {
@@ -189,8 +204,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             position: relative;
             padding: 180px 0 120px;
             overflow: hidden;
-            background: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
-                        radial-gradient(circle at 90% 80%, rgba(124, 58, 237, 0.06) 0%, transparent 45%);
+            background: radial-gradient(circle at 10% 20%, rgba(var(--primary-rgb), 0.05) 0%, transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(var(--primary-rgb), 0.06) 0%, transparent 45%);
         }
         
         .hero-aurora-1 {
@@ -236,8 +251,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: rgba(99, 102, 241, 0.08);
-            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary-ink);
             padding: 8px 18px;
             border-radius: 50px;
             font-size: 0.85rem;
@@ -245,7 +260,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 24px;
-            border: 1px solid rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
         }
         .hero-badge .dot {
             width: 8px; height: 8px;
@@ -294,12 +309,12 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.4);
+            color: var(--on-primary);
+            box-shadow: 0 12px 24px -10px rgba(var(--primary-rgb), 0.4);
         }
         .btn-primary:hover {
             transform: translateY(-3px);
-            box-shadow: 0 20px 35px -8px rgba(99, 102, 241, 0.5);
+            box-shadow: 0 20px 35px -8px rgba(var(--primary-rgb), 0.5);
         }
         .btn-secondary {
             background: white;
@@ -337,8 +352,8 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            color: var(--primary);
-            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary-ink);
+            background: rgba(var(--primary-rgb), 0.08);
             padding: 6px 16px;
             border-radius: 50px;
             margin-bottom: 16px;
@@ -362,27 +377,28 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         }
         .service-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 30px 50px -20px rgba(99, 102, 241, 0.2);
-            border-color: rgba(99, 102, 241, 0.15);
+            box-shadow: 0 30px 50px -20px rgba(var(--primary-rgb), 0.2);
+            border-color: rgba(var(--primary-rgb), 0.15);
         }
         .service-icon-wrap {
             width: 70px; height: 70px;
             margin: 0 auto 24px;
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(124, 58, 237, 0.08));
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--primary-rgb), 0.12));
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.85rem; color: var(--primary);
+            font-size: 1.85rem; color: var(--primary-ink);
         }
         .service-card h3 { font-size: 1.15rem; font-weight: 700; color: var(--dark); margin-bottom: 8px; }
         .service-card p { color: var(--gray); font-size: 0.88rem; }
 
         /* ── Dynamic Stats Bar ──────────────────────────────────────────── */
         .stats-bar {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--on-primary);
             padding: 48px 0;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 20px 40px -10px rgba(var(--primary-rgb), 0.3);
         }
         .stats-bar::before {
             content: '';
@@ -509,7 +525,7 @@ $linkedin_share = "https://www.linkedin.com/shareArticle?mini=true&url=" . urlen
         .form-group input:focus, .form-group textarea:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+            box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.12);
             background: white;
         }
         .modal-send {

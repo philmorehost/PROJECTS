@@ -26,8 +26,41 @@ if (!function_exists('bc_plate_auth_colour')) {
      */
     function bc_plate_auth_colour($site_details = null) {
         $details = is_array($site_details) ? $site_details : array();
+        $is_spadmin = strpos((string)($_SERVER['PHP_SELF'] ?? ''), '/bc-spadmin/') !== false;
+
+        if ($is_spadmin) {
+            if (!empty($GLOBALS['spadmin_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['spadmin_primary_color'])) {
+                return (string)$GLOBALS['spadmin_primary_color'];
+            }
+        } else {
+            if (!empty($GLOBALS['vendor_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['vendor_primary_color'])) {
+                return (string)$GLOBALS['vendor_primary_color'];
+            }
+        }
+
         if (!empty($details['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$details['primary_color'])) {
             return (string)$details['primary_color'];
+        }
+
+        $db = $GLOBALS['connection_server'] ?? null;
+        if ($db instanceof mysqli) {
+            if ($is_spadmin) {
+                $q = @mysqli_query($db, "SELECT primary_color FROM sas_spadmin_style_templates LIMIT 1");
+                if ($q && ($r = mysqli_fetch_assoc($q)) && !empty($r['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$r['primary_color'])) {
+                    return (string)$r['primary_color'];
+                }
+            } else {
+                $vid = (int)($GLOBALS['select_vendor_table']['id'] ?? 0);
+                if ($vid <= 0 && function_exists('resolveVendorID')) {
+                    $vid = (int)resolveVendorID();
+                }
+                if ($vid > 0) {
+                    $q = @mysqli_query($db, "SELECT primary_color FROM sas_vendor_style_templates WHERE vendor_id='$vid' LIMIT 1");
+                    if ($q && ($r = mysqli_fetch_assoc($q)) && !empty($r['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$r['primary_color'])) {
+                        return (string)$r['primary_color'];
+                    }
+                }
+            }
         }
         return '#0f766e';
     }
@@ -116,11 +149,16 @@ if (!function_exists('bc_plate_auth_css')) {
     function bc_plate_auth_css($brand) {
         require_once __DIR__ . '/bc-theme.php';
         $palette = bc_theme_palette($brand)['modes']['light'];
+        $bc_brand_rgb = '15, 118, 110';
+        if (is_string($brand) && preg_match('/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/', $brand, $bc_rgb_m)) {
+            $bc_brand_rgb = hexdec($bc_rgb_m[1]) . ', ' . hexdec($bc_rgb_m[2]) . ', ' . hexdec($bc_rgb_m[3]);
+        }
         ?>
 <style>
         /* ── Plate auth shell ─────────────────────────────────────────── */
         :root {
             --brand: <?php echo $brand; ?>;
+            --brand-rgb: <?php echo $bc_brand_rgb; ?>;
             --brand-fg: <?php echo $palette['on_primary']; ?>;
             --brand-ink: <?php echo $palette['primary_text']; ?>;
             --ink: #0b1220;
@@ -143,8 +181,8 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__bg {
             position: fixed; inset: 0; z-index: -1; pointer-events: none;
             background:
-                radial-gradient(700px 380px at 12% -8%, rgba(15, 118, 110, .12), transparent 70%),
-                radial-gradient(700px 420px at 92% 8%, rgba(15, 118, 110, .10), transparent 70%),
+                radial-gradient(700px 380px at 12% -8%, rgba(<?php echo $bc_brand_rgb; ?>, .12), transparent 70%),
+                radial-gradient(700px 420px at 92% 8%, rgba(<?php echo $bc_brand_rgb; ?>, .10), transparent 70%),
                 var(--wash);
         }
         .pk-auth__brand {
@@ -166,7 +204,7 @@ if (!function_exists('bc_plate_auth_css')) {
         .pk-auth__card--wide { max-width: 560px; }
         .pk-auth__icon {
             width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
-            background: #f0fdfa; color: var(--brand-ink); margin-bottom: 18px;
+            background: rgba(<?php echo $bc_brand_rgb; ?>, .10); color: var(--brand-ink); margin-bottom: 18px;
         }
         .pk-auth__icon--danger { background: #fef2f2; color: var(--danger); }
         .pk-auth__icon--warn { background: #fffbeb; color: #d97706; }
@@ -179,7 +217,7 @@ if (!function_exists('bc_plate_auth_css')) {
             padding: 12px 14px; outline: none; transition: border-color .15s ease, box-shadow .15s ease;
         }
         .pk-auth__input:focus, .pk-auth__select:focus {
-            border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(15, 118, 110, .14); background: #fff;
+            border-color: var(--brand-ink); box-shadow: 0 0 0 3px rgba(<?php echo $bc_brand_rgb; ?>, .14); background: #fff;
         }
         .pk-auth__field { margin-bottom: 18px; }
         .pk-auth__row { display: flex; gap: 12px; }
@@ -191,7 +229,7 @@ if (!function_exists('bc_plate_auth_css')) {
             border-radius: 10px; padding: 13px 18px; cursor: pointer; text-decoration: none;
             transition: opacity .15s ease;
         }
-        .pk-auth__btn:hover { opacity: .9; color: #fff; }
+        .pk-auth__btn:hover { opacity: .9; color: var(--brand-fg); }
         .pk-auth__btn--ghost { background: transparent; color: var(--ink); border-color: var(--line); }
         .pk-auth__btn--ghost:hover { color: var(--ink); border-color: var(--ink); }
         .pk-auth__btn--danger { background: var(--danger); }

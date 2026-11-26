@@ -7,6 +7,7 @@
  * built on guest-bootstrap.php's helpers since there's no session/api_key here.
  */
 include_once(__DIR__ . "/guest-bootstrap.php");
+require_once __DIR__ . "/../../func/bc-theme.php";
 
 $vendor = guest_resolve_vendor();
 $vendor_id = (int)$vendor['id'];
@@ -27,12 +28,14 @@ while ($row = mysqli_fetch_assoc($get_sc)) {
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $sanitized_host = strtolower(preg_replace('/^www\./', '', explode(':', $host)[0]));
 
+$guest_palette = bc_theme_palette($get_style['primary_color'] ?? null);
 guest_json([
     "status" => "success",
     "data" => [
         "site_title" => $get_site['site_title'] ?? "VTU Platform",
         "logo_url" => "https://" . $host . "/uploaded-image/" . str_replace([".", ":"], "-", $sanitized_host) . "_logo.png",
-        "primary_color" => $get_style['primary_color'] ?? "#287bff",
+        "primary_color" => $guest_palette['primary_color'],
+        "theme" => $guest_palette,
         "secondary_color" => $get_style['secondary_color'] ?? "#f6f9fc",
         "services" => $services,
         "currency_symbol" => "₦",

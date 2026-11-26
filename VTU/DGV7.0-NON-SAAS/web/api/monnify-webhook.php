@@ -1,3 +1,4 @@
 <?php
-http_response_code(503); header('Content-Type: application/json'); header('Cache-Control: no-store');
-echo json_encode(array('status'=>'pending','code'=>'LEGACY_SETTLEMENT_HOLD','message'=>'Legacy settlement is held for reconciliation. No funds were credited or refunded. Preserve the event and reconcile through support.'));
+require_once __DIR__ . '/../../func/bc-connect.php';
+require_once __DIR__ . '/../../func/bc-payment-gateway-settlement.php';
+bc_pg_handle_monnify_webhook($connection_server);

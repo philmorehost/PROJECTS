@@ -39,15 +39,17 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $site_title       = $cachedStyle['site_title'] ?? $site_title;
             $header_image_url = $cachedStyle['header_image'] ?? $header_image_url;
         } else {
-            $template_name_pattern = '%template-6%';
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id AND vst.template_name LIKE ? WHERE sd.vendor_id = ? LIMIT 1");
-            mysqli_stmt_bind_param($stmt_site, "si", $template_name_pattern, $vendor_account_details["id"]);
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
+            mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
             mysqli_stmt_execute($stmt_site);
             $result_site = mysqli_stmt_get_result($stmt_site);
             if ($site_row = mysqli_fetch_assoc($result_site)) {
                 $site_details     = $site_row;
                 $site_title       = $site_row['site_title'] ?: $site_title;
                 $header_image_url = $site_row['header_image'] ?: $header_image_url;
+                if (function_exists('bc_cache_set')) {
+                    bc_cache_set($cacheKey, $site_row);
+                }
             }
             mysqli_stmt_close($stmt_site);
         }
@@ -65,6 +67,14 @@ if (file_exists("uploaded-image/" . $logo_filename)) {
 $brand_colour = '#0f766e';
 if (!empty($site_details['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $site_details['primary_color'])) {
     $brand_colour = $site_details['primary_color'];
+}
+require_once __DIR__ . '/func/bc-theme.php';
+$plate_palette = bc_theme_palette($brand_colour);
+$plate_light = $plate_palette['modes']['light'];
+$plate_dark = $plate_palette['modes']['dark'];
+$brand_rgb = '15, 118, 110';
+if (sscanf($brand_colour, '#%02x%02x%02x', $br, $bg, $bb) === 3) {
+    $brand_rgb = "$br, $bg, $bb";
 }
 
 $vendor_id      = isset($vendor_account_details['id']) ? (int)$vendor_account_details['id'] : 0;
@@ -163,6 +173,10 @@ if (!function_exists('bc_plate_stat')) {
         /* ── Plate design system ─────────────────────────────────────────── */
         :root {
             --brand: <?php echo $brand_colour; ?>;
+            --brand-rgb: <?php echo $brand_rgb; ?>;
+            --brand-fg: <?php echo $plate_light['on_primary']; ?>;
+            --brand-ink: <?php echo $plate_light['primary_text']; ?>;
+            --brand-dark-fg: <?php echo $plate_dark['primary_text']; ?>;
             --ink: #0b1220;
             --muted: #64748b;
             --line: #e2e8f0;
@@ -192,29 +206,29 @@ if (!function_exists('bc_plate_stat')) {
         .pc-brand img { height: 34px; width: auto; display: block; }
         .pc-brand__mark {
             width: 34px; height: 34px; border-radius: 10px; background: var(--brand);
-            color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .95rem;
+            color: var(--brand-fg); display: grid; place-items: center; font-weight: 800; font-size: .95rem;
         }
         .pc-nav { display: flex; align-items: center; gap: 24px; }
         .pc-nav a { color: var(--muted); text-decoration: none; font-size: .92rem; font-weight: 500; }
         .pc-nav a:hover { color: var(--ink); }
         .pc-cta {
             display: inline-flex; align-items: center; gap: 8px;
-            background: var(--brand); color: #fff; text-decoration: none;
+            background: var(--brand); color: var(--brand-fg); text-decoration: none;
             padding: 11px 20px; border-radius: 10px; font-weight: 600; font-size: .92rem;
-            border: 1px solid transparent; transition: opacity .15s ease;
+            border: 1px solid var(--brand-ink); transition: opacity .15s ease;
         }
-        .pc-cta:hover { opacity: .9; color: #fff; }
+        .pc-cta:hover { opacity: .9; color: var(--brand-fg); }
         .pc-cta--ghost { background: transparent; color: var(--ink); border-color: var(--line); }
         .pc-cta--ghost:hover { color: var(--ink); border-color: var(--ink); }
 
         /* ── Hero ───────────────────────────────────────────────────────── */
         .pc-hero { padding: 64px 0 0; background:
-            radial-gradient(900px 420px at 50% -10%, rgba(15, 118, 110, .10), transparent 70%);
+            radial-gradient(900px 420px at 50% -10%, rgba(var(--brand-rgb), .12), transparent 70%);
         }
         .pc-hero__inner { max-width: 900px; margin: 0 auto; text-align: center; }
         .pc-eyebrow {
             display: inline-flex; align-items: center; gap: 8px;
-            background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;
+            background: rgba(var(--brand-rgb), .08); color: var(--brand-ink); border: 1px solid rgba(var(--brand-rgb), .24);
             padding: 6px 14px; border-radius: 999px; font-size: .8rem; font-weight: 600; margin-bottom: 22px;
         }
         /* The reference idiom: a two-line display headline whose second line is outlined. */
@@ -271,7 +285,7 @@ if (!function_exists('bc_plate_stat')) {
         }
         .pk-tx { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
         .pk-tx div { display: flex; align-items: center; gap: 9px; font-size: .78rem; }
-        .pk-tx i { width: 26px; height: 26px; border-radius: 8px; background: #f1f5f9; color: var(--brand); display: grid; place-items: center; font-style: normal; }
+        .pk-tx i { width: 26px; height: 26px; border-radius: 8px; background: #f1f5f9; color: var(--brand-ink); display: grid; place-items: center; font-style: normal; }
         .pk-tx b { margin-left: auto; font-weight: 700; }
 
         /* ── Marquee band ──────────────────────────────────────────────── */
@@ -307,8 +321,8 @@ if (!function_exists('bc_plate_stat')) {
         .pc-section--ink .pk-split__copy p { color: #94a3b8; }
         .pk-stats { display: flex; gap: 30px; flex-wrap: wrap; margin-bottom: 26px; }
         .pk-stat { display: flex; flex-direction: column; }
-        .pk-stat__value { font-size: 1.5rem; font-weight: 900; letter-spacing: -.03em; color: var(--brand); }
-        .pc-section--ink .pk-stat__value { color: #5eead4; }
+        .pk-stat__value { font-size: 1.5rem; font-weight: 900; letter-spacing: -.03em; color: var(--brand-ink); }
+        .pc-section--ink .pk-stat__value { color: var(--brand-dark-fg); }
         .pk-stat__label { font-size: .84rem; color: var(--muted); }
 
         /* ── Icon feature grid ──────────────────────────────────────────── */
@@ -316,9 +330,9 @@ if (!function_exists('bc_plate_stat')) {
         .pk-feature { display: flex; gap: 14px; }
         .pk-feature__icon {
             flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px;
-            display: grid; place-items: center; background: #f0fdfa; color: var(--brand);
+            display: grid; place-items: center; background: rgba(var(--brand-rgb), .09); color: var(--brand-ink);
         }
-        .pc-section--ink .pk-feature__icon { background: rgba(255, 255, 255, .08); color: #5eead4; }
+        .pc-section--ink .pk-feature__icon { background: rgba(255, 255, 255, .08); color: var(--brand-dark-fg); }
         .pk-feature h3 { font-size: .98rem; font-weight: 700; margin-bottom: 4px; }
         .pk-feature p { color: var(--muted); font-size: .88rem; }
         .pc-section--ink .pk-feature p { color: #94a3b8; }
@@ -329,7 +343,7 @@ if (!function_exists('bc_plate_stat')) {
             border-radius: var(--radius); padding: 22px; display: grid; gap: 16px;
         }
         .pk-bars { display: flex; align-items: flex-end; gap: 10px; height: 130px; }
-        .pk-bars i { flex: 1; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, #5eead4, #0f766e); display: block; }
+        .pk-bars i { flex: 1; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, var(--brand-dark-fg), var(--brand)); display: block; }
         .pk-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
         .pk-mini { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .07); border-radius: 12px; padding: 14px; }
         .pk-mini small { color: #94a3b8; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
@@ -360,7 +374,7 @@ if (!function_exists('bc_plate_stat')) {
             padding: 24px 20px; transition: transform .18s ease, box-shadow .18s ease;
         }
         .pc-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16, 24, 40, .08); }
-        .pc-card__icon { color: var(--brand); margin-bottom: 14px; }
+        .pc-card__icon { color: var(--brand-ink); margin-bottom: 14px; }
         .pc-card__title { font-size: .98rem; font-weight: 700; margin-bottom: 6px; }
         .pc-card__copy { color: var(--muted); font-size: .875rem; }
         /* Coming soon: clearly unavailable, but still on the page so the product is legible. */
@@ -387,7 +401,7 @@ if (!function_exists('bc_plate_stat')) {
             background: var(--surface); color: var(--ink);
             box-shadow: 0 1px 3px rgba(16, 24, 40, .12);
         }
-        .pc-switch button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+        .pc-switch button:focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 2px; }
         .pc-panel[hidden] { display: none; }
         .pc-panel__note { text-align: center; color: var(--muted); font-size: .92rem; margin: 0 auto 26px; max-width: 620px; }
         .pk-switch-wrap { display: flex; justify-content: center; }

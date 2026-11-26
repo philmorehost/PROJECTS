@@ -151,7 +151,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
         }
         .balance-hero::after {
             content: ''; position: absolute; bottom: -20%; left: -10%; width: 300px; height: 300px;
-            background: radial-gradient(circle, #6366f1 0%, transparent 70%); opacity: 0.1; filter: blur(50px);
+            background: radial-gradient(circle, var(--brand) 0%, transparent 70%); opacity: 0.1; filter: blur(50px);
         }
         .glass-pill {
             background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
@@ -162,7 +162,7 @@ bc_app_head("Gift Card Hub | " . ($get_all_site_details["site_title"]));
         .nav-pills-modern .nav-link {
             border-radius: 1rem; padding: 0.6rem 1.5rem; font-weight: 600; color: #64748b; transition: 0.3s;
         }
-        .nav-pills-modern .nav-link.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px var(--primary-soft); }
+        .nav-pills-modern .nav-link.active { background: var(--brand); color: var(--brand-fg); box-shadow: 0 4px 12px var(--primary-soft); }
 
         .card-modern { border: none; border-radius: 1.5rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #fff; }
         .card-modern:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); }

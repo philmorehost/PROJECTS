@@ -404,8 +404,8 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 
     $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
     $spadmin_primary_color = "#0d6efd";
-    $select_spadmin_style_template = mysqli_query($connection_server, "SELECT * FROM sas_spadmin_style_templates");
-    if(mysqli_num_rows($select_spadmin_style_template) == 1){
+    $select_spadmin_style_template = mysqli_query($connection_server, "SELECT * FROM sas_spadmin_style_templates LIMIT 1");
+    if($select_spadmin_style_template && mysqli_num_rows($select_spadmin_style_template) >= 1){
         $get_spadmin_style_template = mysqli_fetch_array($select_spadmin_style_template);
         $style_template_name = $get_spadmin_style_template["template_name"];
         if(!empty($style_template_name)){
@@ -414,7 +414,10 @@ if (isset($GLOBALS['bc_integrity_fail']) && $GLOBALS['bc_integrity_fail'] === tr
 				$css_style_template_location =  $style_template_location;
 			}
         }
-        $spadmin_primary_color = $get_spadmin_style_template["primary_color"] ?? "#0d6efd";
+        $cand_sp_color = (string)($get_spadmin_style_template["primary_color"] ?? "");
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $cand_sp_color)) {
+            $spadmin_primary_color = $cand_sp_color;
+        }
     }
     
 	/*if(emailTemplateTableExist('student-reg','','verify') == false){

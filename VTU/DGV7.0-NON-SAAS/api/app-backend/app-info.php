@@ -1,5 +1,6 @@
 <?php error_reporting(0);
 include_once("app-config.php");
+require_once(__DIR__ . "/../../func/bc-payment-gateway-settlement.php");
 
 header("Content-Type: application/json");
 $incoming_post_request = file_get_contents("php://input");
@@ -74,17 +75,21 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
         // }
 
         //Update Banner Ads
-        $payment_gateway_url_array = array("beewave" => "beewave.ng", "flutterwave" => "flutterwave.com", "paystack" => "paystack.com", "monnify" => "monnify.com", "payvessel" => "payvessel.com");
+        $payment_gateway_url_array = array("beewave" => "beewave.ng", "flutterwave" => "flutterwave.com", "paystack" => "paystack.com", "monnify" => "monnify.com", "payvessel" => "payvessel.com", "payhub" => "payhub");
         $payment_gateway_assoc_array = array();
         $payment_gateway_public_key_assoc_array = array();
         $payment_gateway_secret_key_assoc_array = array();
         $payment_gateway_encrypt_key_assoc_array = array();
-        $check_payment_gateway = mysqli_query($connection_server, "SELECT * FROM sas_payment_gateways WHERE vendor_id = '" . $select_vendor_table["id"] . "'");
-        if (mysqli_num_rows($check_payment_gateway) >= 1) {
+        $check_payment_gateway = mysqli_query($connection_server, "SELECT * FROM sas_payment_gateways WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND status = 1");
+        if ($check_payment_gateway && mysqli_num_rows($check_payment_gateway) >= 1) {
             while ($payment_gateway = mysqli_fetch_assoc($check_payment_gateway)) {
-                array_push($payment_gateway_assoc_array, $payment_gateway_url_array[$payment_gateway["gateway_name"]]);
+                $gw_key = strtolower(trim((string)($payment_gateway["gateway_name"] ?? '')));
+                if (!bc_pg_is_gateway_enabled($connection_server, (int)$select_vendor_table["id"], $gw_key)) {
+                    continue;
+                }
+                array_push($payment_gateway_assoc_array, $payment_gateway_url_array[$gw_key] ?? $gw_key);
                 array_push($payment_gateway_public_key_assoc_array, $payment_gateway["public_key"]);
-                array_push($payment_gateway_secret_key_assoc_array, $payment_gateway["secret_key"]);
+                array_push($payment_gateway_secret_key_assoc_array, "");
                 array_push($payment_gateway_encrypt_key_assoc_array, $payment_gateway["encrypt_key"]);
             }
         }
@@ -181,8 +186,11 @@ if ((json_last_error() === JSON_ERROR_NONE) || (1 == 1)) {
                 $user_va_bank_fee_array = array();
                 //Get Virtual Accounts
                 $checkuser_virtual_accounts = mysqli_query($connection_server, "SELECT * FROM sas_user_banks WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '$app_username'");
-                if (mysqli_num_rows($checkuser_virtual_accounts) >= 1) {
+                if ($checkuser_virtual_accounts && mysqli_num_rows($checkuser_virtual_accounts) >= 1) {
                     while ($user_va_det = mysqli_fetch_assoc($checkuser_virtual_accounts)) {
+                        if (!bc_pg_bank_account_allowed($connection_server, (int)$select_vendor_table["id"], $user_va_det)) {
+                            continue;
+                        }
                         array_push($user_va_bank_name_array, $user_va_det["bank_name"]);
                         $user_va_bank_acct_name_array[$user_va_det["bank_name"]] = $user_va_det["account_name"];
                         $user_va_bank_acct_number_array[$user_va_det["bank_name"]] = $user_va_det["account_number"];

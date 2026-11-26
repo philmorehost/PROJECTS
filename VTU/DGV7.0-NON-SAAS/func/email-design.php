@@ -58,11 +58,20 @@ function bc_email_brand() {
     $support = '';
     $apk = '';
     if ($connection_server instanceof mysqli && $vendor_id > 0) {
-        $sq = mysqli_query($connection_server, "SELECT site_title, primary_color, apk_download_url FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+        $sq = @mysqli_query($connection_server, "SELECT site_title, primary_color, apk_download_url FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+        if ($sq === false) {
+            $sq = @mysqli_query($connection_server, "SELECT site_title, apk_download_url FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+        }
         if ($sq && ($sr = mysqli_fetch_assoc($sq))) {
             $site_name = trim((string)($sr['site_title'] ?? ''));
             $color = (string)($sr['primary_color'] ?? '');
             $apk = trim((string)($sr['apk_download_url'] ?? ''));
+        }
+        $tq = @mysqli_query($connection_server, "SELECT primary_color FROM sas_vendor_style_templates WHERE vendor_id='$vendor_id' LIMIT 1");
+        if ($tq && ($tr = mysqli_fetch_assoc($tq)) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tr['primary_color'] ?? ''))) {
+            $color = (string)$tr['primary_color'];
+        } elseif (!preg_match('/^#[0-9a-fA-F]{6}$/', $color) && !empty($GLOBALS['vendor_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['vendor_primary_color'])) {
+            $color = (string)$GLOBALS['vendor_primary_color'];
         }
         $vq2 = mysqli_query($connection_server, "SELECT email, website_url FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
         if ($vq2 && ($vr2 = mysqli_fetch_assoc($vq2))) {

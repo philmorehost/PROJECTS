@@ -1,8 +1,9 @@
 <?php
 require_once __DIR__ . '/../../func/bc-secure-session.php';
- bc_secure_session_start();
+bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
+require_once(__DIR__ . "/../../func/bc-payment-gateway-settlement.php");
 
 if (isset($api_post_info_from_app) && is_array($api_post_info_from_app)) {
     $purchase_method = "app";
@@ -33,17 +34,38 @@ if (!$get_vendor) {
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+        echo json_encode(["status" => "error", "message" => "Account is not active"]);
+        exit;
+    }
 
-    $user_id = $user['id'];
-    $username = $user['username'];
+    if (!isServiceEnabled('virtual_bank_display', $vendor_id)) {
+        echo json_encode([
+            "status" => "success",
+            "data" => [],
+            "message" => "Virtual bank accounts are currently disabled."
+        ]);
+        exit;
+    }
 
-    // Ensure PayHub accounts are synced/generated
-    syncPayhubVirtualAccounts($vendor_id, $user['email'], false);
+    $username = mysqli_real_escape_string($connection_server, $user['username']);
+
+    // Ensure PayHub accounts are synced/generated only when PayHub is enabled
+    if (bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'payhub')) {
+        syncPayhubVirtualAccounts($vendor_id, $user['email'], false);
+    }
 
     $banks = [];
-    $q = mysqli_query($connection_server, "SELECT bank_name, account_name, account_number FROM sas_user_banks WHERE username='$username' AND vendor_id='$vendor_id'");
-    while($r = mysqli_fetch_assoc($q)) {
-        $banks[] = $r;
+    $q = mysqli_query($connection_server, "SELECT bank_code, bank_name, account_name, account_number, gateway_name, reference, status FROM sas_user_banks WHERE username='$username' AND vendor_id='$vendor_id'");
+    while ($q && ($r = mysqli_fetch_assoc($q))) {
+        if (!bc_pg_bank_account_allowed($connection_server, $vendor_id, $r)) {
+            continue;
+        }
+        $banks[] = [
+            "bank_name" => $r["bank_name"],
+            "account_name" => $r["account_name"],
+            "account_number" => $r["account_number"],
+        ];
     }
 
     echo json_encode([

@@ -1,13 +1,14 @@
 <?php
 require_once __DIR__ . '/../func/bc-secure-session.php';
- bc_secure_session_start();
+bc_secure_session_start();
 include("../func/bc-config.php");
+require_once(__DIR__ . "/../func/bc-payment-gateway-settlement.php");
 
 $username = mysqli_real_escape_string($connection_server, $get_logged_user_details["username"]);
 $vendor_id = (int)$get_logged_user_details["vendor_id"];
 
 // Check if Virtual Bank is enabled globally or for this vendor
-if(!isServiceEnabled('virtual_bank_display')){
+if(!isServiceEnabled('virtual_bank_display', $vendor_id)){
     header("Location: Dashboard.php");
     exit();
 }
@@ -15,7 +16,8 @@ if(!isServiceEnabled('virtual_bank_display')){
 // Master KYC Compliance Check for Virtual Bank Generation (Always required regardless of global force_kyc for security)
 $is_kyc_compliant = ($get_logged_user_details['kyc_status'] == 2);
 
-$keys = getGatewayDetails('payhub', $vendor_id);
+$payhub_enabled = bc_pg_is_gateway_enabled($connection_server, $vendor_id, 'payhub');
+$keys = $payhub_enabled ? getGatewayDetails('payhub', $vendor_id) : [];
 
 // Virtual account generation
 $registered_virtual_bank_arr_3 = array();
@@ -27,21 +29,14 @@ if (is_array($user_banks_3)) {
     }
 }
 
-// ── Server-side PayHub Auto-Sync ──────────────────────────────────────────────
-// If the user has no PayHub account yet and PayHub is configured, attempt a
-// synchronous fetch-and-save before rendering the HTML.  This ensures accounts
-// are visible immediately without relying solely on the async JS sync (which can
-// be blocked by the shared session throttle).  A 60-second per-page cooldown
-// prevents hammering the PayHub API on rapid successive refreshes.
 $server_sync_result = null;
 $has_payhub_account = in_array("PayHub", $registered_virtual_bank_arr_3);
 
-if (!$has_payhub_account && !empty($keys['secret_key'])) {
+if ($payhub_enabled && !$has_payhub_account && !empty($keys['secret_key'])) {
     $last_vb_payhub_sync = $_SESSION['last_vb_payhub_sync'] ?? 0;
     if (time() - $last_vb_payhub_sync >= 60) {
         $_SESSION['last_vb_payhub_sync'] = time();
         $server_sync_result = syncPayhubVirtualAccounts($vendor_id, $get_logged_user_details['email'], false, $username);
-        // If sync succeeded, refresh the bank list so the HTML shows the new accounts
         if (!empty($server_sync_result['success'])) {
             $registered_virtual_bank_arr_3 = [];
             $user_banks_3 = getUserVirtualBank();
@@ -55,12 +50,24 @@ if (!$has_payhub_account && !empty($keys['secret_key'])) {
         }
     }
 }
-// ─────────────────────────────────────────────────────────────────────────────
+
+$manual_funding_enabled = isServiceEnabled('manual_funding', $vendor_id);
 
 if(isset($_POST['notify-deposit'])){
-    $bank_name = mysqli_real_escape_string($connection_server, $_POST['bank_name']);
-    $amount = (float)$_POST['amount'];
-    $desc = mysqli_real_escape_string($connection_server, $_POST['description']);
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    if (!$manual_funding_enabled) {
+        $_SESSION["product_purchase_response"] = "Manual bank funding is currently disabled.";
+        header("Location: VirtualBanks.php");
+        exit();
+    }
+    $bank_name = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($_POST['bank_name'] ?? ''))));
+    $amount = (float)($_POST['amount'] ?? 0);
+    $desc = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($_POST['description'] ?? ''))));
+    if ($bank_name === '' || !is_finite($amount) || $amount < 100) {
+        $_SESSION["product_purchase_response"] = "Enter a valid bank and amount (minimum NGN 100).";
+        header("Location: VirtualBanks.php");
+        exit();
+    }
     $ref = "MDEP-".substr(str_shuffle("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"), 0, 10);
 
     // Insert into submitted_payments
@@ -136,12 +143,17 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                     ];
 
                     $get_banks = mysqli_query($connection_server, "SELECT * FROM sas_user_banks WHERE vendor_id='$vendor_id' AND username='$username' AND (status = 1 OR status IS NULL)");
-                    if(mysqli_num_rows($get_banks) > 0){
-                        while($bank = mysqli_fetch_assoc($get_banks)){
-                            // Ensure disabled gateways do not display
-                            if (!empty($bank['gateway_name']) && !isServiceEnabled($bank['gateway_name'], $vendor_id)) {
+                    $visible_banks = [];
+                    if ($get_banks) {
+                        while ($bank = mysqli_fetch_assoc($get_banks)) {
+                            if (!bc_pg_bank_account_allowed($connection_server, $vendor_id, $bank)) {
                                 continue;
                             }
+                            $visible_banks[] = $bank;
+                        }
+                    }
+                    if(!empty($visible_banks)){
+                        foreach($visible_banks as $bank){
                             $bank_name_upper = strtoupper($bank['bank_name']);
                             $ussd_info = "";
                             foreach($ussd_codes as $name => $code) {
@@ -159,17 +171,17 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                             <div class="col-md-6">
                                 <div class="bank-card">
                                     <div class="bank-header d-flex justify-content-between">
-                                        <span><?php echo $bank_name_upper; ?></span>
+                                        <span><?php echo htmlspecialchars($bank_name_upper, ENT_QUOTES, 'UTF-8'); ?></span>
                                         <i class="bi bi-bank"></i>
                                     </div>
                                     <div class="bank-body">
                                         <div class="text-muted small">Account Number:</div>
                                         <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <span class="acc-no" id="acc_<?php echo $bank['account_number']; ?>"><?php echo $bank['account_number']; ?></span>
-                                            <i class="bi bi-clipboard copy-btn fs-4" onclick="copyToClipboard('<?php echo $bank['account_number']; ?>')"></i>
+                                            <span class="acc-no" id="acc_<?php echo htmlspecialchars($bank['account_number'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($bank['account_number'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                            <i class="bi bi-clipboard copy-btn fs-4" onclick="copyToClipboard('<?php echo htmlspecialchars($bank['account_number'], ENT_QUOTES, 'UTF-8'); ?>')"></i>
                                         </div>
                                         <div class="text-muted small">Account Name:</div>
-                                        <div class="fw-bold mb-2"><?php echo $bank['account_name']; ?></div>
+                                        <div class="fw-bold mb-2"><?php echo htmlspecialchars($bank['account_name'], ENT_QUOTES, 'UTF-8'); ?></div>
                                         <?php echo $ussd_info; ?>
                                     </div>
                                 </div>
@@ -216,10 +228,12 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                     ?>
                 </div>
 
+                <?php if ($manual_funding_enabled): ?>
                 <div class="card mt-5 p-4 bank-card">
                     <h5 class="fw-bold mb-4">Manual Bank Deposit</h5>
                     <p class="text-muted small">If you made a transfer to our official bank account, please notify us here.</p>
                     <form method="post">
+                        <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Bank You Paid To</label>
@@ -228,14 +242,14 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                                     <?php
                                     $get_admin_banks = mysqli_query($connection_server, "SELECT * FROM sas_admin_payments WHERE vendor_id='$vendor_id'");
                                     while($ab = mysqli_fetch_assoc($get_admin_banks)){
-                                        echo "<option value='{$ab['bank_name']}'>{$ab['bank_name']} - {$ab['account_number']}</option>";
+                                        echo "<option value='".htmlspecialchars($ab['bank_name'], ENT_QUOTES, 'UTF-8')."'>".htmlspecialchars($ab['bank_name'].' - '.$ab['account_number'], ENT_QUOTES, 'UTF-8')."</option>";
                                     }
                                     ?>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Amount Paid</label>
-                                <input type="number" name="amount" class="form-control" required>
+                                <input type="number" name="amount" min="100" step="0.01" class="form-control" required>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Additional Info (Date, Sender Name, etc.)</label>
@@ -247,9 +261,11 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                         </div>
                     </form>
                 </div>
+                <?php endif; ?>
             </div>
 
             <div class="col-lg-4">
+                <?php if ($manual_funding_enabled): ?>
                 <div class="card p-4 bank-card">
                     <h6 class="fw-bold mb-3">Admin Bank Details</h6>
                     <?php
@@ -257,9 +273,9 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                     if(mysqli_num_rows($get_admin_banks) > 0){
                         while($ab = mysqli_fetch_assoc($get_admin_banks)){
                             echo "<div class='mb-3 border-bottom pb-2'>
-                                <div class='fw-bold text-primary'>{$ab['bank_name']}</div>
-                                <div>Account: <strong>{$ab['account_number']}</strong></div>
-                                <div class='small text-muted'>{$ab['account_name']}</div>
+                                <div class='fw-bold text-primary'>".htmlspecialchars($ab['bank_name'], ENT_QUOTES, 'UTF-8')."</div>
+                                <div>Account: <strong>".htmlspecialchars($ab['account_number'], ENT_QUOTES, 'UTF-8')."</strong></div>
+                                <div class='small text-muted'>".htmlspecialchars($ab['account_name'], ENT_QUOTES, 'UTF-8')."</div>
                             </div>";
                         }
                     }else{
@@ -267,6 +283,7 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                     }
                     ?>
                 </div>
+                <?php endif; ?>
 
                 <div class="card p-4 bank-card mt-4">
                     <h6 class="fw-bold mb-3">Recent Notifications</h6>
@@ -326,7 +343,7 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                 if (copyToClipboardFallback(text)) {
                     alert('Account number copied!');
                 } else {
-                    alert('Failed to copy: Clipboard API not supported');
+                    alert('Clipboard copying is not supported in this browser.');
                 }
             }
         }

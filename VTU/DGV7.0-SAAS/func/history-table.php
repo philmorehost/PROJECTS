@@ -7,7 +7,7 @@ $show_vendor_col = !empty($show_vendor_info) && !$is_batch;
 $tx_receipt_source = isset($tx_receipt_source) ? (string)$tx_receipt_source : '';
 
 if ($query_result && mysqli_num_rows($query_result) >= 1) {
-    $show_actions = ($is_admin && ((isset($is_payment_order) && $is_payment_order) || (isset($is_fund_transfer) && $is_fund_transfer))) || (!$is_admin);
+    $show_actions = ($is_admin && ((isset($is_payment_order) && $is_payment_order) || (isset($is_fund_transfer) && $is_fund_transfer) || (isset($inline_approve_page) && $inline_approve_page !== ''))) || (!$is_admin);
     echo '<div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-3">';
     echo '<div class="table-responsive">';
     echo '<table class="table table-hover align-middle mb-0">';
@@ -97,8 +97,8 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
                     $h = '<form method="post" action="' . $page . '" class="d-flex gap-1 align-items-center justify-content-center flex-wrap" onclick="event.stopPropagation();">'
                         . $bc_order_csrf
                         . '<input type="hidden" name="order-ref" value="' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '">'
-                        . '<input type="password" name="pin" maxlength="4" inputmode="numeric" placeholder="PIN" title="Security PIN" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
-                        . '<input type="text" name="otp_code" maxlength="6" inputmode="numeric" placeholder="2FA" title="Authenticator or email code" style="width:58px;font-size:11px;" class="form-control form-control-sm py-0">'
+                        . '<input type="password" name="pin" maxlength="8" inputmode="numeric" autocomplete="off" placeholder="PIN" title="Security PIN" style="width:68px;min-width:68px;font-size:11px;" class="form-control form-control-sm py-0">'
+                        . '<input type="text" name="otp_code" maxlength="8" inputmode="numeric" autocomplete="off" placeholder="2FA" title="Authenticator or email code" style="width:68px;min-width:68px;font-size:11px;" class="form-control form-control-sm py-0">'
                         . '<input type="hidden" name="totp_code" value="">';
                     foreach ($buttons as $b) {
                         $h .= '<button type="submit" name="order-status" value="' . $b[0] . '" class="' . $b[2] . '" style="font-size:11px;">' . $b[1] . '</button>';

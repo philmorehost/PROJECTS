@@ -138,6 +138,25 @@ if ($connection_server) {
                             header('Location: /bc-admin/Login.php');
                             exit();
                         }
+                        $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
+                        $vendor_primary_color = "#287bff";
+                        if (isset($select_vendor_table["id"])) {
+                            $select_vendor_style_template = mysqli_query($connection_server, "SELECT template_name, primary_color FROM sas_vendor_style_templates WHERE vendor_id='" . (int)$select_vendor_table["id"] . "' LIMIT 1");
+                            if ($select_vendor_style_template && mysqli_num_rows($select_vendor_style_template) >= 1) {
+                                $get_vendor_style_template = mysqli_fetch_array($select_vendor_style_template);
+                                $style_template_name = $get_vendor_style_template["template_name"] ?? "";
+                                if (!empty($style_template_name)) {
+                                    $style_template_location = "/cssfile/template/" . $style_template_name;
+                                    if (file_exists($_SERVER['DOCUMENT_ROOT'] . $style_template_location)) {
+                                        $css_style_template_location = $style_template_location;
+                                    }
+                                }
+                                $cand_color = (string)($get_vendor_style_template["primary_color"] ?? "");
+                                if (preg_match('/^#[0-9a-fA-F]{6}$/', $cand_color)) {
+                                    $vendor_primary_color = $cand_color;
+                                }
+                            }
+                        }
                         $GLOBALS['bc_vendor_is_expired'] = true;
                         header('Cache-Control: no-store');
                         if (($_SERVER['SCRIPT_NAME'] ?? '') !== '/bc-admin/RenewSubscription.php') {
@@ -337,8 +356,8 @@ if ($connection_server) {
 $css_style_template_location = "/cssfile/template/bc-style-template-1.css";
 $vendor_primary_color = "#287bff";
 if (isset($select_vendor_table["id"])) {
-    $select_vendor_style_template = mysqli_query($connection_server, "SELECT * FROM sas_vendor_style_templates WHERE vendor_id='" . $select_vendor_table["id"] . "'");
-    if (mysqli_num_rows($select_vendor_style_template) == 1) {
+    $select_vendor_style_template = mysqli_query($connection_server, "SELECT * FROM sas_vendor_style_templates WHERE vendor_id='" . (int)$select_vendor_table["id"] . "' LIMIT 1");
+    if ($select_vendor_style_template && mysqli_num_rows($select_vendor_style_template) >= 1) {
         $get_vendor_style_template = mysqli_fetch_array($select_vendor_style_template);
         $style_template_name = $get_vendor_style_template["template_name"];
         if (!empty($style_template_name)) {
@@ -347,6 +366,9 @@ if (isset($select_vendor_table["id"])) {
                 $css_style_template_location = $style_template_location;
             }
         }
-        $vendor_primary_color = $get_vendor_style_template["primary_color"] ?? "#287bff";
+        $cand_color = (string)($get_vendor_style_template["primary_color"] ?? "");
+        if (preg_match('/^#[0-9a-fA-F]{6}$/', $cand_color)) {
+            $vendor_primary_color = $cand_color;
+        }
     }
 }

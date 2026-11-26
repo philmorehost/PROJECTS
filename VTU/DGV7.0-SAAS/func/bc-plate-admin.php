@@ -45,11 +45,18 @@ if (!function_exists('bc_adm_colour')) {
      * a stored value must be a #rrggbb hex or it cannot inject CSS.
      */
     function bc_adm_colour($details = null) {
+        $area = bc_adm_area();
+        if ($area === 'spadmin') {
+            if (!empty($GLOBALS['spadmin_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['spadmin_primary_color'])) {
+                return (string)$GLOBALS['spadmin_primary_color'];
+            }
+        } else {
+            if (!empty($GLOBALS['vendor_primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', (string)$GLOBALS['vendor_primary_color'])) {
+                return (string)$GLOBALS['vendor_primary_color'];
+            }
+        }
         $details = is_array($details) ? $details : array();
         $raw = isset($details['primary_color']) ? (string)$details['primary_color'] : '';
-        if ($raw === '' && isset($GLOBALS['vendor_primary_color'])) {
-            $raw = (string)$GLOBALS['vendor_primary_color'];
-        }
         return preg_match('/^#[0-9a-fA-F]{6}$/', $raw) ? $raw : '#0f766e';
     }
 }
@@ -831,20 +838,55 @@ if (!function_exists('bc_adm_flash')) {
         $title = $is_fail ? 'Processing Error!' : ($is_ok ? 'Successful!' : 'Notice');
         $body  = $message;
         if ($ref !== '') $body .= '<br><small style="opacity:.7">Ref: ' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '</small>';
+        unset($_SESSION['product_purchase_response'], $_SESSION['product_purchase_status'], $_SESSION['last_transaction_ref']);
         ?>
 <script>
 (function () {
-    if (typeof Swal === 'undefined') return;
-    Swal.fire({
+    var payload = {
         title: <?php echo json_encode($title, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         html: <?php echo json_encode($body, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         icon: <?php echo json_encode($icon, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT); ?>,
         confirmButtonText: 'OK'
-    });
+    };
+    var shown = false;
+    function showFallbackBanner() {
+        var host = document.querySelector('.pk-app__wrap') || document.querySelector('main') || document.body;
+        if (!host) return;
+        var alert = document.createElement('div');
+        var bsClass = payload.icon === 'error' ? 'alert-danger' : (payload.icon === 'success' ? 'alert-success' : 'alert-info');
+        alert.className = 'alert ' + bsClass + ' alert-dismissible fade show shadow-sm mb-3';
+        alert.setAttribute('role', 'alert');
+        var titleEl = document.createElement('strong');
+        titleEl.textContent = payload.title + ' ';
+        alert.appendChild(titleEl);
+        var msgSpan = document.createElement('span');
+        msgSpan.innerHTML = payload.html;
+        alert.appendChild(msgSpan);
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close';
+        closeBtn.setAttribute('data-bs-dismiss', 'alert');
+        closeBtn.setAttribute('aria-label', 'Close');
+        alert.appendChild(closeBtn);
+        host.insertBefore(alert, host.firstChild);
+    }
+    function presentFlash() {
+        if (shown) return;
+        shown = true;
+        if (typeof Swal !== 'undefined') {
+            Swal.fire(payload);
+        } else {
+            showFallbackBanner();
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', presentFlash, { once: true });
+    } else {
+        presentFlash();
+    }
 })();
 </script>
         <?php
-        unset($_SESSION['product_purchase_response'], $_SESSION['product_purchase_status'], $_SESSION['last_transaction_ref']);
     }
 }
 
@@ -1175,7 +1217,7 @@ if (!function_exists('bc_adm_foot')) {
 </footer>
 <?php endif; ?>
 <?php bc_adm_assets($area, $opts); ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js" defer></script>
+<script src="../assets-2/vendor/sweetalert2/sweetalert2.all.min.js?v=11.0.16" defer></script>
 <?php bc_adm_flash(); ?>
 <script>
 (function () {
@@ -1399,9 +1441,13 @@ if (!function_exists('bc_adm_foot')) {
     document.addEventListener('click', function (e) {
         var t = e.target;
         var btn = t && t.closest ? t.closest('button[type="submit"], input[type="submit"], button:not([type])') : null;
-        if (btn && btn.form && btn.form.dataset.bcLocked) {
-            e.preventDefault();
-            e.stopPropagation();
+        if (btn && btn.form) {
+            if (btn.form.dataset.bcLocked) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            btn.form._bcLastSubmitter = btn;
         }
     }, true);
     document.addEventListener('submit', function (e) {
@@ -1413,7 +1459,8 @@ if (!function_exists('bc_adm_foot')) {
         form.dataset.bcLocked = '1';
         /* A disabled submitter can drop its name/value from the payload in
            some browsers, so mirror it into a hidden input BEFORE disabling. */
-        var sub = e.submitter || null;
+        var sub = e.submitter || form._bcLastSubmitter || null;
+        form._bcLastSubmitter = null;
         if (sub && sub.name && !sub.disabled) {
             var m = document.createElement('input');
             m.type = 'hidden';
