@@ -195,9 +195,10 @@ if (!function_exists('bc_app_brand_slug')) {
 }
 
 // STANDALONE: resolveVendorID() always returns 1 - single tenant installation
-if (function_exists('resolveVendorID')) return;
+if (!function_exists('resolveVendorID')) {
 function resolveVendorID($force_recompute = false) {
     return 1;
+}
 }
 
 /**

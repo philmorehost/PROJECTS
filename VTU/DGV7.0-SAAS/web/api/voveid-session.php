@@ -15,6 +15,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+    exit;
+}
+
+require_once __DIR__ . '/../../func/bc-secure-session.php';
+bc_secure_session_start();
 require_once __DIR__ . '/../../func/bc-connect.php';
 
 if (!$connection_server) {
@@ -47,7 +55,7 @@ $refId = '';
 if (isset($_SESSION['user_session']) && !empty($_SESSION['user_session'])) {
     // Web user session
     $username = mysqli_real_escape_string($connection_server, $_SESSION['user_session']);
-    $user_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' LIMIT 1");
+    $user_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND username='$username' AND status=1 AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
     if ($user_q && $u = mysqli_fetch_assoc($user_q)) {
         $user_id = (int)$u['id'];
         $refId = (string)$u['id']; // Use user ID as refId
@@ -55,15 +63,15 @@ if (isset($_SESSION['user_session']) && !empty($_SESSION['user_session'])) {
 } elseif (isset($_SESSION['admin_session']) && !empty($_SESSION['admin_session'])) {
     // Admin session
     $email = mysqli_real_escape_string($connection_server, $_SESSION['admin_session']);
-    $admin_q = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND email='$email' LIMIT 1");
+    $admin_q = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND email='$email' AND status=1 LIMIT 1");
     if ($admin_q && $a = mysqli_fetch_assoc($admin_q)) {
         $user_id = (int)$a['id'];
         $refId = 'vendor_' . $a['id'];
     }
-} elseif (isset($_POST['api_key']) && !empty($_POST['api_key'])) {
-    // App API key authentication
-    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_POST['api_key'], $vendor_id));
-    $app_user_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 LIMIT 1");
+} elseif ((isset($_POST['api_key']) && !empty($_POST['api_key'])) || (function_exists('bc_app_token_from_request') && bc_app_token_from_request() !== '')) {
+    // App API key / bearer token authentication
+    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_POST['api_key'] ?? '', $vendor_id));
+    $app_user_q = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
     if ($app_user_q && $au = mysqli_fetch_assoc($app_user_q)) {
         $user_id = (int)$au['id'];
         $refId = (string)$au['id'];

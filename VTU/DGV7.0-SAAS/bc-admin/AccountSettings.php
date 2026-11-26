@@ -486,6 +486,31 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
     bc_validate_csrf();
     if (function_exists('bc_vendor_kyc_ensure_schema')) bc_vendor_kyc_ensure_schema();
     $vid = (int)$get_logged_admin_details["id"];
+    $vkyc_req_now = function_exists('bc_vendor_kyc_required_checks') ? bc_vendor_kyc_required_checks() : [];
+    $vkyc_pend_now = function_exists('bc_vendor_kyc_pending') ? bc_vendor_kyc_pending($get_logged_admin_details, $vkyc_req_now) : [];
+    $vkyc_manual_map = [
+        'govt_id'            => 'govt_id',
+        'liveliness_picture' => 'selfie',
+        'liveliness_video'   => 'liveliness_video',
+        'proof_of_address'   => 'proof_of_address',
+    ];
+    $vkyc_labels_map = [
+        'govt_id'            => 'Government ID',
+        'liveliness_picture' => 'Live photo',
+        'liveliness_video'   => 'Liveliness video',
+        'proof_of_address'   => 'Proof of address',
+    ];
+    $vkyc_skipped = [];
+    foreach ($vkyc_pend_now as $vchk) {
+        if (isset($vkyc_manual_map[$vchk]) && empty($_FILES[$vkyc_manual_map[$vchk]]['name'])) {
+            $vkyc_skipped[] = $vkyc_labels_map[$vchk] ?? $vchk;
+        }
+    }
+    if (!empty($vkyc_skipped)) {
+        $_SESSION["product_purchase_response"] = "Error: All activated compliance checks are compulsory. Please complete and submit: " . implode(', ', $vkyc_skipped) . ".";
+        header("Location: AccountSettings.php#tab-kyc");
+        exit;
+    }
     $upload_dir = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyc-vendor/";
     if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
     $htaccess_file = $upload_dir . '.htaccess';
@@ -570,7 +595,7 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
     }
     if ($saved) {
         // Replacement evidence must be reviewed again; never retain an old approval.
-        mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status=1,kyc_reject_reason=NULL WHERE id='$vid'");
+        mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status=0,kyc_reject_reason=NULL WHERE id='$vid'");
         $new_status = function_exists('bc_vendor_kyc_refresh_status') ? bc_vendor_kyc_refresh_status($vid) : 0;
         if ($new_status === 1) {
             $_SESSION["product_purchase_response"] = "KYC documents submitted. Every required item is provided — your compliance file is now waiting for super-admin review.";
@@ -1997,21 +2022,31 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                             </ul>
                             <?php endif; ?>
                             <form method="post" enctype="multipart/form-data"><?php echo bc_csrf_field(); ?>
+                                <?php
+                                    $v_req_govt_id = in_array('govt_id', $vkyc_pending, true);
+                                    $v_req_selfie  = in_array('liveliness_picture', $vkyc_pending, true);
+                                    $v_req_poa     = in_array('proof_of_address', $vkyc_pending, true);
+                                    $v_req_video   = in_array('liveliness_video', $vkyc_pending, true);
+                                    $GLOBALS['bc_live_capture_required_fields'] = [
+                                        'selfie'           => $v_req_selfie,
+                                        'liveliness_video' => $v_req_video,
+                                    ];
+                                ?>
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)</label>
-                                        <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3">
+                                        <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $v_req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                        <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Live Photo / Selfie (camera only, max 512 KB)</label>
+                                        <label class="form-label small fw-bold">Live Photo / Selfie (camera only, max 512 KB)<?php echo $v_req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('selfie'); ?>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)</label>
-                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3">
+                                        <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)<?php echo $v_req_poa ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_poa ? ' required data-kyc-required="1"' : ''; ?>>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Live Video (camera only, max 3 MB)</label>
+                                        <label class="form-label small fw-bold">Live Video (camera only, max 3 MB)<?php echo $v_req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('liveliness_video', true); ?>
                                     </div>
                                 </div>

@@ -9,7 +9,8 @@ if (empty($input)) {
     $input = json_decode(file_get_contents('php://input'), true) ?? [];
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), $vendor_id));
 $type = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["type"] ?? ""))));
 $id = mysqli_real_escape_string($connection_server, trim(strip_tags($input["id"] ?? "")));
 
@@ -18,10 +19,13 @@ if (empty($api_key) || empty($type) || empty($id)) {
     exit;
 }
 
-$vendor_id = resolveVendorID();
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $get_logged_user_details = mysqli_fetch_assoc($check_user);
+    if ((int)($get_logged_user_details['status'] ?? 0) !== 1 || !empty($get_logged_user_details['is_blocked'])) {
+        echo json_encode(["status" => "failed", "desc" => "Account is not active"]);
+        exit;
+    }
 
     $res = productIDPurchaseChecker($id, $type, "WEB_CHECK");
     if ($res === "success") {

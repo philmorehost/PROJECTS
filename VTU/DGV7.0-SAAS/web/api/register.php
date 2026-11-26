@@ -4,9 +4,15 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "error", "message" => "Method not allowed"]);
+    exit;
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
-if (empty($input)) {
-    $input = $_REQUEST;
+if (!is_array($input)) {
+    $input = $_POST;
 }
 
 $user = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["user"] ?? ''))));
@@ -85,7 +91,9 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     $reg_token    = $input_reg_token;
 
     if ($otp === '' || $reg_token === '') {
-        if (bc_is_rate_limited('app_reg_otp', $vendor_id . ':' . strtolower($user), 5, 900)) {
+        $reg_ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        if (bc_is_rate_limited('app_reg_otp', $vendor_id . ':' . strtolower($user), 5, 900)
+            || ($reg_ip !== '' && bc_is_rate_limited('app_reg_otp_ip', $reg_ip, 15, 900))) {
             echo json_encode(["status" => "error", "message" => "Too many verification requests. Please try again later."]);
             exit;
         }

@@ -4,9 +4,15 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "error", "message" => "Method not allowed"]);
+    exit;
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
-if (empty($input)) {
-    $input = $_REQUEST;
+if (!is_array($input)) {
+    $input = $_POST;
 }
 if (!is_array($input)) $input = array();
 
@@ -50,11 +56,16 @@ if ((int)$user_details['status'] !== 1 || (int)$user_details['is_blocked'] === 1
 }
 
 $recipient = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["user"] ?? ''))));
-$amount = (float)($input["amount"] ?? 0);
+$raw_amount = $input["amount"] ?? 0;
+if (!is_numeric($raw_amount)) {
+    echo json_encode(["status" => "error", "message" => "Invalid transfer amount"]);
+    exit;
+}
+$amount = (float)$raw_amount;
 $pin = trim((string)($input["pin"] ?? ''));
 $otp = preg_replace('/\D/', '', (string)($input["otp"] ?? ''));
 
-if (empty($recipient) || $amount <= 0 || empty($pin)) {
+if (empty($recipient) || !is_finite($amount) || $amount <= 0 || empty($pin)) {
     echo json_encode(["status" => "error", "message" => "All fields (user, amount, pin) are required"]);
     exit;
 }

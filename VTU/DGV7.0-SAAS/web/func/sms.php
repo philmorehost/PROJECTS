@@ -67,7 +67,15 @@ if (in_array($purchase_method, $purchase_method_array)) {
 
     $sms_type_array = array("mtn", "airtel", "glo", "9mobile");
     if (in_array($isp, $sms_type_array)) {
-        if (!empty(userBalance(1)) && is_numeric(userBalance(1)) && (userBalance(1) > 0)) {
+        $__pin_enforced = in_array($purchase_method, array("WEB", "APP")) || !empty($GLOBALS['pin_required_for_api_purchase']);
+        $__pin_input = ($purchase_method === "WEB") ? $_POST : ($get_api_post_info ?? array());
+        if ($__pin_enforced && function_exists('requireTransactionPin') && !requireTransactionPin($get_vendor_details ?? array(), $get_logged_user_details, $__pin_input, $__pin_error)) {
+            $json_response_array = array("status" => "failed", "code" => "pin_required", "desc" => $__pin_error);
+            $json_response_encode = json_encode($json_response_array, true);
+        } elseif ($get_logged_user_details["status"] != 1 || !empty($get_logged_user_details["is_blocked"])) {
+            $json_response_array = array("status" => "failed", "desc" => "Your account is currently suspended. Please contact support.");
+            $json_response_encode = json_encode($json_response_array, true);
+        } elseif (!empty(userBalance(1)) && is_numeric(userBalance(1)) && (userBalance(1) > 0)) {
             if (!empty($sender_id) || !empty($text_message)) {
                 $sms_details_checker = !empty($isp) && (count($sms_phone_array) > 0) && !empty($sender_id) && !empty($text_message) && !empty($sms_type);
             } else {

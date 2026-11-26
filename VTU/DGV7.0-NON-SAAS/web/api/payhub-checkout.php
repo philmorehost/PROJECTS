@@ -38,7 +38,7 @@ $ref = bc_pg_sanitize_reference((string)($input['reference'] ?? ''));
 $user = null;
 $api_key_raw = trim((string)($input['api_key'] ?? ''));
 if ($api_key_raw !== '' && function_exists('bc_fintech_api_credential')) {
-    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($api_key_raw, 0));
+    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($api_key_raw, $vendor_id));
     if ($api_key !== '') {
         $uq = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
         if ($uq && mysqli_num_rows($uq) === 1) {

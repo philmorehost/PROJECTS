@@ -218,7 +218,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 						}
                     }
                 }else{
-                    if(mysqli_num_rows($select_payment_order) > 1){
+                    if($select_payment_order && mysqli_num_rows($select_payment_order) > 1){
                         //Duplicated Orders
                         $json_response_array = array("desc" => "Duplicated Orders");
                         $json_response_encode = json_encode($json_response_array,true);

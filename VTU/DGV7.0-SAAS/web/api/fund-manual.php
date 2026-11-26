@@ -4,16 +4,18 @@ bc_secure_session_start();
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
-$input = json_decode(file_get_contents('php://input'), true);
-if (empty($input)) {
-    $input = $_REQUEST;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "error", "message" => "Method not allowed"]);
+    exit;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
-
-if (empty($api_key)) {
-    echo json_encode(["status" => "error", "message" => "API Key is required"]);
-    exit;
+$input = json_decode(file_get_contents('php://input'), true);
+if (empty($input)) {
+    $input = $_POST;
+}
+if (!is_array($input)) {
+    $input = array();
 }
 
 $vendor_id = resolveVendorID();
@@ -23,8 +25,15 @@ if (!$get_vendor) {
     exit;
 }
 
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags((string)($input["api_key"] ?? ''))), $vendor_id));
+
+if (empty($api_key)) {
+    echo json_encode(["status" => "error", "message" => "API Key is required"]);
+    exit;
+}
+
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
-if (mysqli_num_rows($check_user) == 1) {
+if ($check_user && mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
     if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
         echo json_encode(["status" => "error", "message" => "Account is not active"]);
@@ -36,10 +45,31 @@ if (mysqli_num_rows($check_user) == 1) {
         exit;
     }
 
+    if (function_exists('bc_is_rate_limited') && bc_is_rate_limited('fund_manual_app', $vendor_id . ':' . strtolower((string)$user['username']), 5, 600)) {
+        http_response_code(429);
+        echo json_encode(["status" => "error", "message" => "Too many manual funding requests. Please wait a few minutes before submitting another."]);
+        exit;
+    }
+
     $username = mysqli_real_escape_string($connection_server, $user['username']);
-    $amount = (float)($input["amount"] ?? 0);
-    $gateway = mysqli_real_escape_string($connection_server, trim(strip_tags((string)($input["gateway"] ?? 'Manual Bank Deposit'))));
-    $reference = "MAN_" . time() . rand(100, 999);
+    $pending_q = mysqli_query($connection_server, "SELECT COUNT(*) AS cnt FROM sas_transactions WHERE vendor_id='$vendor_id' AND username='$username' AND product_unique_id='manual_funding' AND status='2'");
+    $pending_row = $pending_q ? mysqli_fetch_assoc($pending_q) : null;
+    if ((int)($pending_row['cnt'] ?? 0) >= 5) {
+        http_response_code(429);
+        echo json_encode(["status" => "error", "message" => "You already have 5 pending manual deposit requests. Wait for admin review before submitting another."]);
+        exit;
+    }
+
+    $raw_amount = $input["amount"] ?? 0;
+    if (!is_numeric($raw_amount)) {
+        echo json_encode(["status" => "error", "message" => "Invalid deposit amount"]);
+        exit;
+    }
+    $amount = round((float)$raw_amount, 2);
+    $gateway_clean = substr(trim(strip_tags((string)($input["gateway"] ?? 'Manual Bank Deposit'))), 0, 64);
+    if ($gateway_clean === '') $gateway_clean = 'Manual Bank Deposit';
+    $gateway = mysqli_real_escape_string($connection_server, $gateway_clean);
+    $reference = "MAN_" . time() . random_int(100, 999);
     $api_website = mysqli_real_escape_string($connection_server, $_SERVER["HTTP_HOST"] ?? 'APP');
 
     $q_limits = mysqli_query($connection_server, "SELECT min_amount, max_amount FROM sas_admin_payment_orders WHERE vendor_id='$vendor_id' LIMIT 1");
@@ -53,9 +83,10 @@ if (mysqli_num_rows($check_user) == 1) {
     }
 
     // Fetch the admin's manual bank deposit charge fee
-    $admin_payment = mysqli_fetch_assoc(mysqli_query($connection_server,
-        "SELECT amount_charged FROM sas_admin_payments WHERE vendor_id='$vendor_id' LIMIT 1"));
-    $charge_fee = (float)($admin_payment['amount_charged'] ?? 0);
+    $admin_payment_q = mysqli_query($connection_server,
+        "SELECT amount_charged FROM sas_admin_payments WHERE vendor_id='$vendor_id' LIMIT 1");
+    $admin_payment = $admin_payment_q ? mysqli_fetch_assoc($admin_payment_q) : null;
+    $charge_fee = round(max(0.0, (float)($admin_payment['amount_charged'] ?? 0)), 2);
 
     $balance_before = (float)($user['balance'] ?? 0);
     $balance_after  = $balance_before;
@@ -71,7 +102,10 @@ if (mysqli_num_rows($check_user) == 1) {
         ];
 
         if ($charge_fee > 0 && (float)$user['balance'] >= $charge_fee) {
-            $fee_ref = "FEE_" . time() . rand(100, 999);
+            if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                bc_ensure_wallet_transactional_schema($connection_server);
+            }
+            $fee_ref = "FEE_" . time() . random_int(100, 999);
             $fee_deducted = chargeOtherUser(
                 $user['username'], "debit", "manual_bank_charge", "Manual Deposit Fee",
                 $fee_ref, "", $charge_fee, $charge_fee,

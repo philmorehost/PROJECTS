@@ -27,6 +27,14 @@ function intent_json(int $code, array $data): never {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    intent_json(405, ['success' => false, 'error' => 'Method not allowed']);
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 if (!preg_match('/^Bearer\s+(.+)$/i', $auth_header, $m)) {
@@ -37,7 +45,7 @@ $tok_esc = mysqli_real_escape_string($connection_server, $bearer_token);
 $user_row = mysqli_fetch_assoc(mysqli_query($connection_server,
     "SELECT u.*, v.id as vid, v.ai_status FROM sas_users u
      JOIN sas_vendors v ON v.id=u.vendor_id
-     WHERE u.api_token='$tok_esc' AND u.status=1 LIMIT 1"
+     WHERE u.api_token='$tok_esc' AND u.status=1 AND (u.is_blocked IS NULL OR u.is_blocked=0) AND v.status=1 LIMIT 1"
 ));
 if (!$user_row) intent_json(401, ['success' => false, 'error' => 'Invalid token']);
 bc_enrollment_api_guard($user_row);

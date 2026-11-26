@@ -9,14 +9,6 @@ if (empty($input)) {
     $input = json_decode(file_get_contents('php://input'), true) ?? [];
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), 0));
-$action = mysqli_real_escape_string($connection_server, trim(strip_tags($input["action"] ?? "list")));
-
-if (empty($api_key)) {
-    echo json_encode(["status" => "failed", "desc" => "Missing api_key"]);
-    exit;
-}
-
 $vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 if (!$get_vendor) {
@@ -24,9 +16,27 @@ if (!$get_vendor) {
     exit;
 }
 
+$action = mysqli_real_escape_string($connection_server, trim(strip_tags($input["action"] ?? "list")));
+if ($action !== "list" && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "failed", "desc" => "Method not allowed"]);
+    exit;
+}
+
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), $vendor_id));
+
+if (empty($api_key)) {
+    echo json_encode(["status" => "failed", "desc" => "Missing api_key"]);
+    exit;
+}
+
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+        echo json_encode(["status" => "failed", "desc" => "Account is not active"]);
+        exit;
+    }
     $username = $user['username'];
 
     if ($action == "add") {

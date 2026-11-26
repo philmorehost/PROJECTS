@@ -9,7 +9,8 @@ if (empty($input)) {
     $input = json_decode(file_get_contents('php://input'), true) ?? [];
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? "")), $vendor_id));
 $batch_number = mysqli_real_escape_string($connection_server, trim(strip_tags($input["batch_number"] ?? "")));
 
 if (empty($api_key) || empty($batch_number)) {
@@ -17,10 +18,13 @@ if (empty($api_key) || empty($batch_number)) {
     exit;
 }
 
-$vendor_id = resolveVendorID();
-$check_user = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
+$check_user = mysqli_query($connection_server, "SELECT username, status, is_blocked FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) == 1) {
     $user = mysqli_fetch_assoc($check_user);
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+        echo json_encode(["status" => "failed", "desc" => "Account is not active"]);
+        exit;
+    }
     $username = $user['username'];
 
     $q = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='$vendor_id' AND username='$username' AND batch_number='$batch_number'");

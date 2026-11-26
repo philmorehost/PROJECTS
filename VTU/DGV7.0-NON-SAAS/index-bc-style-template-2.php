@@ -350,7 +350,8 @@ if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
                 <li><a href="/ReferAndEarn.php">Refer &amp; Earn</a></li>
                 <li><a href="/web/Pricing.php">Pricing</a></li>
                 <li><a href="/web/APIDocs.php">Developer API</a></li>
-                <li><a href="/web/Login.php" class="nav-cta">Login</a></li>
+                <?php $t2_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
+                <li><a href="<?php echo htmlspecialchars($t2_dash !== '' ? $t2_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t2_dash !== '' ? 'Dashboard' : 'Login'; ?></a></li>
             </ul>
         </div>
     </header>
@@ -361,7 +362,11 @@ if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
                 <h1>Simplifying Digital Payments & Services</h1>
                 <p>Enjoy premium glassmorphism speed for purchasing airtime, data bundles, cable TV subscriptions, electricity tokens, betting funding, and more instantly.</p>
                 <div class="btn-group">
-                    <a href="/web/Register.php" class="btn btn-primary">Get Started <i class="fas fa-arrow-right"></i></a>
+                    <?php if ($t2_dash !== ''): ?>
+                        <a href="<?php echo htmlspecialchars($t2_dash); ?>" class="btn btn-primary">Dashboard <i class="fas fa-arrow-right"></i></a>
+                    <?php else: ?>
+                        <a href="/web/Register.php" class="btn btn-primary">Get Started <i class="fas fa-arrow-right"></i></a>
+                    <?php endif; ?>
                     <?php if(!empty($apk_download_url)): ?>
                     <a href="<?php echo htmlspecialchars($apk_download_url); ?>" class="btn btn-secondary"><i class="fab fa-android"></i> Download App</a>
                     <?php endif; ?>
@@ -413,8 +418,12 @@ if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
             <div class="footer-col">
                 <h4>Core Products</h4>
                 <ul>
-                    <li><a href="/web/Register.php">Create Account</a></li>
-                    <li><a href="/web/Login.php">Access Portal</a></li>
+                    <?php if (!empty($t2_dash)): ?>
+                        <li><a href="<?php echo htmlspecialchars($t2_dash); ?>">Dashboard</a></li>
+                    <?php else: ?>
+                        <li><a href="/web/Register.php">Create Account</a></li>
+                        <li><a href="/web/Login.php">Access Portal</a></li>
+                    <?php endif; ?>
                     <li><a href="/web/Pricing.php">VTU Pricing & Rates</a></li>
                 </ul>
             </div>

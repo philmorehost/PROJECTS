@@ -44,7 +44,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
             if ($__pin_enforced && !requireTransactionPin($get_vendor_details ?? array(), $get_logged_user_details, $__pin_input, $__pin_error)) {
                 $json_response_array = array("status" => "failed", "code" => "pin_required", "desc" => $__pin_error);
                 $json_response_encode = json_encode($json_response_array, true);
-            } elseif ($get_logged_user_details["status"] != 1) {
+            } elseif ($get_logged_user_details["status"] != 1 || !empty($get_logged_user_details["is_blocked"])) {
                 $json_response_array = array("status" => "failed", "desc" => "Your account is currently suspended. Please contact support.");
                 $json_response_encode = json_encode($json_response_array, true);
             } elseif (!empty(userBalance(1)) && is_numeric(userBalance(1)) && (userBalance(1) > 0)) {

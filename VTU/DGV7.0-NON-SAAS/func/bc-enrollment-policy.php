@@ -9,9 +9,11 @@ function bc_enrollment_policy($vendor_id,$refresh=false) {
     if(!$q)throw new RuntimeException('Security policy is unavailable.');
     $p=['vendor'=>false,'user'=>false,'tenant'=>false];
     while($r=mysqli_fetch_assoc($q)) {
-        if($r['name']==='force_vendor_totp')$p['vendor']=$r['value']==='1';
-        if($r['name']==='force_user_totp')$p['user']=$r['value']==='1';
-        if($r['name']==='require_user_totp')$p['tenant']=$r['value']==='1';
+        $n = $r['name'] ?? '';
+        $v = $r['value'] ?? '';
+        if($n==='force_vendor_totp')$p['vendor']=$v==='1';
+        if($n==='force_user_totp')$p['user']=$v==='1';
+        if($n==='require_user_totp')$p['tenant']=$v==='1';
     }
     $p['user']=$p['user']||$p['tenant'];
     return $cache[$vid]=$p;

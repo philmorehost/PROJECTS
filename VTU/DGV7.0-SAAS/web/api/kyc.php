@@ -10,6 +10,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "failed", "desc" => "Method not allowed"]);
+    exit;
+}
+
 include_once("../../func/bc-connect.php");
 // Shared KYC helpers (bc_kyc_checks_pending / bc_kyc_check_label) live in bc-security.php, which
 // bc-connect.php does not pull in by itself. Without this the status/upload replies fatal on an
@@ -33,8 +39,8 @@ if (empty($api_key)) {
 }
 
 $user_q = mysqli_query($connection_server,
-    "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 LIMIT 1");
-$user = mysqli_fetch_assoc($user_q);
+    "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
+$user = $user_q ? mysqli_fetch_assoc($user_q) : null;
 if (!$user) {
     echo json_encode(["status" => "failed", "desc" => "Unauthorized"]);
     exit;
@@ -161,6 +167,9 @@ if ($action === 'upload_document') {
         if (move_uploaded_file($tmp, $upload_dir . $filename)) {
             $fn_esc = mysqli_real_escape_string($connection_server, $filename);
             $updates[] = "$db_col='$fn_esc'";
+            if ($input_name === 'selfie') {
+                $updates[] = "liveliness_picture='$fn_esc'";
+            }
             $uploaded[] = $input_name;
         }
     }

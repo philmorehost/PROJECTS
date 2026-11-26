@@ -61,8 +61,14 @@ try {
     // The same access rule the sibling web/api/*-plans.php endpoints apply: this catalogue is only
     // served to an API user the SELLER has approved. Without it, a suspended or still-pending key
     // could keep reading prices, and "activate another vendor's API" would mean nothing.
-    if ((int)($user['status'] ?? 0) !== 1 || (int)($user['api_status'] ?? 0) !== 1) {
+    if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked']) || (int)($user['api_status'] ?? 0) !== 1) {
         throw new Error("API approval needed, Contact Admin");
+    }
+    if (function_exists('bc_fintech_developer_api_allowed') && !bc_fintech_developer_api_allowed($user)) {
+        throw new Error("Developer API access is restricted to business accounts");
+    }
+    if (function_exists('bc_api_key_is_expired') && bc_api_key_is_expired($user)) {
+        throw new Error("API Key expired");
     }
     $vendor_id = $user['vendor_id'];
     $account_level = (int)$user['account_level'];

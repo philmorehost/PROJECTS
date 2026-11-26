@@ -476,12 +476,13 @@ if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
                 <a href="/" class="logo">
                     <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>" style="filter: brightness(0.9);">
                 </a>
+                <?php $t3_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
                 <nav id="siteNav">
                     <a href="Services.php">Services</a>
                     <a href="ReferAndEarn.php">Refer &amp; Earn</a>
                     <a href="#about">About</a>
                     <a href="#faq">FAQ</a>
-                    <a href="/web/Login.php" class="nav-cta">Get Started</a>
+                    <a href="<?php echo htmlspecialchars($t3_dash !== '' ? $t3_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t3_dash !== '' ? 'Dashboard' : 'Get Started'; ?></a>
                 </nav>
                 <div class="nav-toggle" id="navToggle"><i class="fas fa-bars"></i></div>
             </div>
@@ -501,8 +502,12 @@ if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
                     <h1>Digital Utility Payments, Re-imagined</h1>
                     <p>Recharge airtime, buy cheap mobile data, pay electricity bills and renew cable TV subscriptions instantly using our highly secured next-generation automation gateway.</p>
                     <div class="hero-buttons">
-                        <a href="/web/Register.php" class="btn btn-primary"><i class="fas fa-rocket"></i> Get Started</a>
-                        <a href="/web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Access Portal</a>
+                        <?php if ($t3_dash !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($t3_dash); ?>" class="btn btn-primary"><i class="fas fa-th-large"></i> Dashboard</a>
+                        <?php else: ?>
+                            <a href="/web/Register.php" class="btn btn-primary"><i class="fas fa-rocket"></i> Get Started</a>
+                            <a href="/web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Access Portal</a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="hero-image">

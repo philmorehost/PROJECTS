@@ -2,13 +2,13 @@
 header('Content-Type: application/json');
 include("../../func/bc-connect.php");
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? '', 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? '', $vendor_id));
 if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
 
-$vendor_id = resolveVendorID();
 $purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
 $api_status_clause = ($purchase_method == "app") ? "" : "AND api_status=1";
-$user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' $api_status_clause AND status=1");
+$user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' $api_status_clause AND status=1 AND (is_blocked IS NULL OR is_blocked=0)");
 $user = mysqli_fetch_assoc($user_q);
 if(!$user) exit(json_encode(["status" => "failed", "desc" => "Unauthorized"]));
 

@@ -70,8 +70,11 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
         <p class="eyebrow"><i></i><?php echo $site_e; ?> · Bills, Top-Ups &amp; Global Money</p>
         <h1>Everyday top-ups and bill payments, together.</h1>
         <p class="lede">Pick a network, enter a Nigerian mobile number, and preview airtime, mobile data bundles, electricity tokens, cable TV, exam PINs, and travel eSIMs.</p>
+        <?php $mer_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
         <div class="ctas" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
-          <?php if ($ctx['registration_open']): ?>
+          <?php if ($mer_dash !== ''): ?>
+            <a class="btn primary" href="<?php echo bc_meridian_e($mer_dash); ?>">Dashboard</a>
+          <?php elseif ($ctx['registration_open']): ?>
             <a class="btn primary" href="/web/Register.php">Create free account</a>
           <?php else: ?>
             <a class="btn primary" href="/web/Login.php">Sign in to account</a>
@@ -316,10 +319,14 @@ if (is_file(__DIR__ . '/func/bc-seo-head.php') && !empty($ctx['vendor_id']) && (
             <h2>Get started with <?php echo $site_e; ?> today.</h2>
             <p class="lede">Use the mobile app or log into the web dashboard for instant top-ups, bills, transfers, and virtual cards.</p>
             <div class="chips" style="margin-top:18px;align-items:center">
-              <?php if ($ctx['registration_open']): ?>
-                <a class="btn primary" href="/web/Register.php">Create free account</a>
+              <?php if (!empty($mer_dash)): ?>
+                <a class="btn primary" href="<?php echo bc_meridian_e($mer_dash); ?>">Dashboard</a>
+              <?php else: ?>
+                <?php if ($ctx['registration_open']): ?>
+                  <a class="btn primary" href="/web/Register.php">Create free account</a>
+                <?php endif; ?>
+                <a class="btn ghost" href="/web/Login.php">Log in</a>
               <?php endif; ?>
-              <a class="btn ghost" href="/web/Login.php">Log in</a>
               <?php if ($app_badge !== ''): ?>
                 <?php echo $app_badge; ?>
               <?php else: ?>

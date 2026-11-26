@@ -11,6 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "failed", "desc" => "Method not allowed"]);
+    exit;
+}
+
 include("../../func/bc-connect.php");
 
 // Identify Vendor
@@ -25,24 +31,24 @@ if (!$select_vendor_table) {
     exit;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? '', 0));
-if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
-
-$purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
-$api_status_clause = ($purchase_method == "app") ? "" : "AND api_status=1";
-$user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$v_id' AND api_key='$api_key' $api_status_clause AND status=1");
-$user = mysqli_fetch_assoc($user_q);
-if(!$user) exit(json_encode(["status" => "failed", "desc" => "Unauthorized"]));
-
-// For chargeUser to work correctly, we might need some session-like variables or global user details
-$get_logged_user_details = $user;
-
 if (empty($_POST)) {
     $json_input = json_decode(file_get_contents('php://input'), true);
     if (is_array($json_input)) {
         $_POST = $json_input;
     }
 }
+
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential($_GET['api_key'] ?? ($_POST['api_key'] ?? ''), $v_id));
+if(empty($api_key)) exit(json_encode(["status" => "failed", "desc" => "Missing API Key"]));
+
+$purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
+$api_status_clause = ($purchase_method == "app") ? "" : "AND api_status=1";
+$user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$v_id' AND api_key='$api_key' $api_status_clause AND status=1 AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
+$user = $user_q ? mysqli_fetch_assoc($user_q) : null;
+if(!$user) exit(json_encode(["status" => "failed", "desc" => "Unauthorized"]));
+
+// For chargeUser to work correctly, we might need some session-like variables or global user details
+$get_logged_user_details = $user;
 
 // The transaction PIN belongs to a PERSON, not to a merchant api_key. External API callers
 // ($purchase_method === 'api') serve that merchant's own customers, so they are exempt - requiring a
@@ -76,11 +82,11 @@ if ($get_plan['service_type'] === 'data' && !isServiceEnabled($get_plan['data_ty
 }
 
 $unit_price = (float)($get_plan['price'] ?? 0);
-if($unit_price <= 0) exit(json_encode(["status" => "failed", "desc" => "Plan price not configured."]));
+if(!is_finite($unit_price) || $unit_price <= 0) exit(json_encode(["status" => "failed", "desc" => "Plan price not configured."]));
 
-$total_price = $unit_price * $quantity;
+$total_price = round($unit_price * $quantity, 2);
 
-if($user['balance'] < $total_price) exit(json_encode(["status" => "failed", "desc" => "Insufficient balance."]));
+if((float)$user['balance'] < $total_price) exit(json_encode(["status" => "failed", "desc" => "Insufficient balance."]));
 
 $reference = substr(str_shuffle("12345678901234567890"), 0, 15);
 $batch_reference = strtoupper(substr($service_type, 0, 1))."BATCH-".substr(str_shuffle("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"), 0, 10);
@@ -94,6 +100,7 @@ bc_secure_session_start();
 $_SESSION["user_session"] = $user['username'];
 
 $debit = chargeUser("debit", $batch_reference, ucwords($service_type)." Bundle Card", $reference, "", $total_price, $total_price, $description, "API", $select_vendor_table['website_url'], 1);
+unset($_SESSION["user_session"]);
 
 if($debit === "success"){
     $get_sms = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_databundle_config WHERE vendor_id='".$user["vendor_id"]."' && network='".$get_plan['product_name']."' AND service_type='$service_type'"));

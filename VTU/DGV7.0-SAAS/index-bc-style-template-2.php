@@ -571,12 +571,13 @@ if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
                 <a href="/" class="logo">
                     <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>">
                 </a>
+                <?php $t2_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
                 <nav id="siteNav">
                     <a href="Services.php">Services</a>
                     <a href="ReferAndEarn.php">Refer &amp; Earn</a>
                     <a href="#about">About</a>
                     <a href="#faq">FAQ</a>
-                    <a href="/web/Login.php" class="nav-cta">Get Started</a>
+                    <a href="<?php echo htmlspecialchars($t2_dash !== '' ? $t2_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t2_dash !== '' ? 'Dashboard' : 'Get Started'; ?></a>
                 </nav>
                 <div class="nav-toggle" id="navToggle"><i class="fas fa-bars"></i></div>
             </div>
@@ -596,8 +597,12 @@ if (sscanf($t2_primary, '#%02x%02x%02x', $r2, $g2, $b2) === 3) {
                     <h1>Simplify Your Digital Payments</h1>
                     <p>Experience the easiest way to recharge airtime, purchase internet data, buy electricity tokens, subscribe cable TVs, and fund your wallet instantly with 100% security.</p>
                     <div class="hero-buttons">
-                        <a href="/web/Register.php" class="btn btn-primary"><i class="fas fa-rocket"></i> Join Now</a>
-                        <a href="/web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Login</a>
+                        <?php if ($t2_dash !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($t2_dash); ?>" class="btn btn-primary"><i class="fas fa-th-large"></i> Dashboard</a>
+                        <?php else: ?>
+                            <a href="/web/Register.php" class="btn btn-primary"><i class="fas fa-rocket"></i> Join Now</a>
+                            <a href="/web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Login</a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="hero-image">

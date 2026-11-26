@@ -50,25 +50,46 @@ set_exception_handler(function ($e) {
     $short_file = str_replace(dirname(__DIR__), '', $e->getFile());
     error_log('[DGV-EXCEPTION] ' . $e->getMessage() . ' in ' . $short_file . ':' . $e->getLine());
 
+    // Detect if client expects JSON or if it's an API route
+    $is_json_route = false;
+    if (isset($_SERVER['HTTP_ACCEPT']) && stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['HTTP_X_APP_SOURCE']) && !empty($_SERVER['HTTP_X_APP_SOURCE'])) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['REQUEST_URI']) && (
+        stripos($_SERVER['REQUEST_URI'], '/api/') !== false ||
+        stripos($_SERVER['REQUEST_URI'], 'ai-handler') !== false ||
+        stripos($_SERVER['REQUEST_URI'], 'api-handler') !== false ||
+        stripos($_SERVER['REQUEST_URI'], '-ajax') !== false ||
+        stripos($_SERVER['REQUEST_URI'], '-json') !== false
+    )) {
+        $is_json_route = true;
+    }
+
     if (!headers_sent()) {
         http_response_code(500);
-        header('Content-Type: text/html; charset=utf-8');
+        header('Content-Type: ' . ($is_json_route ? 'application/json' : 'text/html') . '; charset=utf-8');
     }
 
     if (!defined('CRON_CLI')) {
-        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>System Error</title>'
-            . '<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc}'
-            . '.card{text-align:center;padding:40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:450px}'
-            . 'h2{color:#dc2626;margin-bottom:8px}p{color:#6b7280;margin:0}</style></head>'
-            . '<body><div class="card"><h2>Something went wrong</h2>'
-            . '<p>The system encountered an error. Our team has been notified.</p>'
-            . '<div style="margin-top:16px; font-family: monospace; font-size: 13px; color: #7f1d1d; background: #fee2e2; padding: 12px; border-radius: 8px; text-align: left; max-width: 100%; word-break: break-all; border: 1px solid #fca5a5;">'
-            . '<strong>Error Details:</strong><br/>' . htmlspecialchars($e->getMessage()) . '<br/>'
-            . '<strong>File:</strong> ' . htmlspecialchars($short_file) . ':' . $e->getLine() . '<br/>'
-            . '<strong>Stack trace:</strong><br/><pre style="margin: 5px 0 0 0; font-size: 11px; white-space: pre-wrap; overflow-x: auto;">' . htmlspecialchars($e->getTraceAsString()) . '</pre>'
-            . '</div>'
-            . '<p style="margin-top:16px"><a href="javascript:history.back()" style="color:#3b82f6">← Go Back</a></p>'
-            . '</div></body></html>';
+        if ($is_json_route) {
+            echo json_encode([
+                'status'  => 'error',
+                'code'    => 'SYSTEM_ERROR',
+                'message' => 'System error occurred. Please try again.'
+            ]);
+        } else {
+            echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>System Error</title>'
+                . '<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc}'
+                . '.card{text-align:center;padding:40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:400px}'
+                . 'h2{color:#dc2626;margin-bottom:8px}p{color:#6b7280;margin:0}</style></head>'
+                . '<body><div class="card"><h2>Something went wrong</h2>'
+                . '<p>The system encountered an error. Our team has been notified.</p>'
+                . '<p style="margin-top:16px"><a href="javascript:history.back()" style="color:#3b82f6">← Go Back</a></p>'
+                . '</div></body></html>';
+        }
     }
     exit(1);
 });
@@ -138,6 +159,6 @@ if (!headers_sent() && !defined('CRON_CLI')) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-XSS-Protection: 1; mode=block');
-    header('Permissions-Policy: clipboard-write=(self "https://merchant.payhub.com.ng" "https://checkout.paystack.com" "https://checkout.flutterwave.com")');
+    header('Permissions-Policy: camera=(self), microphone=(self), clipboard-write=(self "https://merchant.payhub.com.ng" "https://checkout.paystack.com" "https://checkout.flutterwave.com")');
     @header_remove('X-Powered-By');
 }

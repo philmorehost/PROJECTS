@@ -9,14 +9,14 @@ if (empty($input)) {
     $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), $vendor_id));
 
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     exit;
 }
 
-$vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 if (!$get_vendor) {
     echo json_encode(["status" => "error", "message" => "Vendor not found"]);
@@ -29,6 +29,10 @@ if (mysqli_num_rows($check_user) != 1) {
     exit;
 }
 $user = mysqli_fetch_assoc($check_user);
+if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+    echo json_encode(["status" => "error", "message" => "Account is not active"]);
+    exit;
+}
 $acc_level = $user['account_level'];
 $acc_table = [1 => "sas_smart_parameter_values", 2 => "sas_agent_parameter_values", 3 => "sas_api_parameter_values"][$acc_level];
 

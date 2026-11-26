@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/bc-secure-session.php';
+require_once __DIR__ . '/bc-php-compat.php';
 
 if (isset($_SERVER["HTTPS"]) && ($_SERVER["HTTPS"] == "on")) {
     $web_http_host = "https://" . $_SERVER["HTTP_HOST"];

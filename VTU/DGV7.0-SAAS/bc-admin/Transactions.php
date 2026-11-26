@@ -11,6 +11,31 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
         $_SESSION["bc_admin_transactions_csrf"] = bin2hex(random_bytes(24));
     }
 
+    // §29: emailed step-up code sender for transaction approvals, cancellations, and requery.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_stepup_code'])) {
+        if (!hash_equals((string)$_SESSION['bc_admin_transactions_csrf'], (string)($_POST['csrf_token'] ?? ''))) {
+            if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        }
+        $stepup_ctx_map = array(
+            'wallet_funding_approve' => 'Wallet Funding Approval',
+            'wallet_funding_cancel'  => 'Wallet Funding Cancellation',
+            'transaction_requery'    => 'Transaction Requery',
+        );
+        $req_ctx = trim((string)($_POST['stepup_context'] ?? 'wallet_funding_approve'));
+        if (!isset($stepup_ctx_map[$req_ctx])) {
+            $req_ctx = 'wallet_funding_approve';
+        }
+        $send_err = function_exists('bc_stepup_send_email_otp')
+            ? bc_stepup_send_email_otp((int)$get_logged_admin_details['id'], (string)$get_logged_admin_details['email'], (string)$get_logged_admin_details['email'], $req_ctx, $stepup_ctx_map[$req_ctx])
+            : 'Verification is unavailable.';
+        $_SESSION['product_purchase_response'] = $send_err === ''
+            ? 'Verification code sent to your email for ' . $stepup_ctx_map[$req_ctx] . '. Enter it with your Security PIN.'
+            : "Error: $send_err";
+        $redir_qs = !empty($_POST['review_requery']) ? ('?review_requery=' . urlencode((string)$_POST['review_requery'])) : '';
+        header('Location: /bc-admin/Transactions.php' . $redir_qs);
+        exit();
+    }
+
     // Manual reconciliation has the same financial step-up as other admin actions.
     // Background workers use their own CLI/cron-secret identity, never this UI.
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['requery'])) {
@@ -33,7 +58,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 $_SESSION['product_purchase_response'] = $result['desc'] ?? 'No confirmed provider update.';
             } else $_SESSION['product_purchase_response'] = 'Transaction not found.';
         }
-        header('Location: Transactions.php'); exit;
+        header('Location: /bc-admin/Transactions.php'); exit;
     }
 
     // Admin-reviewed cancellation for an individual provider transaction. This path deliberately
@@ -75,11 +100,16 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 if (!$claimed || mysqli_affected_rows($connection_server) !== 1) {
                     $_SESSION["product_purchase_response"] = "This transaction changed while you were reviewing it. Refresh and check its current status.";
                 } else {
+                    if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                        bc_ensure_wallet_transactional_schema($connection_server);
+                    }
+                    $GLOBALS['vendor_id'] = $vendor_id;
+                    if (function_exists('resolveVendorID')) resolveVendorID(true);
                     $_SESSION['tmp_vendor_override'] = $vendor_id;
-                    $refund_ref = substr(str_shuffle("12345678901234567890"), 0, 15);
+                    $refund_ref = 'TXCAN_' . substr(hash('sha256', $vendor_id . ':' . $tx_row["reference"]), 0, 20);
                     $refund = chargeOtherUser(
                         $tx_row["username"], "credit", $tx_row["product_unique_id"], "Refund",
-                        $refund_ref, "", $tx_row["amount"], $tx_row["discounted_amount"],
+                        $refund_ref, "cancel_pending:" . $tx_row["reference"], $tx_row["amount"], $tx_row["discounted_amount"],
                         "Refund after admin-confirmed provider failure for Ref: " . $tx_row["reference"],
                         $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1"
                     );
@@ -94,7 +124,8 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                              WHERE id='$tx_id' AND vendor_id='$vendor_id' AND status='3'"
                         );
                         error_log("Admin-reviewed cancel refund failed for vendor=$vendor_id transaction=" . $tx_row["reference"]);
-                        $_SESSION["product_purchase_response"] = "The refund failed, so the transaction was left pending and the customer was not marked as refunded.";
+                        $fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : "The refund failed, so the transaction was left pending and the customer was not marked as refunded.";
+                        $_SESSION["product_purchase_response"] = $fail_reason;
                     }
                 }
             }
@@ -127,6 +158,11 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
             );
 
             if ($old_pending) {
+                if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                    bc_ensure_wallet_transactional_schema($connection_server);
+                }
+                $GLOBALS['vendor_id'] = $vendor_id;
+                if (function_exists('resolveVendorID')) resolveVendorID(true);
                 while ($tx_row = mysqli_fetch_assoc($old_pending)) {
                     $tx_id = (int)$tx_row["id"];
                     $tx_ref = (string)$tx_row["reference"];
@@ -143,10 +179,10 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                     }
 
                     $_SESSION['tmp_vendor_override'] = $vendor_id;
-                    $refund_ref = substr(str_shuffle("12345678901234567890"), 0, 15);
+                    $refund_ref = 'TXCANC_' . substr(hash('sha256', $vendor_id . ':' . $tx_ref), 0, 20);
                     $refund = chargeOtherUser(
                         $tx_row["username"], "credit", $tx_row["product_unique_id"], "Refund",
-                        $refund_ref, "", $tx_row["amount"], $tx_row["discounted_amount"],
+                        $refund_ref, "cancel_old_pending:" . $tx_ref, $tx_row["amount"], $tx_row["discounted_amount"],
                         "Refund for admin-cancelled old pending Ref:<i>'$tx_ref'</i>",
                         $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1"
                     );
@@ -207,8 +243,14 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 $updated = mysqli_query($connection_server, "UPDATE sas_transactions SET status='1', description='Transaction Successful | manually confirmed delivered by admin' WHERE vendor_id='$vendor_id' AND reference='$ref' AND status='2'");
                 $_SESSION["product_purchase_response"] = ($updated && mysqli_affected_rows($connection_server) === 1) ? "Transaction marked successful. The user was already billed when the purchase was created." : "Unable to update the pending transaction.";
             } else {
+                if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                    bc_ensure_wallet_transactional_schema($connection_server);
+                }
+                $GLOBALS['vendor_id'] = $vendor_id;
+                if (function_exists('resolveVendorID')) resolveVendorID(true);
                 $_SESSION['tmp_vendor_override'] = $vendor_id;
-                $charge = chargeOtherUser($tx_row["username"], "debit", $tx_row["product_unique_id"], "Charge", substr(str_shuffle("12345678901234567890"), 0, 15), "", $tx_row["amount"], $tx_row["discounted_amount"], "Charge for restored successful Ref:<i>'$ref'</i>", $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1");
+                $recover_ref = 'TXREC_' . substr(hash('sha256', $vendor_id . ':' . $ref), 0, 20);
+                $charge = chargeOtherUser($tx_row["username"], "debit", $tx_row["product_unique_id"], "Charge", $recover_ref, "recover_success:" . $ref, $tx_row["amount"], $tx_row["discounted_amount"], "Charge for restored successful Ref:<i>'$ref'</i>", $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1");
                 unset($_SESSION['tmp_vendor_override']);
                 if ($charge === "success") {
                     $updated = mysqli_query($connection_server, "UPDATE sas_transactions SET status='1', description='Transaction Successful | restored by admin after provider delivery' WHERE vendor_id='$vendor_id' AND reference='$ref' AND status='3'");
@@ -252,53 +294,78 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
             : 'Verification is unavailable.';
         if ($sec29_tx_err !== '') {
             $_SESSION["product_purchase_response"] = $sec29_tx_err;
-            header("Location: Transactions.php");
+            header("Location: /bc-admin/Transactions.php");
             exit();
         }
         if (function_exists('bc_sec_audit')) bc_sec_audit((int)$get_logged_admin_details['id'], 'admin', (string)$get_logged_admin_details['email'], 'transaction_admin_action', trim(strip_tags((string)($_POST["order-ref"] ?? ''))), 'action=' . trim(strip_tags((string)($_POST["order-status"] ?? ''))));
 
+        $admin_vid = (int)$get_logged_admin_details["id"];
         $t_ref    = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-ref"])));
         $t_status = trim(strip_tags($_POST["order-status"]));
 
         if (in_array($t_status, array("approve", "cancel"))) {
             $select_tx = mysqli_query($connection_server,
                 "SELECT * FROM sas_transactions
-                 WHERE vendor_id='" . $get_logged_admin_details["id"] . "'
+                 WHERE vendor_id='$admin_vid'
                    AND reference='$t_ref'
                    AND status='2'
                    AND (product_unique_id='wallet_funding' OR product_unique_id='manual_funding' OR type_alternative LIKE '%Wallet Funding%' OR type_alternative LIKE '%Wallet Credit%')
                  LIMIT 1"
             );
 
-            if (mysqli_num_rows($select_tx) == 1) {
+            if ($select_tx && mysqli_num_rows($select_tx) == 1) {
                 $tx_row = mysqli_fetch_array($select_tx);
                 if ($t_status === "approve") {
-                    $credit = chargeOtherUser(
-                        $tx_row["username"], "credit",
-                        "wallet_credit", "Wallet Credit",
-                        substr(str_shuffle("12345678901234567890"), 0, 15),
-                        $t_ref,
-                        $tx_row["amount"], $tx_row["discounted_amount"],
-                        "Account credited by admin (approved payment notification)",
-                        "WEB", $_SERVER["HTTP_HOST"], 1
+                    mysqli_query($connection_server,
+                        "UPDATE sas_transactions SET status='1'
+                         WHERE vendor_id='$admin_vid'
+                           AND reference='$t_ref'
+                           AND status='2'
+                         LIMIT 1"
                     );
-                    if ($credit === "success") {
-                        mysqli_query($connection_server,
-                            "UPDATE sas_transactions SET status='1'
-                             WHERE vendor_id='" . $get_logged_admin_details["id"] . "'
-                               AND reference='$t_ref'"
-                        );
-                        $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " credited with ₦" . number_format($tx_row["discounted_amount"], 2) . " successfully");
+                    if (mysqli_affected_rows($connection_server) !== 1) {
+                        $_SESSION["product_purchase_response"] = "Transaction is no longer pending and cannot be approved again.";
                     } else {
-                        $_SESSION["product_purchase_response"] = "Failed to credit user wallet. Please try again.";
+                        if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                            bc_ensure_wallet_transactional_schema($connection_server);
+                        }
+                        $GLOBALS['vendor_id'] = $admin_vid;
+                        if (function_exists('resolveVendorID')) resolveVendorID(true);
+                        $tx_reference_2 = 'TXAPP_' . substr(hash('sha256', $admin_vid . ':' . $t_ref), 0, 20);
+                        $credit = chargeOtherUser(
+                            $tx_row["username"], "credit",
+                            "wallet_credit", "Wallet Credit",
+                            $tx_reference_2,
+                            "manual_funding_tx:" . $t_ref,
+                            $tx_row["amount"], $tx_row["discounted_amount"],
+                            "Account credited by admin (approved payment notification)",
+                            "WEB", $_SERVER["HTTP_HOST"] ?? "WEB", 1
+                        );
+                        if ($credit === "success") {
+                            $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " credited with ₦" . number_format((float)$tx_row["discounted_amount"], 2) . " successfully");
+                        } else {
+                            mysqli_query($connection_server,
+                                "UPDATE sas_transactions SET status='2'
+                                 WHERE vendor_id='$admin_vid'
+                                   AND reference='$t_ref'
+                                   AND status='1'
+                                 LIMIT 1"
+                            );
+                            $tx_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : "Failed to credit user wallet. Please try again.";
+                            $_SESSION["product_purchase_response"] = $tx_fail_reason;
+                        }
                     }
                 } else {
                     mysqli_query($connection_server,
                         "UPDATE sas_transactions SET status='3'
-                         WHERE vendor_id='" . $get_logged_admin_details["id"] . "'
-                           AND reference='$t_ref'"
+                         WHERE vendor_id='$admin_vid'
+                           AND reference='$t_ref'
+                           AND status='2'
+                         LIMIT 1"
                     );
-                    $_SESSION["product_purchase_response"] = "Payment notification cancelled.";
+                    $_SESSION["product_purchase_response"] = mysqli_affected_rows($connection_server) === 1
+                        ? "Payment notification cancelled."
+                        : "Transaction not found or already processed.";
                 }
             } else {
                 $_SESSION["product_purchase_response"] = "Transaction not found or already processed.";
@@ -315,15 +382,23 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
 <?php bc_adm_topbar(array("area" => "admin", "title" => "TRANSACTIONS", "crumb" => "Home / Transactions")); ?><!-- End Page Title -->
 
     <?php if (isset($_GET['review_requery'])): ?>
-    <form method="post" action="Transactions.php" class="card card-body">
+    <div class="card card-body mb-3">
       <h2>Confirm provider reconciliation</h2>
       <p>This checks the provider and may update the transaction or refund a confirmed cancellation. It does not buy the service again.</p>
-      <input type="hidden" name="requery" value="<?php echo htmlspecialchars((string)$_GET['review_requery'], ENT_QUOTES, 'UTF-8'); ?>">
-      <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['bc_admin_transactions_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
-      <label>Security PIN <input type="password" name="pin" inputmode="numeric" required autocomplete="off"></label>
-      <label>Authenticator / verification code <input name="otp_code" inputmode="numeric" required autocomplete="one-time-code"></label>
-      <button type="submit" class="btn btn-primary">Verify and requery</button>
-    </form>
+      <form method="post" action="Transactions.php" class="mb-2">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['bc_admin_transactions_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
+        <input type="hidden" name="stepup_context" value="transaction_requery">
+        <input type="hidden" name="review_requery" value="<?php echo htmlspecialchars((string)$_GET['review_requery'], ENT_QUOTES, 'UTF-8'); ?>">
+        <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary btn-sm rounded-pill">Email me a requery code</button>
+      </form>
+      <form method="post" action="Transactions.php" class="d-flex flex-wrap gap-2 align-items-end">
+        <input type="hidden" name="requery" value="<?php echo htmlspecialchars((string)$_GET['review_requery'], ENT_QUOTES, 'UTF-8'); ?>">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['bc_admin_transactions_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
+        <label>Security PIN <input type="password" name="pin" inputmode="numeric" required autocomplete="off"></label>
+        <label>Authenticator / verification code <input name="otp_code" inputmode="numeric" required autocomplete="one-time-code"></label>
+        <button type="submit" class="btn btn-primary">Verify and requery</button>
+      </form>
+    </div>
     <?php endif; ?>
     <section class="section dashboard">
       <div class="row">
@@ -333,28 +408,6 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
                 $page_num = (isset($_GET["page"]) && is_numeric($_GET["page"]) && $_GET["page"] >= 1) ? (int)$_GET["page"] : 1;
                 $limit = 50;
                 $offset = ($page_num - 1) * $limit;
-
-                if(isset($_GET["mark_success"]) && !empty($_GET["mark_success"])){
-                    $ref = mysqli_real_escape_string($connection_server, trim(strip_tags($_GET["mark_success"])));
-                    $select_tx = mysqli_query($connection_server, "SELECT * FROM sas_transactions WHERE vendor_id='".$get_logged_admin_details["id"]."' && reference='$ref' && status='3'");
-                    if(mysqli_num_rows($select_tx) == 1){
-                        $tx_row = mysqli_fetch_array($select_tx);
-                        $amount_to_charge = $tx_row["discounted_amount"];
-                        $t_username = $tx_row["username"];
-                        $reference_2 = substr(str_shuffle("12345678901234567890"), 0, 15);
-                        
-                        $charge = chargeOtherUser($t_username, "debit", $tx_row["product_unique_id"], "Charge", $reference_2, "", $tx_row["amount"], $amount_to_charge, "Charge for manually marked successful Ref:<i>'$ref'</i>", $tx_row["mode"], $_SERVER["HTTP_HOST"] ?? "WEB", "1");
-                        
-                        if ($charge === "success") {
-                            mysqli_query($connection_server, "UPDATE sas_transactions SET status='1', description='Transaction Successful' WHERE vendor_id='".(int)$get_logged_admin_details['id']."' AND reference='$ref'");
-                            $_SESSION["product_purchase_response"] = "Transaction marked as successful and user wallet debited ₦" . number_format($amount_to_charge, 2);
-                        } else {
-                            $_SESSION["product_purchase_response"] = "Failed to debit user wallet. Transaction status not changed.";
-                        }
-                    } else {
-                        $_SESSION["product_purchase_response"] = "Failed transaction not found.";
-                    }
-                }
 
                 $search_statement = "";
                 $search_parameter = "";
@@ -400,7 +453,16 @@ bc_adm_head("Users Transaction | " . ($get_all_super_admin_site_details["site_ti
                     <div class="row align-items-center g-3">
                         <div class="col-md-6">
                             <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-list-check me-2"></i>Transaction History</h5>
-                            <p class="text-muted small mb-0">Review provider responses, confirm delivery, or cancel and refund a failed pending purchase immediately.</p>
+                            <p class="text-muted small mb-2">Review provider responses, confirm delivery, or cancel and refund a failed pending purchase immediately.</p>
+                            <form method="post" action="Transactions.php" class="d-inline-flex flex-wrap gap-2 align-items-center m-0">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['bc_admin_transactions_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <select name="stepup_context" class="form-select form-select-sm" style="width:auto;">
+                                    <option value="wallet_funding_approve">Wallet Funding Approval</option>
+                                    <option value="wallet_funding_cancel">Wallet Funding Cancellation</option>
+                                </select>
+                                <button type="submit" name="send_stepup_code" value="1" class="btn btn-outline-primary btn-sm rounded-pill">Email me an approval code</button>
+                            </form>
+                            <span class="small text-muted d-block mt-1">Approve/Cancel funding actions require your Security PIN + authenticator/email code.</span>
                         </div>
                         <div class="col-12 mt-4">
                             <form method="get" action="Transactions.php" class="row g-3 align-items-end tx-filter-bar">

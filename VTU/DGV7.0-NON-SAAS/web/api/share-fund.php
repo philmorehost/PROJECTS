@@ -4,19 +4,36 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
-$input = json_decode(file_get_contents('php://input'), true);
-if (empty($input)) {
-    $input = $_REQUEST;
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "error", "message" => "Method not allowed"]);
+    exit;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
+$input = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input)) {
+    $input = $_POST;
+}
+if (!is_array($input)) $input = array();
+
+$vendor_id = resolveVendorID();
+if ($vendor_id <= 0) {
+    echo json_encode(["status" => "error", "message" => "Website not registered"]);
+    exit;
+}
+
+if (function_exists('isServiceEnabled') && !isServiceEnabled('share_fund', $vendor_id)) {
+    echo json_encode(["status" => "error", "code" => "service_disabled", "message" => "Fund sharing is currently disabled."]);
+    exit;
+}
+
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), $vendor_id));
 
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     exit;
 }
 
-$vendor_id = resolveVendorID();
 $check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) != 1) {
     echo json_encode(["status" => "error", "message" => "Invalid API Key"]);
@@ -25,22 +42,50 @@ if (mysqli_num_rows($check_user) != 1) {
 $user_details = mysqli_fetch_assoc($check_user);
 $username = $user_details['username'];
 
-$recipient = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["user"] ?? ''))));
-$amount = (float)($input["amount"] ?? 0);
-$pin = mysqli_real_escape_string($connection_server, trim(strip_tags($input["pin"] ?? '')));
-
-if (empty($recipient) || $amount <= 0 || empty($pin)) {
-    echo json_encode(["status" => "error", "message" => "All fields (user, amount, pin) are required"]);
+if (function_exists('bc_is_rate_limited') && bc_is_rate_limited('share_fund_app', $vendor_id . ':' . strtolower($username), 10, 3600)) {
+    echo json_encode(["status" => "error", "message" => "Too many transfer attempts. Please try again later."]);
     exit;
 }
 
-if (!verifyUserPIN($pin, $user_details)) {
+if ((int)($user_details['status'] ?? 0) !== 1 || !empty($user_details['is_blocked'])) {
+    echo json_encode(["status" => "error", "message" => "This account cannot transfer funds right now."]);
+    exit;
+}
+
+$recipient = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["user"] ?? ''))));
+$raw_amount = $input["amount"] ?? 0;
+if (!is_numeric($raw_amount)) {
+    echo json_encode(["status" => "error", "message" => "Invalid transfer amount"]);
+    exit;
+}
+$amount = (float)$raw_amount;
+$pin = trim((string)($input["pin"] ?? ''));
+
+if (empty($recipient) || !is_finite($amount) || $amount <= 0 || empty($pin)) {
+    echo json_encode(["status" => "error", "message" => "All fields (user, amount, pin) are required"]);
+    exit;
+}
+if ($amount < 10) {
+    echo json_encode(["status" => "error", "message" => "Minimum share amount is N10"]);
+    exit;
+}
+
+$pin_ok = function_exists('bc_verify_pin_secure')
+    ? bc_verify_pin_secure($pin, $user_details, 'share_fund')
+    : verifyUserPIN($pin, $user_details);
+if (!$pin_ok) {
     echo json_encode(["status" => "error", "message" => "Invalid Transaction PIN"]);
     exit;
 }
 
 if ($username === $recipient) {
     echo json_encode(["status" => "error", "message" => "You cannot share funds with yourself"]);
+    exit;
+}
+
+$recipient_q = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE vendor_id='$vendor_id' AND username='$recipient' LIMIT 1");
+if (!$recipient_q || mysqli_num_rows($recipient_q) !== 1) {
+    echo json_encode(["status" => "error", "message" => "Recipient username not found"]);
     exit;
 }
 

@@ -76,6 +76,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES) && 
 }
 
 if (isset($_POST['submit_media'])) {
+    $manual_still_needed = array_values(array_intersect($kyc_still_needed, ['govt_id', 'liveliness_picture', 'liveliness_video', 'proof_of_address']));
+    $check_to_field = [
+        'govt_id'            => 'govt_id',
+        'liveliness_picture' => 'selfie',
+        'liveliness_video'   => 'liveliness_video',
+        'proof_of_address'   => 'proof_of_address',
+    ];
+    $skipped_checks = [];
+    foreach ($manual_still_needed as $req_chk) {
+        $fld = $check_to_field[$req_chk] ?? '';
+        if ($fld !== '' && empty($_FILES[$fld]['name'])) {
+            $skipped_checks[] = $req_chk;
+        }
+    }
+    if (!empty($skipped_checks)) {
+        $skipped_names = array_map('bc_kyc_check_label', $skipped_checks);
+        $_SESSION['product_purchase_response'] = "Error: All activated KYC checks are compulsory. Please complete and submit: " . implode(', ', $skipped_names) . ".";
+        header("Location: KYCVerification.php");
+        exit();
+    }
+
     $upload_dir = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyc/";
     if (!is_dir($upload_dir)) @mkdir($upload_dir, 0755, true);
 
@@ -468,11 +489,21 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                     photos of an old photo are rejected.
                                 </p>
                                 <form method="post" enctype="multipart/form-data">
+                                    <?php
+                                        $req_govt_id  = in_array('govt_id', $kyc_still_needed, true);
+                                        $req_selfie   = in_array('liveliness_picture', $kyc_still_needed, true);
+                                        $req_poa      = in_array('proof_of_address', $kyc_still_needed, true);
+                                        $req_video    = in_array('liveliness_video', $kyc_still_needed, true);
+                                        $GLOBALS['bc_live_capture_required_fields'] = [
+                                            'selfie'           => $req_selfie,
+                                            'liveliness_video' => $req_video,
+                                        ];
+                                    ?>
                                     <?php if (in_array('govt_id', $manual_checks, true)): ?>
                                     <div class="row g-3">
                                         <div class="col-md-4">
-                                            <label class="form-label small fw-bold">Document type</label>
-                                            <select name="doc_type" class="form-select rounded-3 shadow-sm">
+                                            <label class="form-label small fw-bold">Document type<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                            <select name="doc_type" class="form-select rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required' : ''; ?>>
                                                 <option value="">Select...</option>
                                                 <?php foreach (['BVN', 'NIN', 'Passport', "Driver's Licence", "Voter's Card", 'National ID'] as $dt): ?>
                                                     <option value="<?php echo htmlspecialchars($dt); ?>" <?php echo (($kyc_self['kyc_id_type'] ?? '') === $dt) ? 'selected' : ''; ?>><?php echo htmlspecialchars($dt); ?></option>
@@ -480,29 +511,29 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                             </select>
                                         </div>
                                         <div class="col-md-8">
-                                            <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)</label>
-                                            <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm">
+                                            <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                            <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
                                         </div>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('liveliness_picture', $manual_checks, true)): ?>
                                     <div class="mt-3">
-                                        <label class="form-label small fw-bold">Take a live photo of yourself now (camera only, max 512 KB)</label>
+                                        <label class="form-label small fw-bold">Take a live photo of yourself now (camera only, max 512 KB)<?php echo $req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('selfie'); ?>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('proof_of_address', $manual_checks, true)): ?>
                                     <div class="mt-3">
-                                        <label class="form-label small fw-bold">Proof of address (utility bill, bank statement, last 3 months)</label>
-                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm">
+                                        <label class="form-label small fw-bold">Proof of address (utility bill, bank statement, last 3 months)<?php echo $req_poa ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm"<?php echo $req_poa ? ' required data-kyc-required="1"' : ''; ?>>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('liveliness_video', $manual_checks, true)): ?>
                                     <div class="mt-3">
-                                        <label class="form-label small fw-bold">Short video - say your full name and today's date</label>
+                                        <label class="form-label small fw-bold">Short video - say your full name and today's date<?php echo $req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('liveliness_video', true); ?>
                                     </div>
                                     <?php endif; ?>

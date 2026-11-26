@@ -9,20 +9,24 @@ if (empty($input)) {
     $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), $vendor_id));
 
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     return;
 }
 
-$vendor_id = resolveVendorID();
-$check_user = mysqli_query($connection_server, "SELECT username, id FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
+$check_user = mysqli_query($connection_server, "SELECT username, id, status, is_blocked FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
 if (mysqli_num_rows($check_user) != 1) {
     echo json_encode(["status" => "error", "message" => "Invalid API Key"]);
     return;
 }
 $user = mysqli_fetch_assoc($check_user);
+if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
+    echo json_encode(["status" => "error", "message" => "Account is not active"]);
+    return;
+}
 $username = mysqli_real_escape_string($connection_server, (string)$user['username']);
 
 $limit = max(1, min(100, (int)($input['limit'] ?? 50)));

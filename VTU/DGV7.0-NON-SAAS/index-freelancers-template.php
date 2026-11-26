@@ -308,9 +308,17 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
       <a href="ReferAndEarn.php">Refer &amp; Earn</a>
       <a href="#faq">Company</a>
     </nav>
+    <?php
+      require_once __DIR__ . '/func/bc-public-app-brand.php';
+      $fl_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : '';
+    ?>
     <div class="nav-actions">
-      <a href="web/Login.php">Log in</a>
-      <a href="web/Register.php" class="btn-red">Start free</a>
+      <?php if ($fl_dash !== ''): ?>
+        <a href="<?php echo htmlspecialchars(ltrim($fl_dash, '/')); ?>" class="btn-red">Dashboard</a>
+      <?php else: ?>
+        <a href="web/Login.php">Log in</a>
+        <a href="web/Register.php" class="btn-red">Start free</a>
+      <?php endif; ?>
     </div>
   </div>
 </header>
@@ -323,7 +331,11 @@ if ($lp_vid > 0 && isset($connection_server) && $connection_server) {
       <h1 class="hero-title">Free account for <span class="accent">freelancers</span> who run their own show.</h1>
       <p class="hero-sub">Get paid by invoice, bank transfer or QR code. Keep your freelance income in one account, spend it with <?php echo $site_name_e; ?> cards, send money abroad, and top up airtime, data and bills in seconds.</p>
       <div class="hero-cta-row">
-        <a href="web/Register.php" class="btn-red">Open free account</a>
+        <?php if ($fl_dash !== ''): ?>
+          <a href="<?php echo htmlspecialchars(ltrim($fl_dash, '/')); ?>" class="btn-red">Dashboard</a>
+        <?php else: ?>
+          <a href="web/Register.php" class="btn-red">Open free account</a>
+        <?php endif; ?>
         <a href="#receive" class="btn-outline-dark">See how it works</a>
       </div>
       <div class="hero-checks"><span>No setup fee</span><span>No monthly fee</span><span>Sign up in minutes</span></div>

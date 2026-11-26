@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/func/bc-public-app-brand.php';
 // Initialize variables to be used in the template
 // §46: default to this site's own host; the vendor's saved Site Name overwrites it below.
 $site_title       = (string)($_SERVER['HTTP_HOST'] ?? '');
@@ -324,7 +325,8 @@ if (sscanf($t5_primary, '#%02x%02x%02x', $r5, $g5, $b5) === 3) {
                 <li><a href="/">Home</a></li>
                 <li><a href="/web/Pricing.php">Pricing</a></li>
                 <li><a href="/web/APIDocs.php">API Hub</a></li>
-                <li><a href="/web/Login.php" class="nav-cta">Get Started</a></li>
+                <?php $t5_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
+                <li><a href="<?php echo htmlspecialchars($t5_dash !== '' ? $t5_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t5_dash !== '' ? 'Dashboard' : 'Get Started'; ?></a></li>
             </ul>
         </div>
     </header>
@@ -335,7 +337,11 @@ if (sscanf($t5_primary, '#%02x%02x%02x', $r5, $g5, $b5) === 3) {
                 <h1>Supercharge your digital bills automation flow.</h1>
                 <p>Welcome to the ultimate payment gateway. Recharge airtime, buy high speed data plans, activate decoders, print tokens instantly with premium dynamic gradient excellence.</p>
                 <div class="btn-group">
-                    <a href="/web/Register.php" class="btn btn-primary">Join Today <i class="fas fa-magic"></i></a>
+                    <?php if ($t5_dash !== ''): ?>
+                        <a href="<?php echo htmlspecialchars($t5_dash); ?>" class="btn btn-primary">Dashboard <i class="fas fa-arrow-right"></i></a>
+                    <?php else: ?>
+                        <a href="/web/Register.php" class="btn btn-primary">Join Today <i class="fas fa-magic"></i></a>
+                    <?php endif; ?>
                     <?php if(!empty($apk_download_url)): ?>
                     <a href="<?php echo htmlspecialchars($apk_download_url); ?>" class="btn btn-secondary"><i class="fab fa-android"></i> App Client</a>
                     <?php endif; ?>
