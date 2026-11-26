@@ -49,12 +49,44 @@ function bc_app_token_well_formed($token) {
 function bc_app_token_from_request($input = null) {
     $token = '';
 
-    if (isset($_SERVER['HTTP_AUTHORIZATION']) && stripos((string)$_SERVER['HTTP_AUTHORIZATION'], 'Bearer ') === 0) {
-        $token = trim(substr((string)$_SERVER['HTTP_AUTHORIZATION'], 7));
-    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) && stripos((string)$_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 'Bearer ') === 0) {
-        $token = trim(substr((string)$_SERVER['REDIRECT_HTTP_AUTHORIZATION'], 7));
-    } elseif (isset($_SERVER['HTTP_X_APP_TOKEN'])) {
-        $token = trim((string)$_SERVER['HTTP_X_APP_TOKEN']);
+    $auth_header = '';
+    if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth_header = (string)$_SERVER['HTTP_AUTHORIZATION'];
+    } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+        $auth_header = (string)$_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+    }
+    $x_app_token = isset($_SERVER['HTTP_X_APP_TOKEN']) ? (string)$_SERVER['HTTP_X_APP_TOKEN'] : '';
+
+    if ($auth_header === '' && $x_app_token === '' && function_exists('getallheaders')) {
+        $all_headers = @getallheaders();
+        if (is_array($all_headers)) {
+            foreach ($all_headers as $h_name => $h_val) {
+                $hl = strtolower((string)$h_name);
+                if ($hl === 'authorization' && $auth_header === '') {
+                    $auth_header = (string)$h_val;
+                } elseif ($hl === 'x-app-token' && $x_app_token === '') {
+                    $x_app_token = (string)$h_val;
+                }
+            }
+        }
+    } elseif ($auth_header === '' && $x_app_token === '' && function_exists('apache_request_headers')) {
+        $all_headers = @apache_request_headers();
+        if (is_array($all_headers)) {
+            foreach ($all_headers as $h_name => $h_val) {
+                $hl = strtolower((string)$h_name);
+                if ($hl === 'authorization' && $auth_header === '') {
+                    $auth_header = (string)$h_val;
+                } elseif ($hl === 'x-app-token' && $x_app_token === '') {
+                    $x_app_token = (string)$h_val;
+                }
+            }
+        }
+    }
+
+    if ($auth_header !== '' && stripos($auth_header, 'Bearer ') === 0) {
+        $token = trim(substr($auth_header, 7));
+    } elseif ($x_app_token !== '') {
+        $token = trim($x_app_token);
     }
 
     if ($token === '' && is_array($input)) {
@@ -62,6 +94,18 @@ function bc_app_token_from_request($input = null) {
             if (isset($input[$field]) && is_string($input[$field])) {
                 $token = trim($input[$field]);
                 break;
+            }
+        }
+    }
+
+    if ($token === '' && $input === null) {
+        foreach ([$_POST ?? [], $_GET ?? []] as $bag) {
+            if (!is_array($bag)) continue;
+            foreach (['app_token', 'appToken'] as $field) {
+                if (isset($bag[$field]) && is_string($bag[$field]) && trim($bag[$field]) !== '') {
+                    $token = trim($bag[$field]);
+                    break 2;
+                }
             }
         }
     }

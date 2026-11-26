@@ -73,7 +73,23 @@ if ($q_check && mysqli_num_rows($q_check) == 1) {
     $update = mysqli_query($connection_server, "UPDATE sas_users SET security_pin='$hashed_pin', transaction_pin='$pin_int' WHERE id='$user_id' AND vendor_id='$vendor_id'");
 
     if ($update) {
-        echo json_encode(["status" => "success", "desc" => "Security PIN set successfully."]);
+        $resp = ["status" => "success", "desc" => "Security PIN set successfully."];
+        if (function_exists('bc_api_is_app_session') && bc_api_is_app_session() && function_exists('bc_app_token_issue')) {
+            $old_token_id = (int)($GLOBALS['bc_api_auth_user']['_app_token_id'] ?? 0);
+            if ($old_token_id > 0 && function_exists('bc_app_token_revoke')) {
+                bc_app_token_revoke($old_token_id, $vendor_id, 'pin_changed');
+            }
+            $q_fresh = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' AND vendor_id='$vendor_id' LIMIT 1");
+            $fresh_user = $q_fresh ? mysqli_fetch_assoc($q_fresh) : null;
+            if (is_array($fresh_user)) {
+                $new_tok = bc_app_token_issue($fresh_user, $vendor_id);
+                if (is_array($new_tok) && !empty($new_tok['token'])) {
+                    $resp['app_token'] = $new_tok['token'];
+                    $resp['app_token_expires_at'] = $new_tok['expires_at'];
+                }
+            }
+        }
+        echo json_encode($resp);
     } else {
         echo json_encode(["status" => "failed", "desc" => "Unable to save your PIN. Please try again."]);
     }

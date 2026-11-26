@@ -904,6 +904,7 @@ $global_behaviour_files = [
     'func/bc-fintech-schema.php',
     'func/bc-app-credential-binding.php',
     'func/bc-app-token.php',
+    'func/bc-app-request-compat.php',
     'func/bc-fintech-gate.php',
 ];
 
@@ -1249,6 +1250,24 @@ gcheck('valid token: resolved user is the token owner', $GLOBALS['bc_api_auth_us
 // Vendor may be unknown at call time; the session row supplies it.
 gcheck('valid token without a known vendor still authenticates', bc_fintech_api_credential('', 0), 'personal-legacy-key');
 unset($_SERVER['HTTP_AUTHORIZATION']);
+
+// Proxy/Apache-stripped Authorization fallback: a valid v2_ app token sent via api_key
+// (as released Android 1.0.12 builds do) authenticates as an app_token session.
+$_POST = ['api_key' => $key_user['token']];
+gcheck('stripped bearer fallback accepts valid v2_ token in api_key', bc_fintech_api_credential($key_user['token'], 7), 'personal-legacy-key');
+gcheck('stripped bearer fallback sets app_token mode', $GLOBALS['bc_api_auth_mode'], 'app_token');
+$_POST = [];
+
+// Trusted in-process app-backend execution context authenticates personal users and blocks business users.
+$GLOBALS['bc_in_process_app_user'] = ['id' => 1, 'vendor_id' => 7, 'username' => 'smart', 'api_key' => 'personal-legacy-key', 'status' => 1, 'is_blocked' => 0, 'account_level' => 1, 'account_type' => 'personal'];
+gcheck('in-process app-backend context authenticates personal account', bc_fintech_api_credential('personal-legacy-key', 7), 'personal-legacy-key');
+gcheck('in-process app-backend sets app_token mode', $GLOBALS['bc_api_auth_mode'], 'app_token');
+$GLOBALS['bc_in_process_app_user'] = $business;
+$in_proc_denied = null;
+try { bc_fintech_api_credential('merchant-live', 7); }
+catch (Throwable $e) { $in_proc_denied = $e->getMessage(); }
+unset($GLOBALS['bc_in_process_app_user']);
+gcheck('in-process app-backend still blocks business accounts', $in_proc_denied, 'APP_DENIAL');
 
 // Both first-party authenticators apply the same compliance route policy.
 $_SERVER['HTTP_AUTHORIZATION']='Bearer '.$key_user['token'];

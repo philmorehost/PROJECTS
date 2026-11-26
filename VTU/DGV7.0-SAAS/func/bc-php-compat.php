@@ -94,6 +94,56 @@ set_exception_handler(function ($e) {
     exit(1);
 });
 
+// ── Fatal shutdown handler (prevents 0-byte blank pages on E_ERROR / timeouts) ─
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if (!$err) return;
+    $fatal_types = E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR | E_RECOVERABLE_ERROR;
+    if (!($err['type'] & $fatal_types)) return;
+
+    $short_file = str_replace(dirname(__DIR__), '', (string)($err['file'] ?? ''));
+    error_log('[DGV-FATAL-SHUTDOWN] ' . ($err['message'] ?? 'Fatal error') . ' in ' . $short_file . ':' . (int)($err['line'] ?? 0));
+
+    if (defined('CRON_CLI') || headers_sent()) return;
+
+    $is_json_route = false;
+    if (isset($_SERVER['HTTP_ACCEPT']) && stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['HTTP_X_APP_SOURCE']) && !empty($_SERVER['HTTP_X_APP_SOURCE'])) {
+        $is_json_route = true;
+    } elseif (isset($_SERVER['REQUEST_URI']) && (
+        stripos($_SERVER['REQUEST_URI'], '/api/') !== false ||
+        stripos($_SERVER['REQUEST_URI'], 'transaction-details') !== false ||
+        stripos($_SERVER['REQUEST_URI'], 'ai-handler') !== false ||
+        stripos($_SERVER['REQUEST_URI'], 'api-handler') !== false ||
+        stripos($_SERVER['REQUEST_URI'], '-ajax') !== false ||
+        stripos($_SERVER['REQUEST_URI'], '-json') !== false
+    )) {
+        $is_json_route = true;
+    }
+
+    http_response_code(500);
+    header('Content-Type: ' . ($is_json_route ? 'application/json' : 'text/html') . '; charset=utf-8');
+    if ($is_json_route) {
+        echo json_encode([
+            'status'  => 'error',
+            'code'    => 'SYSTEM_ERROR',
+            'message' => 'System error occurred. Please try again.'
+        ]);
+    } else {
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>System Error</title>'
+            . '<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc}'
+            . '.card{text-align:center;padding:40px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:400px}'
+            . 'h2{color:#dc2626;margin-bottom:8px}p{color:#6b7280;margin:0}</style></head>'
+            . '<body><div class="card"><h2>Something went wrong</h2>'
+            . '<p>The system encountered an error. Our team has been notified.</p>'
+            . '<p style="margin-top:16px"><a href="javascript:history.back()" style="color:#3b82f6">← Go Back</a></p>'
+            . '</div></body></html>';
+    }
+});
+
 // ── Session security & 72-Hour Lifetime (Legacy-Safe Compatibility) ────────────
 $lifetime = 259200; // 72 hours in seconds
 $path = '/';

@@ -7,6 +7,11 @@ Options -Indexes
     RewriteEngine On
     RewriteBase /web/
 
+    # Preserve Authorization: Bearer <token> header for PHP under Apache/FastCGI/FPM
+    # (child RewriteEngine On replaces parent root .htaccess rewrite rules).
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
     # 1. Hide .php extension (Transparently serve /web/login as Login.php)
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d

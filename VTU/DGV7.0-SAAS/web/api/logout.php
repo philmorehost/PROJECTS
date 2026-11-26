@@ -21,6 +21,9 @@ if (empty($input) || !is_array($input)) {
 
 $vendor_id = (int)resolveVendorID();
 $token = bc_app_token_from_request($input);
+if ($token === '' && function_exists('bc_app_normalized_token_from_legacy_body')) {
+    $token = bc_app_normalized_token_from_legacy_body($input);
+}
 
 if ($vendor_id <= 0 || $token === '') {
     echo json_encode(["status" => "success", "message" => "Signed out"]);

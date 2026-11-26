@@ -77,14 +77,25 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 						if ($sec30_err !== '') {
 							$json_response_encode = json_encode(array("desc" => $sec30_err),true);
 						} else {
+							@set_time_limit(120);
+							if (function_exists('bc_ensure_wallet_transactional_schema')) {
+								bc_ensure_wallet_transactional_schema($connection_server);
+							}
 							// Atomic claim: exactly one concurrent request may transition 2 (pending) -> 1 (approved).
 							mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='1' WHERE reference='".$reference."' AND status='2' LIMIT 1");
 							if (mysqli_affected_rows($connection_server) !== 1) {
 								$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
 							} else {
-								if (function_exists('bc_ensure_wallet_transactional_schema')) {
-									bc_ensure_wallet_transactional_schema($connection_server);
-								}
+								$GLOBALS['bc_vpo_pending_claim'] = array(
+									'reference' => $reference,
+									'done' => false,
+								);
+								register_shutdown_function(function () use ($connection_server) {
+									$claim = $GLOBALS['bc_vpo_pending_claim'] ?? null;
+									if (is_array($claim) && empty($claim['done']) && $connection_server instanceof mysqli) {
+										@mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='2' WHERE reference='" . $claim['reference'] . "' AND status='1' LIMIT 1");
+									}
+								});
 								$user = $get_vendors_details["email"];
 								$type = "credit";
 								$amount = $get_payment_order["amount"];
@@ -94,12 +105,16 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 								$description = ucwords("account ".$type."ed by admin ( payment order )");
 								$credit_other_user = chargeOtherVendor($get_payment_order["vendor_id"], $type, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"] ?? "WEB", "1");
 								if($credit_other_user === "success"){
-									if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($get_vendors_details["email"] ?? 'vendor'));
+									$GLOBALS['bc_vpo_pending_claim']['done'] = true;
+									try {
+										if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($get_vendors_details["email"] ?? 'vendor'));
+									} catch (Throwable $ignored) {}
 									$json_response_array = array("desc" => ucwords($get_vendors_details["email"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 									$json_response_encode = json_encode($json_response_array,true);
 								} else {
 									// Revert claim back to pending if wallet mutation did not succeed.
 									mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='2' WHERE reference='".$reference."' AND status='1' LIMIT 1");
+									$GLOBALS['bc_vpo_pending_claim']['done'] = true;
 									$vpo_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : ("Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify the vendor account is active and wallet tables are ready.");
 									$json_response_array = array("desc" => $vpo_fail_reason);
 									$json_response_encode = json_encode($json_response_array,true);

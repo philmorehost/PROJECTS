@@ -15,6 +15,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
         //echo '<script>alert("'.$json_response_decode["status"].': '.$json_response_decode["desc"].'");</script>';
         header("Location: ".$_SERVER["REQUEST_URI"]);
+        exit;
     }
     
 ?>
@@ -96,6 +97,14 @@ bc_app_head("Bulk SMS | " . ($get_all_site_details["site_title"]));
                     <input class="form-check-input" type="checkbox" id="phone-bypass" onclick="bypassBulkSMSPhoneNumbers();" checked>
                     <label class="form-check-label small fw-bold text-muted" for="phone-bypass">Bypass Verification</label>
                 </div>
+
+                <?php if (!empty($force_security_pin_for_users) && (int)$force_security_pin_for_users === 1): ?>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-uppercase" for="transaction-pin">Transaction PIN</label>
+                    <input id="transaction-pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" class="form-control form-control-lg text-center" placeholder="Enter your 4-digit PIN" required />
+                    <div class="form-text">Your account requires a transaction PIN for every purchase.</div>
+                </div>
+                <?php endif; ?>
 
                 <button id="proceedBtn" name="send-sms" type="submit" data-no-lock class="btn btn-primary btn-lg w-100 shadow-sm py-3 fw-bold rounded-3" style="pointer-events: none; opacity: 0.7;">
                     SEND BULK SMS

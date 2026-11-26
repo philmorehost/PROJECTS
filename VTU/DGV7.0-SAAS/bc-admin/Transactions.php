@@ -92,6 +92,12 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                     $connection_server,
                     "Cancelled by admin after confirming provider failure. Previous provider response: " . $old_description
                 );
+                @set_time_limit(120);
+                if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                    bc_ensure_wallet_transactional_schema($connection_server);
+                }
+                $GLOBALS['vendor_id'] = $vendor_id;
+                if (function_exists('resolveVendorID')) resolveVendorID(true);
                 $claimed = mysqli_query($connection_server,
                     "UPDATE sas_transactions SET status='3', description='$cancel_description'
                      WHERE id='$tx_id' AND vendor_id='$vendor_id' AND status='2' AND api_id > 0"
@@ -100,11 +106,6 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 if (!$claimed || mysqli_affected_rows($connection_server) !== 1) {
                     $_SESSION["product_purchase_response"] = "This transaction changed while you were reviewing it. Refresh and check its current status.";
                 } else {
-                    if (function_exists('bc_ensure_wallet_transactional_schema')) {
-                        bc_ensure_wallet_transactional_schema($connection_server);
-                    }
-                    $GLOBALS['vendor_id'] = $vendor_id;
-                    if (function_exists('resolveVendorID')) resolveVendorID(true);
                     $_SESSION['tmp_vendor_override'] = $vendor_id;
                     $refund_ref = 'TXCAN_' . substr(hash('sha256', $vendor_id . ':' . $tx_row["reference"]), 0, 20);
                     $refund = chargeOtherUser(
@@ -316,6 +317,13 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
             if ($select_tx && mysqli_num_rows($select_tx) == 1) {
                 $tx_row = mysqli_fetch_array($select_tx);
                 if ($t_status === "approve") {
+                    @set_time_limit(120);
+                    if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                        bc_ensure_wallet_transactional_schema($connection_server);
+                    }
+                    $GLOBALS['vendor_id'] = $admin_vid;
+                    if (function_exists('resolveVendorID')) resolveVendorID(true);
+
                     mysqli_query($connection_server,
                         "UPDATE sas_transactions SET status='1'
                          WHERE vendor_id='$admin_vid'
@@ -326,11 +334,17 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                     if (mysqli_affected_rows($connection_server) !== 1) {
                         $_SESSION["product_purchase_response"] = "Transaction is no longer pending and cannot be approved again.";
                     } else {
-                        if (function_exists('bc_ensure_wallet_transactional_schema')) {
-                            bc_ensure_wallet_transactional_schema($connection_server);
-                        }
-                        $GLOBALS['vendor_id'] = $admin_vid;
-                        if (function_exists('resolveVendorID')) resolveVendorID(true);
+                        $GLOBALS['bc_tx_pending_claim'] = array(
+                            'where' => "vendor_id='$admin_vid' AND reference='" . $t_ref . "' AND status='1'",
+                            'revert_status' => '2',
+                            'done' => false,
+                        );
+                        register_shutdown_function(function () use ($connection_server) {
+                            $claim = $GLOBALS['bc_tx_pending_claim'] ?? null;
+                            if (is_array($claim) && empty($claim['done']) && $connection_server instanceof mysqli) {
+                                @mysqli_query($connection_server, "UPDATE sas_transactions SET status='" . $claim['revert_status'] . "' WHERE " . $claim['where'] . " LIMIT 1");
+                            }
+                        });
                         $tx_reference_2 = 'TXAPP_' . substr(hash('sha256', $admin_vid . ':' . $t_ref), 0, 20);
                         $credit = chargeOtherUser(
                             $tx_row["username"], "credit",
@@ -342,6 +356,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                             "WEB", $_SERVER["HTTP_HOST"] ?? "WEB", 1
                         );
                         if ($credit === "success") {
+                            $GLOBALS['bc_tx_pending_claim']['done'] = true;
                             $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " credited with ₦" . number_format((float)$tx_row["discounted_amount"], 2) . " successfully");
                         } else {
                             mysqli_query($connection_server,
@@ -351,6 +366,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                                    AND status='1'
                                  LIMIT 1"
                             );
+                            $GLOBALS['bc_tx_pending_claim']['done'] = true;
                             $tx_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : "Failed to credit user wallet. Please try again.";
                             $_SESSION["product_purchase_response"] = $tx_fail_reason;
                         }
@@ -371,6 +387,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 $_SESSION["product_purchase_response"] = "Transaction not found or already processed.";
             }
         }
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
         header("Location: /bc-admin/Transactions.php");
         exit();
     }

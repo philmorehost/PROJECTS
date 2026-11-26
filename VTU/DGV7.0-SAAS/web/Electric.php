@@ -147,7 +147,7 @@ bc_app_head("Utility Bills | " . ($get_all_site_details["site_title"]));
                 <button name="buy-electric" type="submit" class="btn btn-primary btn-lg w-100 shadow-sm rounded-pill fw-bold mb-3" >
                     COMPLETE PURCHASE
                 </button>
-                <button name="reset-electric" type="submit" class="btn btn-outline-secondary w-100 border-0" >
+                <button name="reset-electric" type="submit" formnovalidate class="btn btn-outline-secondary w-100 border-0" >
                     Cancel and Start Over
                 </button>
                 <?php } ?>

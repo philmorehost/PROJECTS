@@ -15,7 +15,7 @@ $glo_carrier_id_array = array("805", "705", "905", "807", "815", "811", "915");
 $etisalat_carrier_id_array = array("809", "817", "818", "908", "909");
 
 if (!function_exists('bc_app_backend_preauth_guard')) {
-	function bc_app_backend_preauth_guard($vendor, $password, $username = '') {
+	function bc_app_backend_preauth_guard($vendor, $password, $username = '', $is_login = false) {
 		$app_ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
 		if (function_exists('bc_is_rate_limited')) {
 			if (bc_is_rate_limited('app_backend_ip', $app_ip, 20, 60)) {
@@ -32,7 +32,7 @@ if (!function_exists('bc_app_backend_preauth_guard')) {
 			echo json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Invalid username or password"));
 			exit;
 		}
-		if (function_exists('bc_user_login_otp_required') && bc_user_login_otp_required($vendor)) {
+		if ($is_login && function_exists('bc_user_login_otp_required') && bc_user_login_otp_required($vendor)) {
 			echo json_encode(array("json-status" => "success", "status" => "failed", "status-msg" => "Please update your app to the latest version to sign in. Email verification is now required."));
 			exit;
 		}
