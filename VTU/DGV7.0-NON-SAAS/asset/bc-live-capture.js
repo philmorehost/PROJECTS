@@ -6,21 +6,31 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
     const start = box.querySelector('[data-camera-start]'), shot = box.querySelector('[data-camera-shot]');
     const reset = box.querySelector('[data-camera-reset]'), status = box.querySelector('[role=status]');
     let stream, recorder, timer, url, generation = 0, busy = false;
-    const stop = () => {
-        clearTimeout(timer);
-        if (recorder && recorder.state !== 'inactive') recorder.stop();
+    const stopTracks = () => {
         if (stream) stream.getTracks().forEach(t => t.stop());
         stream = null; preview.srcObject = null;
     };
+    const stop = () => {
+        clearTimeout(timer);
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+        } else {
+            stopTracks();
+        }
+    };
     const clear = () => {
-        generation++; stop(); input.value = ''; busy = false;
+        generation++; clearTimeout(timer);
+        if (recorder && recorder.state !== 'inactive') {
+            try { recorder.stop(); } catch (e) {}
+        }
+        stopTracks(); input.value = ''; busy = false;
         if (url) { URL.revokeObjectURL(url); url = null; }
         image.hidden = preview.hidden = true; preview.removeAttribute('src'); preview.controls = false;
         start.hidden = false; reset.hidden = true; if (shot) shot.hidden = true;
     };
     const attach = (blob, ext) => {
         const max = moving ? 3 * 1024 * 1024 : 512 * 1024;
-        if (!blob || !blob.size || blob.size > max) throw new Error('Capture too large or empty. Please retake.');
+        if (!blob || !blob.size || blob.size > max) throw new Error(moving ? 'Video too large or empty.' : 'Photo too large or empty.');
         const dt = new DataTransfer(); dt.items.add(new File([blob], 'camera.' + ext, {type:blob.type})); input.files = dt.files;
         url = URL.createObjectURL(blob);
         if (moving) { preview.src = url; preview.controls = true; preview.muted = false; preview.autoplay = false; preview.hidden = false; }
@@ -31,7 +41,9 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
     const fail = error => { clear(); status.textContent = (error && error.message ? error.message + ' ' : '') + 'Use a supported camera-enabled browser over HTTPS. Gallery uploads are not accepted here.'; };
     const openStream = async () => {
         const attempts = [
-            {video:{facingMode:{ideal:'user'},width:{ideal:640,max:960},height:{ideal:480,max:960},frameRate:{ideal:15,max:20}},audio:moving},
+            moving
+                ? {video:{facingMode:{ideal:'user'},width:{ideal:480,max:960},height:{ideal:360,max:960},frameRate:{ideal:15,max:20}},audio:true}
+                : {video:{facingMode:{ideal:'user'},width:{ideal:640,max:960},height:{ideal:480,max:960},frameRate:{ideal:15,max:20}},audio:false},
             {video:{facingMode:{ideal:'user'}},audio:moving},
             {video:true,audio:moving}
         ];
@@ -60,36 +72,47 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
             if (epoch !== generation) return;
             reset.hidden = false;
             if (!moving) { shot.hidden = false; status.textContent = 'Look at the camera and take your photo.'; return; }
-            const mime = ['video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(t => MediaRecorder.isTypeSupported(t));
+            const mime = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm','video/mp4;codecs=avc1,mp4a.40.2','video/mp4'].find(t => MediaRecorder.isTypeSupported(t));
             if (!mime) throw new Error('No supported recording format.');
             const chunks = []; let total = 0, oversized = false;
             recorder = new MediaRecorder(s,{mimeType:mime,videoBitsPerSecond:500000,audioBitsPerSecond:32000});
-            recorder.ondataavailable = e => { total += e.data.size; if (total > 3 * 1024 * 1024) { oversized = true; stop(); } else chunks.push(e.data); };
+            recorder.ondataavailable = e => {
+                if (!e.data || !e.data.size) return;
+                total += e.data.size;
+                if (total > 3 * 1024 * 1024) { oversized = true; stop(); }
+                else chunks.push(e.data);
+            };
             recorder.onerror = () => { if (epoch === generation) fail(new Error('Recording failed.')); };
             recorder.onstop = () => {
-                if (epoch !== generation) return;
-                stop();
+                if (epoch !== generation) { stopTracks(); return; }
+                clearTimeout(timer);
+                stopTracks();
                 try { if (oversized) throw new Error('Video too large.'); attach(new Blob(chunks,{type:mime.split(';')[0]}),mime.startsWith('video/mp4')?'mp4':'webm'); }
                 catch(e) { fail(e); }
             };
-            recorder.start(250); status.textContent = 'Recording 8 seconds: say your name and today’s date, then turn your head slowly. Wait until it finishes, or click Retake to cancel.';
-            timer = setTimeout(stop,8000);
+            recorder.start(250); status.textContent = 'Recording 6 seconds: say your name and today’s date, then turn your head slowly. Wait until it finishes, or click Retake to cancel.';
+            timer = setTimeout(stop,6000);
         } catch(e) { if (epoch === generation) fail(e); }
     });
     if (shot) shot.addEventListener('click', () => {
         const epoch = generation, w = preview.videoWidth, h = preview.videoHeight;
         if (!w || !h) { status.textContent = 'Camera is still starting. Try again.'; return; }
-        const scale = Math.min(1,960 / Math.max(w,h)), canvas = document.createElement('canvas');
-        canvas.width = Math.round(w*scale); canvas.height = Math.round(h*scale);
-        canvas.getContext('2d').drawImage(preview,0,0,canvas.width,canvas.height); shot.hidden = true;
-        const qualities = [0.78, 0.62, 0.48];
-        const encode = idx => canvas.toBlob(blob => {
-            if (epoch !== generation) return;
-            if (blob && blob.size > 512 * 1024 && idx + 1 < qualities.length) { encode(idx + 1); return; }
-            stop();
-            try { attach(blob,'jpg'); } catch(e) { fail(e); }
-        },'image/jpeg',qualities[idx]);
-        encode(0);
+        const renderAndEncode = (maxDim, qualities, idx) => {
+            const scale = Math.min(1, maxDim / Math.max(w, h)), canvas = document.createElement('canvas');
+            canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+            canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+                if (epoch !== generation) return;
+                if (blob && blob.size > 512 * 1024) {
+                    if (idx + 1 < qualities.length) { renderAndEncode(maxDim, qualities, idx + 1); return; }
+                    if (maxDim > 640) { renderAndEncode(640, [0.68, 0.52, 0.38], 0); return; }
+                }
+                stopTracks();
+                try { attach(blob, 'jpg'); } catch (e) { fail(e); }
+            }, 'image/jpeg', qualities[idx]);
+        };
+        shot.hidden = true;
+        renderAndEncode(960, [0.78, 0.62, 0.48, 0.35], 0);
     });
     reset.addEventListener('click',clear);
     box.closest('form')?.addEventListener('submit', e => {

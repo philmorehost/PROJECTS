@@ -1423,12 +1423,16 @@ if (!function_exists('bc_app_flash')) {
         $ref   = isset($_SESSION['last_transaction_ref']) ? $_SESSION['last_transaction_ref'] : null;
 
         $type = 'success';
-        if ($state === 'failed' || stripos($msg, 'Error') !== false || stripos($msg, 'reached the maximum') !== false
+        if ($state === 'failed' || $state === 'error' || stripos($msg, 'Error') !== false || stripos($msg, 'reached the maximum') !== false
             || stripos($msg, 'Limit Reached') !== false || stripos($msg, 'failed') !== false
             || stripos($msg, 'Insufficient') !== false || stripos($msg, 'suspension') !== false
-            || stripos($msg, 'suspended') !== false) {
+            || stripos($msg, 'suspended') !== false || stripos($msg, 'could not') !== false
+            || stripos($msg, 'unable') !== false || stripos($msg, 'invalid') !== false
+            || stripos($msg, 'exceeded') !== false || stripos($msg, 'exceeds') !== false
+            || stripos($msg, 'not accepted') !== false || stripos($msg, 'rejected') !== false
+            || stripos($msg, 'declined') !== false || stripos($msg, 'not saved') !== false) {
             $type = 'error';
-        } elseif ($state === 'pending' || stripos($msg, 'pending') !== false || stripos($msg, 'processed') !== false) {
+        } elseif ($state === 'pending' || stripos($msg, 'pending') !== false || stripos($msg, 'processed') !== false || stripos($msg, 'Notice:') !== false) {
             $type = 'warning';
         }
 

@@ -564,12 +564,17 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         $v_err = $_FILES['liveliness_video']['error'] ?? UPLOAD_ERR_NO_FILE;
         $v_tmp = $_FILES['liveliness_video']['tmp_name'] ?? '';
         if ($v_err === UPLOAD_ERR_INI_SIZE || $v_err === UPLOAD_ERR_FORM_SIZE) {
+            $_SESSION['product_purchase_status'] = 'failed';
             $_SESSION['product_purchase_response'] = 'Error: Liveliness video exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Record a shorter video (max 3 MB).';
             header('Location: AccountSettings.php#tab-kyc');
             exit;
         }
         if ($v_err !== UPLOAD_ERR_OK || !is_uploaded_file($v_tmp) || !bc_live_media_prepare($v_tmp, 'liveliness_video')) {
-            $_SESSION['product_purchase_response']='Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';header('Location: AccountSettings.php#tab-kyc');exit;
+            $v_detail = function_exists('bc_live_media_last_error') ? bc_live_media_last_error() : '';
+            $_SESSION['product_purchase_status'] = 'failed';
+            $_SESSION['product_purchase_response'] = 'Video could not be validated.' . ($v_detail !== '' ? ' ' . $v_detail : '') . ' Record a clear 1–6 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';
+            header('Location: AccountSettings.php#tab-kyc');
+            exit;
         }
     }
     foreach ($kinds as $input_name => $spec) {

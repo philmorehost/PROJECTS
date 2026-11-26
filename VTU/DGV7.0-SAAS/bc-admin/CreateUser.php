@@ -12,26 +12,33 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     	$answer = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["answer"]))));
     	$address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
         $email = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["email"]))));
-        $phone = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["phone"]))));
+        $country_raw = trim(strip_tags((string)($_POST["country"] ?? '')));
+        $country_info = ($country_raw !== '' && function_exists('bc_world_country_lookup')) ? bc_world_country_lookup($country_raw) : null;
+        $country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+        $phone_raw = trim(strip_tags((string)($_POST["phone"] ?? '')));
+        $phone_norm = function_exists('bc_normalize_world_phone')
+            ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+            : sanitize_phone_number($phone_raw);
+        $phone = mysqli_real_escape_string($connection_server, $phone_norm);
         $pass = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["new-pass"])));
-        // Normalise the phone BEFORE validating it. Admins routinely paste "+2348012345678" or
-        // "0801 234 5678", and the old check demanded exactly 11 raw characters - so those were
-        // rejected as though the field were simply wrong. sanitize_phone_number() strips non-digits
-        // and rewrites 234... as 0..., and is the same helper the EPIN fulfilment path uses.
-        $phone = sanitize_phone_number($phone);
     	
-        if(!empty($user) && !empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($email) && !empty($phone) && !empty($pass)){
+        if(!empty($user) && !empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($email) && !empty($phone_raw) && !empty($pass)){
             $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && username='$user'");
             
             if(mysqli_num_rows($check_user_details) == 0){
                 if(!filter_var($user, FILTER_VALIDATE_EMAIL)){
                     if(filter_var($email, FILTER_VALIDATE_EMAIL)){
-                        if(is_numeric($phone) && (strlen($phone) == 11)){
+                        if($country_raw !== '' && $country_info === null){
+                            $_SESSION["product_purchase_response"] = "Invalid country selected.";
+                        }elseif($phone !== ''){
                             $md5_pass = md5($pass);
                             $api_key = bin2hex(random_bytes(25));
                             $last_login = date('Y-m-d H:i:s');
+                            $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+                            $country_col_sql = $has_country_col ? ", country" : "";
+                            $country_val_sql = $has_country_col ? ", '$country'" : "";
                             
-                            $insert = mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, security_quest, security_answer, home_address, account_level, api_key, last_login, api_status, status) VALUES ('".$get_logged_admin_details["id"]."', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$quest', '$answer', '$address', '1', '$api_key', '$last_login', '2', '1')");
+                            $insert = mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, security_quest, security_answer, home_address{$country_col_sql}, account_level, api_key, last_login, api_status, status) VALUES ('".$get_logged_admin_details["id"]."', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$quest', '$answer', '$address'{$country_val_sql}, '1', '$api_key', '$last_login', '2', '1')");
                             
                             if($insert){
                                 // Email Beginning
@@ -49,7 +56,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                                 $_SESSION["product_purchase_response"] = "Error creating account: ".mysqli_error($connection_server);
                             }
                         }else{
-                            $_SESSION["product_purchase_response"] = "Phone number must be 11 digits (e.g. 08012345678). Received: '" . $phone . "'.";
+                            $_SESSION["product_purchase_response"] = "Enter a valid local or international phone number (7-15 digits, e.g. 08012345678 or +447911123456). Received: '" . $phone_raw . "'.";
                         }
                     }else{
                         $_SESSION["product_purchase_response"] = "Invalid email address: '" . $email . "' is not a valid email.";
@@ -166,8 +173,22 @@ bc_adm_head("Create User | " . ($get_all_super_admin_site_details["site_title"])
                                 <input name="email" type="email" placeholder="user@example.com" class="form-control rounded-3" required/>
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label small fw-bold text-muted">COUNTRY</label>
+                                <select name="country" class="form-select rounded-3">
+                                    <option value="">Select Country</option>
+                                    <?php
+                                        if (function_exists('bc_world_countries')) {
+                                            foreach (bc_world_countries() as $c) {
+                                                $sel = ($c['code'] === 'NG') ? 'selected' : '';
+                                                echo '<option value="'.htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8').'" '.$sel.'>'.htmlspecialchars($c['name'].' (+'.$c['dial'].')', ENT_QUOTES, 'UTF-8').'</option>';
+                                            }
+                                        }
+                                    ?>
+                                </select>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label small fw-bold text-muted">PHONE NUMBER</label>
-                                <input name="phone" type="text" placeholder="08012345678" class="form-control rounded-3" required/>
+                                <input name="phone" type="tel" placeholder="e.g. 08012345678 or +447911123456" class="form-control rounded-3" required/>
                             </div>
                         </div>
 

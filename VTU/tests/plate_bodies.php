@@ -366,8 +366,24 @@ PLATEBODY,
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label small fw-bold text-uppercase text-muted">Phone Number</label>
-                            <input name="phone" type="text" value="<?php echo $get_logged_user_details['phone_number']; ?>" class="form-control" pattern="[0-9]{11}" required/>
+                            <input name="phone" type="tel" value="<?php echo htmlspecialchars((string)$get_logged_user_details['phone_number'], ENT_QUOTES, 'UTF-8'); ?>" class="form-control" required/>
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase text-muted">Country</label>
+                        <select name="country" class="form-select">
+                            <option value="">Select Country</option>
+                            <?php
+                                if (function_exists('bc_world_countries')) {
+                                    $acct_country_info = bc_world_country_lookup((string)($get_logged_user_details['country'] ?? ''));
+                                    $acct_country_code = $acct_country_info ? $acct_country_info['code'] : '';
+                                    foreach (bc_world_countries() as $c) {
+                                        $sel = ($acct_country_code !== '' && $c['code'] === $acct_country_code) ? 'selected' : '';
+                                        echo '<option value="'.htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8').'" '.$sel.'>'.htmlspecialchars($c['name'].' (+'.$c['dial'].')', ENT_QUOTES, 'UTF-8').'</option>';
+                                    }
+                                }
+                            ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-uppercase text-muted">Home Address</label>
@@ -5598,8 +5614,24 @@ PLATEBODY,
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label small fw-bold text-uppercase text-muted">Phone Number</label>
-                            <input name="phone" type="text" value="<?php echo $get_logged_user_details['phone_number']; ?>" class="form-control" pattern="[0-9]{11}" required/>
+                            <input name="phone" type="tel" value="<?php echo htmlspecialchars((string)$get_logged_user_details['phone_number'], ENT_QUOTES, 'UTF-8'); ?>" class="form-control" required/>
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase text-muted">Country</label>
+                        <select name="country" class="form-select">
+                            <option value="">Select Country</option>
+                            <?php
+                                if (function_exists('bc_world_countries')) {
+                                    $acct_country_info = bc_world_country_lookup((string)($get_logged_user_details['country'] ?? ''));
+                                    $acct_country_code = $acct_country_info ? $acct_country_info['code'] : '';
+                                    foreach (bc_world_countries() as $c) {
+                                        $sel = ($acct_country_code !== '' && $c['code'] === $acct_country_code) ? 'selected' : '';
+                                        echo '<option value="'.htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8').'" '.$sel.'>'.htmlspecialchars($c['name'].' (+'.$c['dial'].')', ENT_QUOTES, 'UTF-8').'</option>';
+                                    }
+                                }
+                            ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-uppercase text-muted">Home Address</label>

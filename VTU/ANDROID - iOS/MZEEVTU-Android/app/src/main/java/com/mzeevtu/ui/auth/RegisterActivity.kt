@@ -2,6 +2,7 @@ package com.mzeevtu.ui.auth
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.mzeevtu.data.model.ApiResult
@@ -13,20 +14,38 @@ import com.mzeevtu.databinding.ActivityRegisterBinding
 import com.mzeevtu.ui.MainActivity
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class RegisterActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRegisterBinding
     private val authRepo by lazy { AuthRepository(this) }
+    private lateinit var countryCodes: List<String>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRegisterBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupCountrySpinner()
         binding.btnBack.setOnClickListener { finish() }
         binding.btnRegister.setOnClickListener { attemptRegister() }
         binding.tvLogin.setOnClickListener { finish() }
+    }
+
+    private fun setupCountrySpinner() {
+        val pairs = Locale.getISOCountries()
+            .map { code -> code to Locale("", code).getDisplayCountry(Locale.ENGLISH) }
+            .filter { it.second.isNotBlank() }
+            .sortedBy { it.second }
+        countryCodes = pairs.map { it.first }
+        val labels = pairs.map { "${it.second} (${it.first})" }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, labels)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spCountry.adapter = adapter
+        val defaultCode = Locale.getDefault().country.uppercase(Locale.ENGLISH).ifBlank { "NG" }
+        val idx = countryCodes.indexOf(defaultCode).let { if (it >= 0) it else countryCodes.indexOf("NG") }
+        if (idx >= 0) binding.spCountry.setSelection(idx)
     }
 
     private fun attemptRegister() {
@@ -36,7 +55,11 @@ class RegisterActivity : AppCompatActivity() {
         val firstname = binding.etFirstname.text?.toString()?.trim() ?: ""
         val lastname = binding.etLastname.text?.toString()?.trim() ?: ""
         val email = binding.etEmail.text?.toString()?.trim() ?: ""
-        val phone = binding.etPhone.text?.toString()?.trim() ?: ""
+        val countryPos = binding.spCountry.selectedItemPosition
+        val country = if (countryPos in countryCodes.indices) countryCodes[countryPos] else "NG"
+        val rawPhone = binding.etPhone.text?.toString()?.trim() ?: ""
+        val phoneDigits = rawPhone.filter { it.isDigit() }
+        val cleanPhone = if (rawPhone.startsWith("+")) "+$phoneDigits" else phoneDigits
         val address = binding.etAddress.text?.toString()?.trim() ?: ""
         val referral = binding.etReferral.text?.toString()?.trim() ?: ""
 
@@ -46,14 +69,15 @@ class RegisterActivity : AppCompatActivity() {
             password != confirmPass -> snack("Passwords do not match")
             firstname.isEmpty() || lastname.isEmpty() -> snack("Please enter your full name")
             email.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> snack("Invalid email address")
-            phone.length != 11 || !phone.all { it.isDigit() } -> snack("Phone must be 11 digits")
-            else -> doRegister(username, password, firstname, lastname, email, phone, address, referral)
+            !Regex("^\\+?[0-9\\s().-]{7,20}$").matches(rawPhone) || phoneDigits.length !in 7..15 ->
+                snack("Enter a valid phone number (7–15 digits)")
+            else -> doRegister(username, password, firstname, lastname, email, country, cleanPhone, address, referral)
         }
     }
 
     private fun doRegister(
         username: String, password: String, firstname: String, lastname: String,
-        email: String, phone: String, address: String, referral: String
+        email: String, country: String, phone: String, address: String, referral: String
     ) {
         binding.btnRegister.isEnabled = false
         binding.progressBar.visibility = android.view.View.VISIBLE
@@ -63,7 +87,7 @@ class RegisterActivity : AppCompatActivity() {
                 mapOf(
                     "user" to username, "pass" to password,
                     "first" to firstname, "last" to lastname,
-                    "email" to email, "phone" to phone,
+                    "email" to email, "country" to country, "phone" to phone,
                     "address" to address, "referral" to referral
                 )
             )

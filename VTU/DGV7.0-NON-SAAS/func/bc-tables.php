@@ -527,7 +527,8 @@ if ($create_user_table) {
         // turns "mysqli_stmt_get_result(false)" into a fatal TypeError, which surfaced in the apps
         // as "The server returned an error (HTTP 500)" on the Refer and Earn screen.
         "referral_id"            => "VARCHAR(225)",
-        "referral_bonus_awarded" => "TINYINT(1) DEFAULT 0"
+        "referral_bonus_awarded" => "TINYINT(1) DEFAULT 0",
+        "country"                => "VARCHAR(100) NULL DEFAULT NULL"
     ];
     $res = mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users");
     $existing = []; while($r = mysqli_fetch_assoc($res)) $existing[] = $r['Field'];

@@ -13,16 +13,25 @@ bc_totp_setup_handle('sas_users', $get_logged_user_details);
     	$quest = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["quest"])));
     	$answer = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["answer"]))));
     	$address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
-        $phone = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["phone"]))));
+        $country_raw = trim(strip_tags((string)($_POST["country"] ?? ($get_logged_user_details['country'] ?? ''))));
+        $country_info = ($country_raw !== '' && function_exists('bc_world_country_lookup')) ? bc_world_country_lookup($country_raw) : null;
+        $country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+        $phone_raw = trim(strip_tags((string)($_POST["phone"] ?? '')));
+        $phone_norm = function_exists('bc_normalize_world_phone')
+            ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+            : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+        $phone = mysqli_real_escape_string($connection_server, $phone_norm);
         
-        if(!empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($phone)){
+        if(!empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($phone_raw)){
             $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' && username='".$get_logged_user_details["username"]."'");
             if(mysqli_num_rows($check_user_details) == 1){
                 if((strlen($answer) >= 3) && (strlen($answer) <= 20)){
-                    if(is_numeric($phone) && (strlen($phone) == 11)){
-                    	mysqli_query($connection_server, "UPDATE sas_users SET security_quest='$quest', security_answer='$answer', firstname='$first', lastname='$last', othername='$other', home_address='$address', phone_number='$phone' WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' && username='".$get_logged_user_details["username"]."'");
+                    if($phone !== ''){
+                    	$has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+                    	$country_upd_sql = ($has_country_col && $country !== '') ? ", country='$country'" : "";
+                    	mysqli_query($connection_server, "UPDATE sas_users SET security_quest='$quest', security_answer='$answer', firstname='$first', lastname='$last', othername='$other', home_address='$address', phone_number='$phone'{$country_upd_sql} WHERE vendor_id='".$get_logged_user_details["vendor_id"]."' && username='".$get_logged_user_details["username"]."'");
                 		// Email Beginning
-               			$log_template_encoded_text_array = array("{firstname}" => $first, "{lastname}" => $last, "{email}" => $get_logged_user_details["email"], "{phone}" => $get_logged_user_details["phone_number"], "{address}" => $address, "{security_answer}" => $answer);
+               			$log_template_encoded_text_array = array("{firstname}" => $first, "{lastname}" => $last, "{email}" => $get_logged_user_details["email"], "{phone}" => $phone, "{address}" => $address, "{security_answer}" => $answer);
                			$raw_log_template_subject = getUserEmailTemplate('user-account-update','subject');
                			$raw_log_template_body = getUserEmailTemplate('user-account-update','body');
                			foreach($log_template_encoded_text_array as $array_key => $array_val){
@@ -36,8 +45,8 @@ bc_totp_setup_handle('sas_users', $get_logged_user_details);
                			$json_response_array = array("desc" => "Profile Information Updated Successfully");
                			$json_response_encode = json_encode($json_response_array,true);
                 	}else{
-                		//Phone number should be 11 digit long
-                		$json_response_array = array("desc" => "Phone number should be 11 digit long");
+                		//Invalid phone number
+                		$json_response_array = array("desc" => "Enter a valid local or international phone number (7-15 digits)");
                 		$json_response_encode = json_encode($json_response_array,true);
                 	}
                 }else{
@@ -321,8 +330,24 @@ bc_app_head("Account Settings | " . ($get_all_site_details["site_title"]));
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label small fw-bold text-uppercase text-muted">Phone Number</label>
-                            <input name="phone" type="text" value="<?php echo $get_logged_user_details['phone_number']; ?>" class="form-control" pattern="[0-9]{11}" required/>
+                            <input name="phone" type="tel" value="<?php echo htmlspecialchars((string)$get_logged_user_details['phone_number'], ENT_QUOTES, 'UTF-8'); ?>" class="form-control" required/>
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase text-muted">Country</label>
+                        <select name="country" class="form-select">
+                            <option value="">Select Country</option>
+                            <?php
+                                if (function_exists('bc_world_countries')) {
+                                    $acct_country_info = bc_world_country_lookup((string)($get_logged_user_details['country'] ?? ''));
+                                    $acct_country_code = $acct_country_info ? $acct_country_info['code'] : '';
+                                    foreach (bc_world_countries() as $c) {
+                                        $sel = ($acct_country_code !== '' && $c['code'] === $acct_country_code) ? 'selected' : '';
+                                        echo '<option value="'.htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8').'" '.$sel.'>'.htmlspecialchars($c['name'].' (+'.$c['dial'].')', ENT_QUOTES, 'UTF-8').'</option>';
+                                    }
+                                }
+                            ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-uppercase text-muted">Home Address</label>

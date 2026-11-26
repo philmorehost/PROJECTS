@@ -27,9 +27,20 @@ if (isset($_GET['doc'], $_GET['uid'])) {
     $file = trim((string)($row_doc['kyb_document'] ?? ''));
     if ($file === '') { http_response_code(404); exit('No such document'); }
 
-    $base = realpath($_SERVER['DOCUMENT_ROOT'] . '/uploads/kyb/');
-    $path = realpath($_SERVER['DOCUMENT_ROOT'] . '/uploads/kyb/' . basename($file));
-    if (!$base || !$path || strpos($path, $base) !== 0 || !is_file($path)) {
+    $doc_name = basename($file);
+    $base = false;
+    $path = false;
+    foreach ([rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/uploads/kyb/', dirname(__DIR__) . '/uploads/kyb/'] as $dir_candidate) {
+        if ($dir_candidate === '/uploads/kyb/') continue;
+        $cand_base = realpath($dir_candidate);
+        $cand_path = $cand_base ? realpath($cand_base . DIRECTORY_SEPARATOR . $doc_name) : false;
+        if ($cand_base && $cand_path && strpos($cand_path, $cand_base) === 0 && is_file($cand_path)) {
+            $base = $cand_base;
+            $path = $cand_path;
+            break;
+        }
+    }
+    if (!$base || !$path || strpos($path, $base) !== 0) {
         http_response_code(404); exit('Document missing on disk');
     }
 
@@ -40,6 +51,7 @@ if (isset($_GET['doc'], $_GET['uid'])) {
     // Release the session lock before streaming, so a slow download cannot block this admin's
     // other tabs (same reasoning as the KYC evidence viewer).
     if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    while (ob_get_level() > 0) { ob_end_clean(); }
     header('Content-Type: ' . $mimes[$ext]);
     header('Content-Length: ' . filesize($path));
     header('Content-Disposition: inline; filename="kyb-document.' . $ext . '"');

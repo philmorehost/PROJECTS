@@ -14,30 +14,57 @@ function bc_live_capture_widget($name, $video = false) {
         .'<button type="button" data-camera-start class="btn btn-outline-primary btn-sm">Start camera'.($video?' & record':'').'</button> '
         .(!$video?'<button type="button" data-camera-shot class="btn btn-primary btn-sm" hidden>Take photo</button>':'')
         .'<button type="button" data-camera-reset class="btn btn-outline-secondary btn-sm" hidden>Retake</button>'
-        .'<p role="status" class="small mb-0">'.($video?'Record 8 seconds: say your full name and today’s date, then turn your head slowly. Maximum 3 MB.':'Take a clear live photo. JPEG up to 960 pixels, maximum 512 KB.').' Camera permission and HTTPS required. No gallery upload. Captures are subject to review.</p></div>';
+        .'<p role="status" class="small mb-0">'.($video?'Record a short 6-second video: say your full name and today’s date, then turn your head slowly. Maximum 3 MB.':'Take a clear live photo. JPEG up to 960 pixels, maximum 512 KB.').' Camera permission and HTTPS required. No gallery upload. Captures are subject to review.</p></div>';
     static $loaded = false;
     if (!$loaded) { echo '<script src="../asset/bc-live-capture.js" defer></script>'; $loaded = true; }
 }
+function bc_live_media_last_error($msg = null) {
+    if ($msg !== null) {
+        $GLOBALS['bc_live_media_last_error'] = (string)$msg;
+    }
+    return (string)($GLOBALS['bc_live_media_last_error'] ?? '');
+}
 /** Bound storage even for alternate API clients. Never trust filename or client flags as liveness. */
 function bc_live_media_prepare($tmp, $kind) {
-    if (!is_file($tmp)) return false;
+    bc_live_media_last_error('');
+    if (!is_file($tmp)) { bc_live_media_last_error('Uploaded file is missing.'); return false; }
     $size = filesize($tmp);
-    if ($size <= 0 || $size > ($kind === 'selfie' ? 512 * 1024 : 3 * 1024 * 1024)) return false;
+    $max = ($kind === 'selfie' ? 512 * 1024 : 3 * 1024 * 1024);
+    if ($size <= 0 || $size > $max) {
+        bc_live_media_last_error($kind === 'selfie' ? 'Live photo must be 512 KB or smaller.' : 'Liveliness video must be 3 MB or smaller.');
+        return false;
+    }
     if ($kind !== 'selfie') {
-        if (!class_exists('finfo')) return false;
+        if (!class_exists('finfo')) { bc_live_media_last_error('PHP fileinfo extension is unavailable.'); return false; }
         $mime = (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
-        return bc_video_evidence_inspect($tmp, $mime);
+        if ($mime === 'video/x-matroska') $mime = 'video/webm';
+        elseif ($mime === 'video/quicktime' || $mime === 'application/mp4') $mime = 'video/mp4';
+        $ok = bc_video_evidence_inspect($tmp, $mime);
+        if (!$ok && bc_video_evidence_last_error() !== '') {
+            bc_live_media_last_error(bc_video_evidence_last_error());
+        }
+        return $ok;
     }
     $info = @getimagesize($tmp);
-    if (!$info || (int)$info[2] !== IMAGETYPE_JPEG || ($info['mime'] ?? '') !== 'image/jpeg' || $info[0] > 960 || $info[1] > 960 || min($info[0], $info[1]) < 160) return false;
-    if (class_exists('finfo') && (new finfo(FILEINFO_MIME_TYPE))->file($tmp) !== 'image/jpeg') return false;
+    if (!$info || (int)$info[2] !== IMAGETYPE_JPEG || ($info['mime'] ?? '') !== 'image/jpeg' || $info[0] > 960 || $info[1] > 960 || min($info[0], $info[1]) < 160) {
+        bc_live_media_last_error('Live photo must be a JPEG between 160px and 960px.');
+        return false;
+    }
+    if (class_exists('finfo') && (new finfo(FILEINFO_MIME_TYPE))->file($tmp) !== 'image/jpeg') {
+        bc_live_media_last_error('Live photo must be a valid JPEG.');
+        return false;
+    }
     // Strip metadata and recompress when GD is available; input limits apply even without GD.
     if (function_exists('imagecreatefromjpeg')) {
         $image = @imagecreatefromjpeg($tmp);
-        if (!$image) return false;
+        if (!$image) { bc_live_media_last_error('Could not decode live JPEG.'); return false; }
         $ok = imagejpeg($image, $tmp, 78); imagedestroy($image);
-        if (!$ok) return false;
+        if (!$ok) { bc_live_media_last_error('Could not process live JPEG.'); return false; }
         clearstatcache(true, $tmp);
     }
-    return filesize($tmp) <= 512 * 1024;
+    if (filesize($tmp) > 512 * 1024) {
+        bc_live_media_last_error('Live photo exceeds 512 KB.');
+        return false;
+    }
+    return true;
 }

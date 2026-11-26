@@ -20,7 +20,14 @@ $pass = mysqli_real_escape_string($connection_server, trim(strip_tags($input["pa
 $first = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($input["first"] ?? ''))));
 $last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($input["last"] ?? ''))));
 $email = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["email"] ?? ''))));
-$phone = mysqli_real_escape_string($connection_server, trim(strip_tags($input["phone"] ?? '')));
+$country_raw = trim(strip_tags((string)($input["country"] ?? '')));
+$country_info = ($country_raw !== '' && function_exists('bc_world_country_lookup')) ? bc_world_country_lookup($country_raw) : null;
+$country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+$phone_raw = trim(strip_tags((string)($input["phone"] ?? '')));
+$phone_norm = function_exists('bc_normalize_world_phone')
+    ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+    : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+$phone = mysqli_real_escape_string($connection_server, $phone_norm);
 $address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($input["address"] ?? ''))));
 $referral = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($input["referral"] ?? ''))));
 
@@ -30,7 +37,7 @@ $is_otp_verification = ($input_otp !== '' && $input_reg_token !== '');
 
 // A verification request only needs the token + code; the account is rebuilt from the saved
 // payload, so it is not required (or trusted) to resend the whole form.
-if (!$is_otp_verification && (empty($user) || empty($pass) || empty($first) || empty($last) || empty($email) || empty($phone))) {
+if (!$is_otp_verification && (empty($user) || empty($pass) || empty($first) || empty($last) || empty($email) || empty($phone_raw))) {
     echo json_encode(["status" => "error", "message" => "Missing required fields"]);
     exit;
 }
@@ -61,8 +68,13 @@ if (!$is_otp_verification) {
         exit;
     }
 
-    if (!is_numeric($phone) || strlen($phone) != 11) {
-        echo json_encode(["status" => "error", "message" => "Phone number must be 11 digits"]);
+    if ($country_raw !== '' && $country_info === null) {
+        echo json_encode(["status" => "error", "message" => "Invalid country"]);
+        exit;
+    }
+
+    if ($phone === '') {
+        echo json_encode(["status" => "error", "message" => "Invalid phone number. Enter a valid local or international number (7–15 digits)"]);
         exit;
     }
 
@@ -99,7 +111,7 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
         }
         $pending = bc_reg_pending_create((int)$vendor_id, [
             'username' => $user, 'pass_md5' => (function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass)), 'first' => $first, 'last' => $last,
-            'email' => $email, 'phone' => $phone, 'address' => $address,
+            'email' => $email, 'phone' => $phone, 'address' => $address, 'country' => $country,
             'referral_id' => $referral_id, 'api_key' => $api_key,
         ]);
         if ($pending['token'] === '' || $pending['otp'] === '') {
@@ -138,6 +150,7 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     $email   = mysqli_real_escape_string($connection_server, $pending['email']);
     $phone   = mysqli_real_escape_string($connection_server, $pending['phone']);
     $address = mysqli_real_escape_string($connection_server, $pending['address']);
+    $country = mysqli_real_escape_string($connection_server, (string)($pending['country'] ?? ''));
     $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential((string)($pending['api_key'] ?? $api_key), $vendor_id));
     $referral_id = mysqli_real_escape_string($connection_server, (string)($pending['referral_id'] ?? ''));
 
@@ -148,8 +161,11 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     }
 }
 
-$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status, email_verified)
-          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address', '$referral_id', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '1', '1', '" . ((($get_vendor["reg_otp_enabled"] ?? 1) == 1) ? '1' : '0') . "')";
+$has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+$country_col_sql = $has_country_col ? ", country" : "";
+$country_val_sql = $has_country_col ? ", '$country'" : "";
+$query = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, home_address{$country_col_sql}, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status, email_verified)
+          VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$address'{$country_val_sql}, '$referral_id', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '1', '1', '" . ((($get_vendor["reg_otp_enabled"] ?? 1) == 1) ? '1' : '0') . "')";
 
 if (mysqli_query($connection_server, $query)) {
     // Email Notification
