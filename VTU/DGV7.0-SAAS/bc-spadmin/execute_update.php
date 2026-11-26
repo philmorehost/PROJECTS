@@ -310,13 +310,16 @@ try {
         mysqli_stmt_close($vStmt);
     }
 
-    // Clean up temporary files on success
+    // Clean up temporary files on success & prune old backups beyond 2 sets
     cleanup_temp_files();
+    require_once ROOT_DIR . '/func/bc-backup-prune.php';
+    $pruned_backups = bc_prune_old_backups(BACKUP_DIR, 2, 14, array_filter([(string)$backup_zip, (string)$backup_sql]));
 
     ob_end_clean();
     echo json_encode([
         'status' => 'success',
-        'message' => 'System successfully updated to version ' . $new_version
+        'message' => 'System successfully updated to version ' . $new_version,
+        'pruned_backups' => $pruned_backups
     ]);
     exit;
 
