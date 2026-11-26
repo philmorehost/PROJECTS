@@ -106,7 +106,8 @@
     try {
       const cfg = JSON.parse(rawCfg);
       const credit = m / 100;
-      const markupPct = Math.min(1, Math.max(0, Number(cfg.markup_percent ?? 0.5)));
+      const maxMarkup = Math.max(1, Number(cfg.max_markup_percent ?? 1));
+      const markupPct = Math.min(maxMarkup, Math.max(0, Number(cfg.markup_percent ?? 0.5)));
       const vendorMarkup = round2(credit * (markupPct / 100));
       const netNeeded = round2(credit + vendorMarkup);
       const reqAmount = solveGrossForNet(cfg, netNeeded);

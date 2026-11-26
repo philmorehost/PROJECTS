@@ -713,7 +713,26 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
         
     
     <script>
-</script>
+    function initiatePayoutActivation(amount) {
+        var fee = Number(amount || 0);
+        var url = 'Fund.php?purpose=payout_activation' + (fee > 0 ? '&amount=' + encodeURIComponent(fee) : '');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Buy Withdrawal Module',
+                text: 'You are about to pay ₦' + fee.toLocaleString() + ' to activate the Withdrawal Module. Proceed?',
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Proceed to Payment'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    window.location.href = url;
+                }
+            });
+        } else if (window.confirm('Proceed to pay ₦' + fee.toLocaleString() + ' to activate the Withdrawal Module?')) {
+            window.location.href = url;
+        }
+    }
+    </script>
 
 
 <?php bc_paid_otp_script(); bc_adm_foot(array("area" => "admin")); ?>
