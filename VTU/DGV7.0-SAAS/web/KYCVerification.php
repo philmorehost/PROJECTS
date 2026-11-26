@@ -133,12 +133,17 @@ if (isset($_POST['submit_media'])) {
         $v_err = $_FILES['liveliness_video']['error'] ?? UPLOAD_ERR_NO_FILE;
         $v_tmp = $_FILES['liveliness_video']['tmp_name'] ?? '';
         if ($v_err === UPLOAD_ERR_INI_SIZE || $v_err === UPLOAD_ERR_FORM_SIZE) {
+            $_SESSION['product_purchase_status'] = 'failed';
             $_SESSION['product_purchase_response'] = 'Error: Liveliness video exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Record a shorter video (max 3 MB).';
             header('Location: KYCVerification.php');
             exit;
         }
         if ($v_err !== UPLOAD_ERR_OK || !is_uploaded_file($v_tmp) || !bc_live_media_prepare($v_tmp, 'liveliness_video')) {
-            $_SESSION['product_purchase_response']='Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';header('Location: KYCVerification.php');exit;
+            $v_detail = function_exists('bc_live_media_last_error') ? bc_live_media_last_error() : '';
+            $_SESSION['product_purchase_status'] = 'failed';
+            $_SESSION['product_purchase_response'] = 'Video could not be validated.' . ($v_detail !== '' ? ' ' . $v_detail : '') . ' Record a clear 1–6 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.';
+            header('Location: KYCVerification.php');
+            exit;
         }
     }
     foreach ($kinds as $input_name => $spec) {
@@ -328,9 +333,20 @@ if (isset($_GET['doc'])) {
     $doc_file = trim($row_doc['f'] ?? '');
     if ($doc_file === '') { http_response_code(404); exit('No such document'); }
 
-    $doc_base = realpath($_SERVER['DOCUMENT_ROOT'] . '/uploads/kyc/');
-    $doc_path = realpath($_SERVER['DOCUMENT_ROOT'] . '/uploads/kyc/' . basename($doc_file));
-    if (!$doc_base || !$doc_path || strpos($doc_path, $doc_base) !== 0 || !is_file($doc_path)) {
+    $doc_name = basename($doc_file);
+    $doc_base = false;
+    $doc_path = false;
+    foreach ([rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/uploads/kyc/', dirname(__DIR__) . '/uploads/kyc/'] as $dir_candidate) {
+        if ($dir_candidate === '/uploads/kyc/') continue;
+        $cand_base = realpath($dir_candidate);
+        $cand_path = $cand_base ? realpath($cand_base . DIRECTORY_SEPARATOR . $doc_name) : false;
+        if ($cand_base && $cand_path && strpos($cand_path, $cand_base) === 0 && is_file($cand_path)) {
+            $doc_base = $cand_base;
+            $doc_path = $cand_path;
+            break;
+        }
+    }
+    if (!$doc_base || !$doc_path) {
         http_response_code(404); exit('Document missing on disk');
     }
 
@@ -340,6 +356,8 @@ if (isset($_GET['doc'])) {
         'mp4' => 'video/mp4', 'mov' => 'video/quicktime', 'webm' => 'video/webm', 'mkv' => 'video/x-matroska',
     ];
     $doc_ext = strtolower(pathinfo($doc_path, PATHINFO_EXTENSION));
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+    while (ob_get_level() > 0) { ob_end_clean(); }
 
     header('Content-Type: ' . ($doc_mimes[$doc_ext] ?? 'application/octet-stream'));
     header('Content-Length: ' . filesize($doc_path));
@@ -350,7 +368,6 @@ if (isset($_GET['doc'])) {
     exit();
 }
 
-?>
 ?>
 <?php
 // Plate app shell: one shared chrome for the signed-in console.

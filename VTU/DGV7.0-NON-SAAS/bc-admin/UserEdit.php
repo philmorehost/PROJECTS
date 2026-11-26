@@ -27,49 +27,35 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     	$answer = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["answer"]))));
     	$address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
         $email = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["email"]))));
-        $phone = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["phone"]))));
+        $country_raw = trim(strip_tags((string)($_POST["country"] ?? ($get_user_details['country'] ?? ''))));
+        $country_info = ($country_raw !== '' && function_exists('bc_world_country_lookup')) ? bc_world_country_lookup($country_raw) : null;
+        $country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+        $phone_raw = trim(strip_tags((string)($_POST["phone"] ?? '')));
+        $phone_norm = function_exists('bc_normalize_world_phone')
+            ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+            : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+        $phone = mysqli_real_escape_string($connection_server, $phone_norm);
         $api_domain = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["api_domain"])));
     	//$bank_code = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["bank-code"])));
         //$account_number = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["account-number"])));
         //$bvn = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["bvn"]))));
     	//$nin = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["nin"]))));
     	
-        if(!empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($email) && !empty($phone)){
+        if(!empty($first) && !empty($last) && !empty($quest) && is_numeric($quest) && !empty($answer) && !empty($address) && !empty($email) && !empty($phone_raw)){
             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
                 $check_user_details = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
                 if(mysqli_num_rows($check_user_details) == 1){
                     if((strlen($answer) >= 3) && (strlen($answer) <= 20)){
-                        if(is_numeric($phone) && (strlen($phone) == 11)){
-        	                /*if(!empty($bank_code) && is_numeric($bank_code) && (strlen($bank_code) >= 1)){
-    	                		$refined_bank_code = $bank_code;
-	                    	}else{
-                    			$refined_bank_code = "";
-                    		}
-                    		
-                	    	if(!empty($account_number) && is_numeric($account_number) && (strlen($account_number) == 10)){
-            	        		$refined_account_number = $account_number;
-        	            	}else{
-    	                		$refined_account_number = "";
-	                    	}
-
-                        	if(!empty($bvn) && is_numeric($bvn) && (strlen($bvn) == 11)){
-                    	    	$refined_bvn = $bvn;
-                	        }else{
-            	            	$refined_bvn = "";
-        	                }
-                        
-    	                    if(!empty($nin) && is_numeric($nin) && (strlen($nin) == 11)){
-	                        	$refined_nin = $nin;
-                        	}else{
-                    	    	$refined_nin = "";
-                	        }*/
-		            mysqli_query($connection_server, "UPDATE sas_users SET security_quest='$quest', security_answer='$answer', firstname='$first', lastname='$last', othername='$other', home_address='$address', email='$email', phone_number='$phone', api_domain='$api_domain' WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
+                        if($phone !== ''){
+		            $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+		            $country_upd_sql = ($has_country_col && $country !== '') ? ", country='$country'" : "";
+		            mysqli_query($connection_server, "UPDATE sas_users SET security_quest='$quest', security_answer='$answer', firstname='$first', lastname='$last', othername='$other', home_address='$address', email='$email', phone_number='$phone'{$country_upd_sql}, api_domain='$api_domain' WHERE vendor_id='".$get_logged_admin_details["id"]."' && id='".$user_id_number."'");
         	                //Profile Information Updated Successfully
     	                    $json_response_array = array("desc" => "Profile Information Updated Successfully");
 	                        $json_response_encode = json_encode($json_response_array,true);
                     	}else{
-                    		//Phone number should be 11 digit long
-                    		$json_response_array = array("desc" => "Phone number should be 11 digit long");
+                    		//Invalid phone number
+                    		$json_response_array = array("desc" => "Enter a valid local or international phone number (7-15 digits)");
                     		$json_response_encode = json_encode($json_response_array,true);
                     	}
                     }else{
@@ -393,8 +379,24 @@ bc_adm_head("Edit User | " . ($get_all_super_admin_site_details["site_title"]), 
                                 <label class="form-label small fw-bold">Phone Number</label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light border-end-0 rounded-start-3"><i class="bi bi-phone"></i></span>
-                                    <input name="phone" type="text" value="<?php echo $get_user_details['phone_number']; ?>" class="form-control rounded-end-3" pattern="[0-9]{11}" required/>
+                                    <input name="phone" type="tel" value="<?php echo htmlspecialchars((string)$get_user_details['phone_number'], ENT_QUOTES, 'UTF-8'); ?>" class="form-control rounded-end-3" required/>
                                 </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold">Country</label>
+                                <select name="country" class="form-select rounded-3">
+                                    <option value="">Select Country</option>
+                                    <?php
+                                        if (function_exists('bc_world_countries')) {
+                                            $u_country_info = bc_world_country_lookup((string)($get_user_details['country'] ?? ''));
+                                            $u_country_code = $u_country_info ? $u_country_info['code'] : '';
+                                            foreach (bc_world_countries() as $c) {
+                                                $sel = ($u_country_code !== '' && $c['code'] === $u_country_code) ? 'selected' : '';
+                                                echo '<option value="'.htmlspecialchars($c['code'], ENT_QUOTES, 'UTF-8').'" '.$sel.'>'.htmlspecialchars($c['name'].' (+'.$c['dial'].')', ENT_QUOTES, 'UTF-8').'</option>';
+                                            }
+                                        }
+                                    ?>
+                                </select>
                             </div>
                             <div class="col-12">
                                 <label class="form-label small fw-bold">API Whitelist Domain</label>

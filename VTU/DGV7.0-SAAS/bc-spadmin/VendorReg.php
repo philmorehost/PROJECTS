@@ -633,7 +633,7 @@ bc_adm_head("Vendor Onboarding | Platform Registration", array("area" => "spadmi
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label text-uppercase small fw-bold">Phone Number</label>
-                                    <input type="text" name="phone" class="form-control" placeholder="081XXXXXXXX" pattern="[0-9]{11}" required>
+                                    <input type="tel" name="phone" class="form-control" placeholder="e.g. 081XXXXXXXX or +447911123456" required>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label text-uppercase small fw-bold">Address</label>

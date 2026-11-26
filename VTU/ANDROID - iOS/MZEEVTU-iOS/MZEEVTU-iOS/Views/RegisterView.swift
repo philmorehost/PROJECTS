@@ -22,9 +22,20 @@ struct RegisterView: View {
     @State private var firstname = ""
     @State private var lastname = ""
     @State private var email = ""
+    @State private var country: String = Locale.current.regionCode ?? "NG"
     @State private var phone = ""
     @State private var address = ""
     @State private var referral = ""
+
+    private var countryOptions: [(code: String, name: String)] {
+        let enLocale = Locale(identifier: "en_US")
+        return Locale.isoRegionCodes
+            .compactMap { code -> (String, String)? in
+                guard let name = enLocale.localizedString(forRegionCode: code), !name.isEmpty else { return nil }
+                return (code, name)
+            }
+            .sorted { $0.1 < $1.1 }
+    }
 
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -54,8 +65,15 @@ struct RegisterView: View {
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
-                        TextField("Phone number (11 digits)", text: $phone)
-                            .keyboardType(.numberPad)
+                        Picker("Country", selection: $country) {
+                            ForEach(countryOptions, id: \.code) { item in
+                                Text("\(item.name) (\(item.code))").tag(item.code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        TextField("Phone number (e.g. 08012345678 or +447911123456)", text: $phone)
+                            .keyboardType(.phonePad)
                         TextField("Home address", text: $address)
                         TextField("Referral username (optional)", text: $referral)
                             .autocapitalization(.none)
@@ -110,11 +128,13 @@ struct RegisterView: View {
             errorMessage = "Passwords do not match."
             return
         }
-        let digits = phone.filter { $0.isNumber }
-        guard digits.count == 11 else {
-            errorMessage = "Phone number must be 11 digits."
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = trimmedPhone.filter { $0.isNumber }
+        guard digits.count >= 7 && digits.count <= 15 else {
+            errorMessage = "Enter a valid phone number (7–15 digits)."
             return
         }
+        let normalizedPhone = trimmedPhone.hasPrefix("+") ? "+\(digits)" : digits
 
         isLoading = true
         let params: [String: Any] = [
@@ -123,7 +143,8 @@ struct RegisterView: View {
             "first": firstname,
             "last": lastname,
             "email": email.lowercased(),
-            "phone": digits,
+            "country": country,
+            "phone": normalizedPhone,
             "address": address,
             "referral": referral.lowercased()
         ]

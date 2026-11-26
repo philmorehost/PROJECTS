@@ -25,7 +25,14 @@ $first    = mysqli_real_escape_string($connection_server, trim(strip_tags(ucword
 $last     = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]    ?? ""))));
 $other    = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["other"]   ?? ""))));
 $email    = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["email"]  ?? ""))));
-$phone    = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["phone"]   ?? "")));
+$country_raw = trim(strip_tags((string)($_POST["country"] ?? "NG")));
+$country_info = function_exists('bc_world_country_lookup') ? bc_world_country_lookup($country_raw) : null;
+$country  = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+$phone_raw = trim(strip_tags((string)($_POST["phone"] ?? "")));
+$phone_norm = function_exists('bc_normalize_world_phone')
+    ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+    : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+$phone    = mysqli_real_escape_string($connection_server, $phone_norm);
 $address  = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"] ?? ""))));
 $referral = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["referral"] ?? ""))));
 // Field validations
@@ -34,7 +41,7 @@ if (empty($pass))    { echo json_encode(["status" => "error", "message" => "Pass
 if (empty($first))   { echo json_encode(["status" => "error", "message" => "Firstname Field Empty"]);     exit; }
 if (empty($last))    { echo json_encode(["status" => "error", "message" => "Lastname Field Empty"]);      exit; }
 if (empty($email))   { echo json_encode(["status" => "error", "message" => "Email Field Empty"]);         exit; }
-if (empty($phone))   { echo json_encode(["status" => "error", "message" => "Phone Number Field Empty"]);  exit; }
+if (empty($phone_raw)) { echo json_encode(["status" => "error", "message" => "Phone Number Field Empty"]); exit; }
 if (empty($address)) { echo json_encode(["status" => "error", "message" => "Home Address Field Empty"]);  exit; }
 
 // Business rule validations
@@ -46,8 +53,12 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     echo json_encode(["status" => "error", "message" => "Invalid Email Address"]);
     exit;
 }
-if (!is_numeric($phone) || strlen($phone) != 11) {
-    echo json_encode(["status" => "error", "message" => "Phone number should be 11 digits"]);
+if ($country_info === null) {
+    echo json_encode(["status" => "error", "message" => "Please select a valid country"]);
+    exit;
+}
+if ($phone === '') {
+    echo json_encode(["status" => "error", "message" => "Invalid phone number. Enter a valid local or international number (7–15 digits)"]);
     exit;
 }
 
@@ -86,6 +97,7 @@ $_SESSION['reg_pending'] = [
     'email'     => $email,
     'phone'     => $phone,
     'address'   => $address,
+    'country'   => $country,
     'referral'  => $referral,
     'api_key'   => bin2hex(random_bytes(25)),
 ];
@@ -108,7 +120,10 @@ if (($select_vendor_table["reg_otp_enabled"] ?? 1) == 0) {
         ? bc_resolve_referral_id($connection_server, $vendor_id, $referral)
         : "";
 
-    $q = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass_md5', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', '$last_login', '2', '1', '0')";
+    $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+    $country_col_sql = $has_country_col ? ", country" : "";
+    $country_val_sql = $has_country_col ? ", '$country'" : "";
+    $q = "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address{$country_col_sql}, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass_md5', '$phone', '0', '$first', '$last', '$other', '$address'{$country_val_sql}, '$referral_edited', '1', '$api_key', '$last_login', '2', '1', '0')";
 
     if (mysqli_query($connection_server, $q)) {
         // Send welcome email

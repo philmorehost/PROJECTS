@@ -8,7 +8,13 @@ if (json_last_error() === JSON_ERROR_NONE) {
     $username = mysqli_real_escape_string($conn_db, trim(strip_tags($decode_post_request["username"])));
     $password = mysqli_real_escape_string($conn_db, trim(strip_tags($decode_post_request["encoded-passkey"])));
     $fullname = mysqli_real_escape_string($conn_db, trim(strip_tags($decode_post_request["fullname"])));
-    $phone = mysqli_real_escape_string($conn_db, trim(strip_tags($decode_post_request["phone"])));
+    $phone_raw = trim(strip_tags((string)($decode_post_request["phone"] ?? '')));
+    $phone_norm = function_exists('bc_normalize_world_phone')
+        ? bc_normalize_world_phone($phone_raw, trim(strip_tags((string)($decode_post_request["country"] ?? ''))))
+        : (preg_match('/^\+?[0-9][0-9\s().-]{6,19}$/', $phone_raw)
+            ? (strpos($phone_raw, '+') === 0 ? '+' . preg_replace('/\D+/', '', $phone_raw) : preg_replace('/\D+/', '', $phone_raw))
+            : '');
+    $phone = mysqli_real_escape_string($conn_db, $phone_norm);
     $address = mysqli_real_escape_string($conn_db, trim(strip_tags($decode_post_request["address"])));
 
 
@@ -19,9 +25,8 @@ if (json_last_error() === JSON_ERROR_NONE) {
         !empty($username) &&
         !empty($password) &&
         !empty($fullname) &&
-        !empty($phone) &&
-        is_numeric($phone) &&
-        (strlen($phone) == 11) &&
+        !empty($phone_raw) &&
+        $phone !== '' &&
         !empty($address)
     ) {
         $checkuser = mysqli_query($conn_db, "SELECT * FROM users WHERE username = '" . $username . "' OR email='" . $username . "'");
@@ -68,12 +73,10 @@ if (json_last_error() === JSON_ERROR_NONE) {
             $status_msg = "Empty Password";
         } elseif (empty($fullname)) {
             $status_msg = "Fullname is required";
-        } elseif (empty($phone)) {
+        } elseif (empty($phone_raw)) {
             $status_msg = "Phone number is required";
-        } elseif (!is_numeric($phone)) {
-            $status_msg = "Phone number must be a number";
-        } elseif ((strlen($phone) < 11) || (strlen($phone) > 11)) {
-            $status_msg = "Phone number must be 11 digits long";
+        } elseif ($phone === '') {
+            $status_msg = "Invalid phone number. Enter a valid local or international number";
         } elseif (empty($address)) {
             $status_msg = "Address is required";
         }

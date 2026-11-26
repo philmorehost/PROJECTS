@@ -16,7 +16,14 @@ if (json_last_error() === JSON_ERROR_NONE) {
         $lastname = mysqli_real_escape_string($connection_server, trim(strip_tags($fullname_exp[1] ?? "")));
         $othername = mysqli_real_escape_string($connection_server, trim(strip_tags($fullname_exp[2] ?? "")));
         $username = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["username"])));
-        $phone = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["phone"])));
+        $country_raw = trim(strip_tags((string)($decode_post_request["country"] ?? '')));
+        $country_info = ($country_raw !== '' && function_exists('bc_world_country_lookup')) ? bc_world_country_lookup($country_raw) : null;
+        $country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+        $phone_raw = trim(strip_tags((string)($decode_post_request["phone"] ?? '')));
+        $phone_norm = function_exists('bc_normalize_world_phone')
+            ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+            : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+        $phone = mysqli_real_escape_string($connection_server, $phone_norm);
         $email = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["email"])));
         $address = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["address"])));
         $password = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["encoded-passkey"])));
@@ -40,9 +47,9 @@ if (json_last_error() === JSON_ERROR_NONE) {
             !empty($lastname) &&
             !empty($othername) &&
             !empty($username) &&
-            !empty($phone) &&
-            is_numeric($phone) &&
-            (strlen($phone) == 11) &&
+            !empty($phone_raw) &&
+            $phone !== '' &&
+            ($country_raw === '' || $country_info !== null) &&
             !empty($email) &&
             filter_var($email, FILTER_VALIDATE_EMAIL) &&
             !empty($address) &&
@@ -92,9 +99,12 @@ if (json_last_error() === JSON_ERROR_NONE) {
 
                 if ($proceed_register == true) {
                     $last_login = date('Y-m-d H:i:s.u');
+                    $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+                    $country_col_sql = $has_country_col ? ", `country`" : "";
+                    $country_val_sql = $has_country_col ? ", '$country'" : "";
                     mysqli_query($connection_server, "INSERT INTO sas_users 
-                (vendor_id, username, `password`, phone_number, email, balance, firstname, lastname, othername, account_level, api_key, last_login, api_status,`status`, `home_address`, `referral_id`)
-                VALUES ('" . $select_vendor_table["id"] . "', '$username', '$password', '$phone', '$email', '$balance', '$firstname', '$lastname', '$othername', '$account_type', '$token', '$last_login', '2', '$status' , '$address', '$refined_referral') ");
+                (vendor_id, username, `password`, phone_number, email, balance, firstname, lastname, othername, account_level, api_key, last_login, api_status,`status`, `home_address`{$country_col_sql}, `referral_id`)
+                VALUES ('" . $select_vendor_table["id"] . "', '$username', '$password', '$phone', '$email', '$balance', '$firstname', '$lastname', '$othername', '$account_type', '$token', '$last_login', '2', '$status' , '$address'{$country_val_sql}, '$refined_referral') ");
 
                     // Email Beginning
                     $registration_template_encoded_text_array = array("{firstname}" => $firstname, "{lastname}" => $lastname, "{username}" => $username, "{email}" => $email, "{phone}" => $phone, "{address}" => $address);
@@ -121,12 +131,12 @@ if (json_last_error() === JSON_ERROR_NONE) {
                 $status_msg = "Empty Lastname";
             } elseif (empty($username)) {
                 $status_msg = "Empty Username";
-            } elseif (empty($phone)) {
+            } elseif (empty($phone_raw)) {
                 $status_msg = "Empty Phone number";
-            } elseif (!is_numeric($phone)) {
-                $status_msg = "Phone number must be a number";
-            } elseif (strlen($phone) < 11 || strlen($phone) > 11) {
-                $status_msg = "Phone number must be 11 digit";
+            } elseif ($country_raw !== '' && $country_info === null) {
+                $status_msg = "Invalid Country";
+            } elseif ($phone === '') {
+                $status_msg = "Invalid phone number. Enter a valid local or international number";
             } elseif (empty($email)) {
                 $status_msg = "Empty Email";
             } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {

@@ -34,6 +34,7 @@ $other     = mysqli_real_escape_string($connection_server, $d['other']);
 $email     = mysqli_real_escape_string($connection_server, $d['email']);
 $phone     = mysqli_real_escape_string($connection_server, $d['phone']);
 $address   = mysqli_real_escape_string($connection_server, $d['address']);
+$country   = mysqli_real_escape_string($connection_server, (string)($d['country'] ?? ''));
 $generated_api_key = mysqli_real_escape_string($connection_server, (string)($d['api_key'] ?? ''));
 
 // Re-check username uniqueness (guards against race condition)
@@ -50,9 +51,12 @@ $referral_edited = function_exists('bc_resolve_referral_id')
     ? bc_resolve_referral_id($connection_server, $vendor_id, $d['referral'] ?? '')
     : "";
 
+$has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+$country_col_sql = $has_country_col ? ", country" : "";
+$country_val_sql = $has_country_col ? ", '$country'" : "";
 unset($_SESSION['reg_otp']); // Consumed before INSERT; failures require a fresh request.
 $last_login = date('Y-m-d H:i:s.u');
-$reg_inserted=mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$generated_api_key', '$last_login', '2', '1', '1')");
+$reg_inserted=mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address{$country_col_sql}, referral_id, account_level, api_key, last_login, api_status, status, email_verified) VALUES ('$vendor_id', '$email', '$user', '$pass', '$phone', '0', '$first', '$last', '$other', '$address'{$country_val_sql}, '$referral_edited', '1', '$generated_api_key', '$last_login', '2', '1', '1')");
 
 if(!$reg_inserted){unset($_SESSION['reg_pending']);echo json_encode(['status'=>'error','message'=>'Account creation could not be confirmed. Check sign-in before starting again.']);exit;}
 session_regenerate_id(true);

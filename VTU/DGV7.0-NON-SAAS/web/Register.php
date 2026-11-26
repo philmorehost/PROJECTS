@@ -24,11 +24,18 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     	$last = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["last"]))));
         $other = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["other"]))));
     	$email = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["email"]))));
-        $phone = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_POST["phone"]))));
+        $country_raw = trim(strip_tags((string)($_POST["country"] ?? "NG")));
+        $country_info = function_exists('bc_world_country_lookup') ? bc_world_country_lookup($country_raw) : null;
+        $country = mysqli_real_escape_string($connection_server, $country_info ? $country_info['name'] : '');
+        $phone_raw = trim(strip_tags((string)($_POST["phone"] ?? "")));
+        $phone_norm = function_exists('bc_normalize_world_phone')
+            ? bc_normalize_world_phone($phone_raw, $country_info ? $country_info['code'] : $country_raw)
+            : (is_numeric($phone_raw) && strlen($phone_raw) == 11 ? $phone_raw : '');
+        $phone = mysqli_real_escape_string($connection_server, $phone_norm);
     	$address = mysqli_real_escape_string($connection_server, trim(strip_tags(ucwords($_POST["address"]))));
         $referral = mysqli_real_escape_string($connection_server, trim(strip_tags(strtolower($_GET["referral"] ?? ""))));
         
-        if(!empty($user) && !empty($pass) && !empty($first) && !empty($last) && !empty($email) && !empty($phone) && !empty($address)){
+        if(!empty($user) && !empty($pass) && !empty($first) && !empty($last) && !empty($email) && !empty($phone_raw) && !empty($address)){
                     // When email verification is on, this legacy no-JS path must NOT create the
                     // account: it used to insert straight into sas_users, which let a direct POST
                     // skip the emailed code entirely. Send the visitor through the real flow.
@@ -54,12 +61,15 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                     if(mysqli_num_rows($check_user_details) == 0){
                         if(!filter_var($user, FILTER_VALIDATE_EMAIL)){
                             if(filter_var($email, FILTER_VALIDATE_EMAIL)){
-                                if(is_numeric($phone) && (strlen($phone) == 11)){
+                                if($country_info !== null && $phone !== ''){
                                     // §29: bcrypt at rest (login still accepts legacy MD5).
                                     $md5_pass = function_exists('bc_hash_password') ? bc_hash_password($pass) : md5($pass);
                                     $api_key = bin2hex(random_bytes(25));
                                     $last_login = date('Y-m-d H:i:s.u');
-                                    mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$address', '$referral_edited', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '2', '1')");
+                                    $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
+                                    $country_col_sql = $has_country_col ? ", country" : "";
+                                    $country_val_sql = $has_country_col ? ", '$country'" : "";
+                                    mysqli_query($connection_server, "INSERT INTO sas_users (vendor_id, email, username, password, phone_number, balance, firstname, lastname, othername, home_address{$country_col_sql}, referral_id, account_level, api_key, api_key_created_at, api_key_expires_at, last_login, api_status, status) VALUES ('$vendor_id', '$email', '$user', '$md5_pass', '$phone', '0', '$first', '$last', '$other', '$address'{$country_val_sql}, '$referral_edited', '1', '$api_key', NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY), '$last_login', '2', '1')");
                                     
                                     // Email Beginning
                                     $reg_template_encoded_text_array = array("{firstname}" => $first, "{lastname}" => $last, "{username}" => $user, "{address}" => $address, "{email}" => $email, "{phone}" => $phone);
@@ -82,9 +92,11 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 
                                     header("Location: SecurityPIN.php");
                                     exit();
+                                }elseif($country_info === null){
+                                    $json_response_array = array("desc" => "Invalid Country selected");
+                                    $json_response_encode = json_encode($json_response_array,true);
                                 }else{
-                                    //Phone number should be 11 digit long
-                                    $json_response_array = array("desc" => "Phone number should be 11 digit long");
+                                    $json_response_array = array("desc" => "Invalid phone number. Enter a valid local or international number (e.g. +14155552671, +447911123456, or 08031234567)");
                                     $json_response_encode = json_encode($json_response_array,true);
                                 }
                             }else{
@@ -136,9 +148,9 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                                         $json_response_array = array("desc" => "Email Field Empty");
                                         $json_response_encode = json_encode($json_response_array,true);
                                     }else{
-                                    	if(empty($phone)){
+                                    	if(empty($phone_raw)){
                                     		//Phone Number Field Empty
-                                    		$json_response_array = array("desc" => "Home Address Field Empty");
+                                    		$json_response_array = array("desc" => "Phone Number Field Empty");
                                     		$json_response_encode = json_encode($json_response_array,true);
                                     	}else{
                                         	if(empty($address)){
@@ -164,6 +176,12 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
     
 ?>
 <?php
+$bc_world_list = function_exists('bc_world_countries') ? bc_world_countries() : ['NG' => ['name' => 'Nigeria', 'dial' => '+234']];
+$bc_default_country = 'NG';
+if (function_exists('getCountryCodeFromIP') && !empty($_SERVER['REMOTE_ADDR'])) {
+    $detected_cc = strtoupper((string)getCountryCodeFromIP($_SERVER['REMOTE_ADDR']));
+    if (isset($bc_world_list[$detected_cc])) $bc_default_country = $detected_cc;
+}
 bc_plate_auth_head('Register | ' . $get_all_site_details["site_title"]);
 bc_plate_auth_top(array(
     'icon'  => 'user',
@@ -180,9 +198,20 @@ bc_plate_auth_top(array(
                     <input id="user" name="user" type="text" class="pk-auth__input" placeholder="e.g. johndoe" pattern="[a-zA-Z]{6,}" required>
                 </div>
                 <div class="pk-auth__field">
-                    <label class="pk-auth__label" for="phone">Phone number</label>
-                    <input id="phone" name="phone" type="text" class="pk-auth__input" placeholder="080XXXXXXXX" pattern="[0-9]{11}" required>
+                    <label class="pk-auth__label" for="country">Country</label>
+                    <select id="country" name="country" class="pk-auth__input" required>
+                        <?php foreach ($bc_world_list as $cc_code => $cc_info): ?>
+                            <option value="<?php echo htmlspecialchars($cc_code, ENT_QUOTES, 'UTF-8'); ?>" data-dial="<?php echo htmlspecialchars($cc_info['dial'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo $cc_code === $bc_default_country ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($cc_info['name'] . ' (' . $cc_info['dial'] . ')', ENT_QUOTES, 'UTF-8'); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
+            </div>
+
+            <div class="pk-auth__field">
+                <label class="pk-auth__label" for="phone">Phone number <small id="phone-dial-hint" style="font-weight:500;color:var(--muted);">(include country code or local number, e.g. <?php echo htmlspecialchars($bc_world_list[$bc_default_country]['dial'] ?? '+234', ENT_QUOTES, 'UTF-8'); ?>...)</small></label>
+                <input id="phone" name="phone" type="tel" class="pk-auth__input" placeholder="e.g. <?php echo htmlspecialchars(($bc_world_list[$bc_default_country]['dial'] ?? '+234') . '8012345678', ENT_QUOTES, 'UTF-8'); ?>" pattern="\+?[0-9\s\-\(\)]{7,20}" title="Enter a valid local or international phone number (7–15 digits)" required>
             </div>
 
             <div class="pk-auth__row">
@@ -244,10 +273,13 @@ bc_plate_auth_top(array(
   <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.0.16/dist/sweetalert2.all.min.js"></script>
 
-<?php if(isset($_SESSION["product_purchase_response"])){ ?>
+<?php if(isset($_SESSION["product_purchase_response"])){
+    $reg_msg = (string)$_SESSION["product_purchase_response"];
+    $reg_is_err = (stripos($reg_msg, 'congratulations') === false && stripos($reg_msg, 'success') === false);
+?>
 
 <script>
-  Swal.fire ('Done!', '<?php echo htmlspecialchars($_SESSION["product_purchase_response"], ENT_QUOTES, 'UTF-8'); ?>', 'success') ;
+  Swal.fire (<?php echo json_encode($reg_is_err ? 'Notice' : 'Done!'); ?>, <?php echo json_encode($reg_msg); ?>, <?php echo json_encode($reg_is_err ? 'error' : 'success'); ?>) ;
             //Swal.fire({ position:'top-end',type:'',title:'Oops', text: 'kindly fill all form', showConfirmButton:1,timer:2500 });
           setTimeout(() => {
                 fetch('/func/unset-product-response.php')
@@ -359,6 +391,19 @@ bc_plate_auth_top(array(
 
 <script src="../jsfile/bc-custom-all.js"></script>
 <script>
+(function () {
+    const countrySelect = document.getElementById('country');
+    const phoneInput = document.getElementById('phone');
+    const dialHint = document.getElementById('phone-dial-hint');
+    if (countrySelect && phoneInput) {
+        countrySelect.addEventListener('change', function () {
+            const opt = countrySelect.options[countrySelect.selectedIndex];
+            const dial = opt ? (opt.getAttribute('data-dial') || '') : '';
+            if (dialHint && dial) dialHint.textContent = '(include country code or local number, e.g. ' + dial + '...)';
+            if (dial) phoneInput.placeholder = 'e.g. ' + dial + '123456789';
+        });
+    }
+})();
 function togglePasswordVisibility(fieldId, toggleElement) {
     const field = document.getElementById(fieldId);
     const label = toggleElement.getAttribute('aria-label') === 'Show password' ? 'Hide password' : 'Show password';

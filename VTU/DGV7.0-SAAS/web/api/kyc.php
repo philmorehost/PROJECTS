@@ -146,8 +146,16 @@ if ($action === 'upload_document') {
         'liveliness_video' => ['liveliness_video', ['mp4', 'webm'], 3],
     ];
 
-    if (!empty($_FILES['liveliness_video']['name']) && (($_FILES['liveliness_video']['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file($_FILES['liveliness_video']['tmp_name']??'') || !bc_live_media_prepare($_FILES['liveliness_video']['tmp_name'], 'liveliness_video'))) {
-        http_response_code(422);echo json_encode(['status'=>'failed','code'=>'VIDEO_EVIDENCE_INVALID','desc'=>'Video could not be validated. Record a clear 1–8 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.']);exit;
+    if (!empty($_FILES['liveliness_video']['name'])) {
+        $v_err = $_FILES['liveliness_video']['error'] ?? UPLOAD_ERR_NO_FILE;
+        $v_tmp = $_FILES['liveliness_video']['tmp_name'] ?? '';
+        if ($v_err === UPLOAD_ERR_INI_SIZE || $v_err === UPLOAD_ERR_FORM_SIZE) {
+            http_response_code(422);echo json_encode(['status'=>'failed','code'=>'VIDEO_TOO_LARGE','desc'=>'Liveliness video exceeds the server upload limit (' . ini_get('upload_max_filesize') . '). Record a shorter video (max 3 MB).']);exit;
+        }
+        if ($v_err !== UPLOAD_ERR_OK || !is_uploaded_file($v_tmp) || !bc_live_media_prepare($v_tmp, 'liveliness_video')) {
+            $v_detail = function_exists('bc_live_media_last_error') ? bc_live_media_last_error() : '';
+            http_response_code(422);echo json_encode(['status'=>'failed','code'=>'VIDEO_EVIDENCE_INVALID','desc'=>'Video could not be validated.' . ($v_detail !== '' ? ' ' . $v_detail : '') . ' Record a clear 1–6 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.']);exit;
+        }
     }
     foreach ($kinds as $input_name => $spec) {
         list($db_col, $exts, $max_mb) = $spec;
