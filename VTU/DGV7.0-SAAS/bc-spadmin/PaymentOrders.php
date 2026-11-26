@@ -82,6 +82,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 							if (mysqli_affected_rows($connection_server) !== 1) {
 								$json_response_encode = json_encode(array("desc" => "This order is no longer pending and cannot be processed again."),true);
 							} else {
+								if (function_exists('bc_ensure_wallet_transactional_schema')) {
+									bc_ensure_wallet_transactional_schema($connection_server);
+								}
 								$user = $get_vendors_details["email"];
 								$type = "credit";
 								$amount = $get_payment_order["amount"];
@@ -89,7 +92,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 								// Deterministic ledger reference prevents duplicate credits across retries.
 								$reference_2 = 'VPO_' . substr(hash('sha256', (string)$get_payment_order["vendor_id"] . ':' . $reference), 0, 20);
 								$description = ucwords("account ".$type."ed by admin ( payment order )");
-								$credit_other_user = chargeOtherVendor($get_payment_order["vendor_id"], $type, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"], "1");
+								$credit_other_user = chargeOtherVendor($get_payment_order["vendor_id"], $type, $user, ucwords("wallet ".$type), $reference_2, $amount, $discounted_amount, $description, $_SERVER["HTTP_HOST"] ?? "WEB", "1");
 								if($credit_other_user === "success"){
 									if (function_exists('bc_sec_audit')) bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . ($get_vendors_details["email"] ?? 'vendor'));
 									$json_response_array = array("desc" => ucwords($get_vendors_details["email"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
@@ -97,7 +100,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 								} else {
 									// Revert claim back to pending if wallet mutation did not succeed.
 									mysqli_query($connection_server, "UPDATE sas_super_admin_submitted_payments SET status='2' WHERE reference='".$reference."' AND status='1' LIMIT 1");
-										$json_response_array = array("desc" => "Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify the vendor account is active and wallet tables are ready.");
+									$vpo_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : ("Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify the vendor account is active and wallet tables are ready.");
+									$json_response_array = array("desc" => $vpo_fail_reason);
 									$json_response_encode = json_encode($json_response_array,true);
 								}
 							}

@@ -108,6 +108,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 									$json_response_array = array("desc" => "This request is no longer pending and cannot be approved again.");
 									$json_response_encode = json_encode($json_response_array,true);
 								} else {
+									if (function_exists('bc_ensure_wallet_transactional_schema')) {
+										bc_ensure_wallet_transactional_schema($connection_server);
+									}
+									$GLOBALS['vendor_id'] = $admin_vid;
+									if (function_exists('resolveVendorID')) resolveVendorID(true);
 									$purchase_method = "WEB";
 									$user = $get_payment_order["username"];
 									$recipient_user = $get_payment_order["recipient_username"];
@@ -116,23 +121,24 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 									$discounted_amount = $get_payment_order["discounted_amount"];
 									$reference_2 = 'FTAPR_' . substr(hash('sha256', $admin_vid . ':' . $reference), 0, 20);
 									$description = "Fund Received From User: ".ucwords($user)." - Approved By Admin";
-									$credit_other_user = chargeOtherUser($recipient_user, $type, $recipient_user, ucwords("fund received"), $reference_2, "fund_transfer_approve:" . $reference, $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"], "1");
+									$credit_other_user = chargeOtherUser($recipient_user, $type, $recipient_user, ucwords("fund received"), $reference_2, "fund_transfer_approve:" . $reference, $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"] ?? "WEB", "1");
 									if($credit_other_user === "success"){
 										if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'fund_transfer_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $get_payment_order["recipient_username"] . ' from ' . $get_payment_order["username"]);
 										mysqli_query($connection_server, "UPDATE sas_transactions SET status='1' WHERE vendor_id='$admin_vid' AND reference='".$reference."'");
 										$json_response_array = array("desc" => ucwords($get_payment_order["recipient_username"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 										$json_response_encode = json_encode($json_response_array,true);
 									} else {
+										$ft_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : '';
 										$refund_ref = 'FTRFD_' . substr(hash('sha256', $admin_vid . ':' . $reference), 0, 20);
-										$refund_res = chargeOtherUser($user, $type, $user, "Refund", $refund_ref, "", $amount, $discounted_amount, "Refund for Ref:<i>'$reference'</i>", $purchase_method, $_SERVER["HTTP_HOST"], "1");
+										$refund_res = chargeOtherUser($user, $type, $user, "Refund", $refund_ref, "", $amount, $discounted_amount, "Refund for Ref:<i>'$reference'</i>", $purchase_method, $_SERVER["HTTP_HOST"] ?? "WEB", "1");
 										if ($refund_res === "success") {
 											mysqli_query($connection_server, "UPDATE sas_fund_transfer_requests SET status='3' WHERE vendor_id='$admin_vid' AND reference='".$reference."' AND status='1' LIMIT 1");
 											mysqli_query($connection_server, "UPDATE sas_transactions SET status='3', description='Transfer Failed' WHERE vendor_id='$admin_vid' AND reference='".$reference."'");
 											if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'fund_transfer_failed_refund', (string)$reference, 'Recipient credit failed; refunded NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $user);
-											$json_response_array = array("desc" => "Cannot Proceed Processing Transaction: Fund Refunded");
+											$json_response_array = array("desc" => "Cannot Proceed Processing Transaction: Fund Refunded" . ($ft_fail_reason !== '' ? " ($ft_fail_reason)" : ""));
 										} else {
 											mysqli_query($connection_server, "UPDATE sas_fund_transfer_requests SET status='2' WHERE vendor_id='$admin_vid' AND reference='".$reference."' AND status='1' LIMIT 1");
-											$json_response_array = array("desc" => "Cannot Proceed Processing Transaction");
+											$json_response_array = array("desc" => $ft_fail_reason !== '' ? $ft_fail_reason : "Cannot Proceed Processing Transaction");
 										}
 										$json_response_encode = json_encode($json_response_array,true);
 									}
@@ -260,12 +266,12 @@ bc_adm_head("Fund Transfer Requests | " . ($get_all_super_admin_site_details["si
         ?>
         <div class="card info-card px-5 py-5">
             <div class="row mb-3">
-                <form method="get" action="FundTransferRequests.php" class="">
-                    <input style="user-select: auto;" name="searchq" type="text" value="<?php echo trim(strip_tags($_GET["searchq"])); ?>" placeholder="Reference No, Username, amount e.t.c" class="form-control mt-3" />
-                    <button style="user-select: auto;" type="submit" class="btn btn-primary d-inline col-12 col-lg-auto my-2" >
-                        <i class="bi bi-search"></i> Search
-                    </button>
-                </form>
+                 <form method="get" action="FundTransferRequests.php" class="">
+                     <input style="user-select: auto;" name="searchq" type="text" value="<?php echo htmlspecialchars(isset($_GET["searchq"]) ? trim(strip_tags($_GET["searchq"])) : '', ENT_QUOTES); ?>" placeholder="Reference No, Username, amount e.t.c" class="form-control mt-3" />
+                     <button style="user-select: auto;" type="submit" class="btn btn-primary d-inline col-12 col-lg-auto my-2" >
+                         <i class="bi bi-search"></i> Search
+                     </button>
+                 </form>
             </div>
 
             <div class="mt-4">
@@ -324,7 +330,6 @@ bc_adm_head("Fund Transfer Requests | " . ($get_all_super_admin_site_details["si
         </div>
       </div>
     </section>
-
 
 
 

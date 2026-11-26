@@ -2923,7 +2923,7 @@ foreach ([
 $tables_src = file_get_contents($root . '/DGV7.0-SAAS/func/bc-tables.php');
 $version = [];
 preg_match("/define\\('BC_TABLES_VERSION',\\s*'([^']+)'\\)/", $tables_src, $version);
-gcheck('schema version marker includes additive dispatch-claim and autoheal migration', $version[1] ?? null, '2026.11.18-autoheal-1');
+gcheck('schema version marker includes additive dispatch-claim, autoheal and InnoDB wallet migration', $version[1] ?? null, '2026.11.26-innodb-wallet-1');
 gtrue('pending-vendor migration adds columns individually',
     strpos($tables_src, '$pending_column_ddl') !== false
     && preg_match('/foreach \(\$pending_column_ddl as \$pending_column => \$pending_ddl\)/', $tables_src) === 1);
