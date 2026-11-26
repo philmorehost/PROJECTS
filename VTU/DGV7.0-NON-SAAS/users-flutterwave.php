@@ -20,6 +20,10 @@
  */
 header("Content-Type: application/json");
 include_once(__DIR__ . "/func/bc-connect.php");
+if (file_exists(__DIR__ . "/func/bc-payment-gateway-settlement.php")) {
+    require_once __DIR__ . "/func/bc-payment-gateway-settlement.php";
+    bc_pg_ensure_tables($connection_server);
+}
 
 $provider = 'flutterwave';
 $raw = bc_fintech_webhook_raw_input();
@@ -38,10 +42,16 @@ if ($vendor_id <= 0) {
         : '';
     if ($posted_ref !== '') {
         $ref_esc = mysqli_real_escape_string($connection_server, $posted_ref);
-        $q = mysqli_query($connection_server, "SELECT vendor_id FROM sas_user_payment_checkouts WHERE reference='$ref_esc' LIMIT 1");
+        $q = mysqli_query($connection_server, "SELECT vendor_id FROM sas_secure_payment_intents WHERE reference='$ref_esc' LIMIT 1");
         if ($q && ($r = mysqli_fetch_assoc($q))) {
             $vendor_id = (int)$r['vendor_id'];
-            error_log("Flutterwave webhook: host did not resolve, vendor recovered from the checkout row (vendor=$vendor_id ref=$posted_ref)");
+            error_log("Flutterwave webhook: host did not resolve, vendor recovered from the intent row (vendor=$vendor_id ref=$posted_ref)");
+        } else {
+            $q2 = mysqli_query($connection_server, "SELECT vendor_id FROM sas_user_payment_checkouts WHERE reference='$ref_esc' LIMIT 1");
+            if ($q2 && ($r2 = mysqli_fetch_assoc($q2))) {
+                $vendor_id = (int)$r2['vendor_id'];
+                error_log("Flutterwave webhook: host did not resolve, vendor recovered from the checkout row (vendor=$vendor_id ref=$posted_ref)");
+            }
         }
     }
 }
