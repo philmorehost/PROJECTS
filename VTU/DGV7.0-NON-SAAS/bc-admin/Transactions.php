@@ -222,6 +222,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                     }
                 } else if ($tx_row["status"] == '2' && (in_array($tx_row['product_unique_id'], ['wallet_funding', 'manual_funding']) || stripos($tx_row['type_alternative'], 'Wallet Funding') !== false || stripos($tx_row['type_alternative'], 'Wallet Credit') !== false)) {
                     if ($t_status === "approve") {
+                        @set_time_limit(120);
                         mysqli_query($connection_server,
                             "UPDATE sas_transactions SET status='1'
                              WHERE vendor_id='$admin_vid'
@@ -232,6 +233,17 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                         if (mysqli_affected_rows($connection_server) !== 1) {
                             $_SESSION["product_purchase_response"] = "Transaction is no longer pending and cannot be approved again.";
                         } else {
+                            $GLOBALS['bc_tx_pending_claim'] = array(
+                                'where' => "vendor_id='$admin_vid' AND reference='" . $t_ref . "' AND status='1'",
+                                'revert_status' => '2',
+                                'done' => false,
+                            );
+                            register_shutdown_function(function () use ($connection_server) {
+                                $claim = $GLOBALS['bc_tx_pending_claim'] ?? null;
+                                if (is_array($claim) && empty($claim['done']) && $connection_server instanceof mysqli) {
+                                    @mysqli_query($connection_server, "UPDATE sas_transactions SET status='" . $claim['revert_status'] . "' WHERE " . $claim['where'] . " LIMIT 1");
+                                }
+                            });
                             $tx_reference_2 = 'TXAPP_' . substr(hash('sha256', $admin_vid . ':' . $t_ref), 0, 20);
                             $credit = chargeOtherUser(
                                 $tx_row["username"], "credit",
@@ -243,6 +255,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                                 "WEB", $_SERVER["HTTP_HOST"] ?? "WEB", 1
                             );
                             if ($credit === "success") {
+                                $GLOBALS['bc_tx_pending_claim']['done'] = true;
                                 $_SESSION["product_purchase_response"] = ucwords($tx_row["username"] . " credited with ₦" . number_format((float)$tx_row["discounted_amount"], 2) . " successfully");
                             } else {
                                 mysqli_query($connection_server,
@@ -252,6 +265,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                                        AND status='1'
                                      LIMIT 1"
                                 );
+                                $GLOBALS['bc_tx_pending_claim']['done'] = true;
                                 $tx_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : "Failed to credit user wallet. Please try again.";
                                 $_SESSION["product_purchase_response"] = $tx_fail_reason;
                             }
@@ -275,6 +289,7 @@ if (isset($_GET['mark_success']) || isset($_GET['requery'])) {
                 $_SESSION["product_purchase_response"] = "Transaction not found or already processed.";
             }
         }
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
         header("Location: /bc-admin/Transactions.php");
         exit();
     }

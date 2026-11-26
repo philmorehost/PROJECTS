@@ -16,5 +16,13 @@ foreach(['DGV7.0-SAAS','DGV7.0-NON-SAAS'] as $ed){$b=__DIR__.'/../'.$ed;
  stcheck(file_get_contents($b.'/func/bc-app-request-compat.php')===file_get_contents(__DIR__.'/../DGV7.0-SAAS/func/bc-app-request-compat.php'),'edition parity');
  $route=file_get_contents($b.'/web/api/security-quest.php');stcheck(strpos($route,'bc_app_security_question_input($data)')<strpos($route,'bc_fintech_require_app_account((int)$vendor_id, $data)'),'normalization still followed by mandatory real session validation');
  stcheck(strpos(file_get_contents($b.'/.htaccess'),'E=HTTP_AUTHORIZATION:%{HTTP:Authorization}')!==false,'Apache bearer preservation');
+ stcheck(strpos(file_get_contents($b.'/web/.htaccess'),'E=HTTP_AUTHORIZATION:%{HTTP:Authorization}')!==false,$ed.' web/.htaccess Apache bearer preservation');
+ stcheck(strpos(file_get_contents($b.'/api/.htaccess'),'E=HTTP_AUTHORIZATION:%{HTTP:Authorization}')!==false,$ed.' api/.htaccess Apache bearer preservation');
 }
+stcheck(bc_app_normalized_token_from_legacy_body(['api_key'=>$token])===$token,'legacy Android v2_ token in api_key normalized when headers stripped');
+stcheck(bc_app_normalized_token_from_legacy_body(['api_key'=>'personal-legacy-key'])==='','raw personal api_key never normalized to app token');
+stcheck(bc_app_normalized_token_from_legacy_body(['api_key'=>'sk_live_merchant'])==='','developer api_key never normalized to app token');
+$_SERVER['HTTP_AUTHORIZATION']='Bearer bad-token';
+stcheck(bc_app_normalized_token_from_legacy_body(['api_key'=>$token])==='','explicit bearer header blocks legacy body normalization');
+$_SERVER=[];
 echo "PASS $n app session transport checks; normalization is not authorization\n";

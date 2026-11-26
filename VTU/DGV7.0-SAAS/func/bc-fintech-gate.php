@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__.'/bc-compliance-policy.php';
+require_once __DIR__.'/bc-app-request-compat.php';
 /**
  * DGV7 phase 1B enforcement gate.
  *
@@ -32,6 +33,7 @@ if (!function_exists('bc_fintech_gate_boot')) {
         require_once $dir . '/bc-fintech-policy.php';
         require_once $dir . '/bc-fintech-schema.php';
         require_once $dir . '/bc-app-token.php';
+        require_once $dir . '/bc-app-request-compat.php';
 
         $booted = bc_fintech_schema_ready();
         if (!$booted) {
@@ -208,6 +210,9 @@ if (!function_exists('bc_fintech_require_app_account')) {
      */
     function bc_fintech_require_app_account($vendor_id, $input = null) {
         $token = bc_app_token_from_request($input);
+        if ($token === '' && function_exists('bc_app_normalized_token_from_legacy_body')) {
+            $token = bc_app_normalized_token_from_legacy_body($input);
+        }
         if ($token === '') {
             bc_fintech_send_app_denial([
                 'http' => 401, 'code' => 'APP_TOKEN_REQUIRED',
@@ -437,6 +442,31 @@ if (!function_exists('bc_fintech_api_credential')) {
         $GLOBALS['bc_api_auth_mode'] = 'api_key';
         $GLOBALS['bc_api_auth_user'] = null;
 
+        // Trusted in-process calls from api/app-backend/*.php already authenticated the
+        // mobile-app account server-side and pass the verified row in $GLOBALS['bc_in_process_app_user'].
+        if (isset($GLOBALS['bc_in_process_app_user']) && is_array($GLOBALS['bc_in_process_app_user']) && !empty($GLOBALS['bc_in_process_app_user']['id'])) {
+            $in_user = $GLOBALS['bc_in_process_app_user'];
+            if ((int)($in_user['status'] ?? 0) !== 1 || !empty($in_user['is_blocked'])) {
+                bc_fintech_send_app_denial([
+                    'http' => 401, 'code' => 'APP_SESSION_INVALID',
+                    'message' => 'Your app session has expired. Please sign in again.',
+                ]);
+            }
+            $decision = bc_fintech_app_access($in_user);
+            if (!$decision['allowed']) bc_fintech_send_app_denial($decision);
+            bc_fintech_app_compliance_guard($in_user);
+            $GLOBALS['bc_api_auth_mode'] = 'app_token';
+            $GLOBALS['bc_api_auth_user'] = $in_user;
+            $key = (string)($in_user['api_key'] ?? '');
+            if ($key === '') {
+                bc_fintech_send_app_denial([
+                    'http' => 401, 'code' => 'APP_SESSION_INVALID',
+                    'message' => 'Your app session is not usable. Please sign in again.',
+                ]);
+            }
+            return mysqli_real_escape_string($connection_server, $key);
+        }
+
         $input = (isset($_POST) && is_array($_POST) && !empty($_POST)) ? $_POST : null;
         if ($input === null && PHP_SAPI !== 'cli') {
             $raw_body = @file_get_contents('php://input');
@@ -447,6 +477,9 @@ if (!function_exists('bc_fintech_api_credential')) {
         }
 
         $token = bc_app_token_from_request($input);
+        if ($token === '' && function_exists('bc_app_normalized_token_from_legacy_body')) {
+            $token = bc_app_normalized_token_from_legacy_body($input, $provided_api_key);
+        }
         if ($token === '') {
             // A personal account's internal bridge key is never a first-party session.
             // Developer integrations retain their own Business key; no rotation is performed here.

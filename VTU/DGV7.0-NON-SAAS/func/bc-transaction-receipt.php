@@ -105,18 +105,32 @@ if (!function_exists('bc_receipt_fetch')) {
             LEFT JOIN sas_products p ON p.vendor_id = t.vendor_id AND p.id = t.product_id
             LEFT JOIN sas_apis a ON a.vendor_id = t.vendor_id AND a.id = t.api_id
             WHERE $scope_sql AND t.reference = '$ref' LIMIT 1");
-        if (!$q) {
-            return null;
-        }
-        $row = mysqli_fetch_assoc($q);
+        $row = $q ? mysqli_fetch_assoc($q) : null;
         if ($row) {
             // Scope utility lookup to the SAME fetched transaction owner and tenant.
             $vid=(int)$row['vendor_id'];
             $uname=mysqli_real_escape_string($connection_server,(string)$row['username']);
             $utility=mysqli_query($connection_server,"SELECT * FROM sas_electric_purchaseds WHERE vendor_id='$vid' AND username='$uname' AND reference='$ref' ORDER BY id DESC LIMIT 1");
             if ($utility && ($detail=mysqli_fetch_assoc($utility))) $row['utility_purchase']=$detail;
+            return $row;
         }
-        return $row ?: null;
+        $q_po = mysqli_query($connection_server, "SELECT t.* FROM sas_submitted_payments t WHERE $scope_sql AND t.reference = '$ref' LIMIT 1");
+        if ($q_po && ($po_row = mysqli_fetch_assoc($q_po))) {
+            $po_row['type_alternative'] = 'Payment Order';
+            $po_row['product_unique_id'] = (string)($po_row['username'] ?? '');
+            $po_row['mode'] = (string)($po_row['mode'] ?? 'WEB');
+            $po_row['_source'] = 'payment_order';
+            return $po_row;
+        }
+        $q_ft = mysqli_query($connection_server, "SELECT t.* FROM sas_fund_transfer_requests t WHERE $scope_sql AND t.reference = '$ref' LIMIT 1");
+        if ($q_ft && ($ft_row = mysqli_fetch_assoc($q_ft))) {
+            $ft_row['type_alternative'] = 'Fund Transfer';
+            $ft_row['product_unique_id'] = (string)($ft_row['recipient_username'] ?? ($ft_row['username'] ?? ''));
+            $ft_row['mode'] = (string)($ft_row['mode'] ?? 'WEB');
+            $ft_row['_source'] = 'fund_transfer';
+            return $ft_row;
+        }
+        return null;
     }
 }
 

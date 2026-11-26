@@ -588,14 +588,71 @@ if (!function_exists('bc_normalize_mysql_decimal')) {
     }
 }
 
+if (!function_exists('bc_ensure_wallet_transactional_schema')) {
+    function bc_ensure_wallet_transactional_schema($connection_server) {
+        if (!($connection_server instanceof mysqli)) return;
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_wallet_mutation_events (
+            event_key CHAR(64) NOT NULL PRIMARY KEY, payload_hash CHAR(64) NOT NULL,
+            vendor_id INT UNSIGNED NOT NULL, actor VARCHAR(240) NOT NULL,
+            direction VARCHAR(6) NOT NULL, reference VARCHAR(225) NOT NULL,
+            amount DECIMAL(30,8) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX wallet_event_lookup(vendor_id,reference)
+        ) ENGINE=InnoDB");
+
+        $chk_api_ref = @mysqli_query($connection_server, "SHOW COLUMNS FROM `sas_transactions` LIKE 'api_reference'");
+        if ($chk_api_ref && mysqli_num_rows($chk_api_ref) === 0) {
+            @mysqli_query($connection_server, "ALTER TABLE `sas_transactions` ADD COLUMN api_reference VARCHAR(225) AFTER reference");
+        }
+
+        $wallet_tables = array('sas_users', 'sas_vendors', 'sas_transactions', 'sas_vendor_transactions', 'sas_wallet_mutation_events');
+        $in_list = "'" . implode("','", $wallet_tables) . "'";
+        $q_eng = @mysqli_query($connection_server, "SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ($in_list)");
+        if ($q_eng) {
+            $non_innodb = array();
+            while ($r_eng = mysqli_fetch_assoc($q_eng)) {
+                if (strtoupper((string)($r_eng['ENGINE'] ?? '')) !== 'INNODB') {
+                    $non_innodb[] = $r_eng['TABLE_NAME'];
+                }
+            }
+            mysqli_free_result($q_eng);
+            if (!empty($non_innodb)) {
+                $orig_mode = null;
+                $qm = @mysqli_query($connection_server, "SELECT @@SESSION.sql_mode AS m");
+                if ($qm && ($rm = mysqli_fetch_assoc($qm))) $orig_mode = $rm['m'];
+                foreach ($non_innodb as $tbl) {
+                    if (!@mysqli_query($connection_server, "ALTER TABLE `$tbl` ENGINE=InnoDB")) {
+                        if ($orig_mode !== null) @mysqli_query($connection_server, "SET SESSION sql_mode=''");
+                        @mysqli_query($connection_server, "ALTER TABLE `$tbl` ENGINE=InnoDB");
+                        if ($orig_mode !== null) @mysqli_query($connection_server, "SET SESSION sql_mode='" . mysqli_real_escape_string($connection_server, $orig_mode) . "'");
+                    }
+                }
+            }
+        }
+    }
+}
+
+if (!function_exists('bc_wallet_post_with_schema_heal')) {
+    function bc_wallet_post_with_schema_heal($vendor, $username, $direction, $product, $label, $reference, $api_reference, $amount, $charged, $description, $mode, $website, $status, $is_vendor = false) {
+        $res = bc_incident_wallet_post($vendor, $username, $direction, $product, $label, $reference, $api_reference, $amount, $charged, $description, $mode, $website, $status, $is_vendor);
+        if ($res === 'failed' && strpos((string)($GLOBALS['bc_charge_failure_reason'] ?? ''), 'WALLET_TRANSACTIONAL_SCHEMA_REQUIRED') !== false) {
+            global $connection_server;
+            if ($connection_server instanceof mysqli) {
+                bc_ensure_wallet_transactional_schema($connection_server);
+                $res = bc_incident_wallet_post($vendor, $username, $direction, $product, $label, $reference, $api_reference, $amount, $charged, $description, $mode, $website, $status, $is_vendor);
+            }
+        }
+        return $res;
+    }
+}
+
 function chargeUser($type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-    return bc_incident_wallet_post(resolveVendorID(), $GLOBALS['get_logged_user_details']['username'] ?? ($_SESSION['user_session'] ?? ''), $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
+    return bc_wallet_post_with_schema_heal(resolveVendorID(), $GLOBALS['get_logged_user_details']['username'] ?? ($_SESSION['user_session'] ?? ''), $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
 }
 
 function chargeOtherUser($user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, $amount, $discounted_amount, $description, $mode, $api_website, $status)
 {
-    return bc_incident_wallet_post(resolveVendorID(), $user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
+    return bc_wallet_post_with_schema_heal(resolveVendorID(), $user_id, $type, $product_unique_id, $type_alternative, $reference, $api_reference, bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, $mode, $api_website, $status, false);
 }
 
 // STANDALONE: chargeVendor is a no-op — no billing in standalone
@@ -607,7 +664,7 @@ function chargeVendor($type, $service, $description, $ref, $amount, $fee, $note,
 
 function chargeOtherVendor($vendor_id, $type, $product_unique_id, $type_alternative, $reference, $amount, $discounted_amount, $description, $api_website, $status)
 {
-    return bc_incident_wallet_post($vendor_id, '', $type, $product_unique_id, $type_alternative, $reference, '', bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, 'WEB', $api_website, $status, true);
+    return bc_wallet_post_with_schema_heal($vendor_id, '', $type, $product_unique_id, $type_alternative, $reference, '', bc_normalize_mysql_decimal($amount), bc_normalize_mysql_decimal($discounted_amount), $description, 'WEB', $api_website, $status, true);
 }
 
 function addUserVirtualBank($reference, $bank_code, $bank_name, $account_number, $account_name, $vid = 0, $username = "", $gateway_name = "")

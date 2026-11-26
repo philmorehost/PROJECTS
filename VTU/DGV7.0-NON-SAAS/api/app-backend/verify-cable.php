@@ -44,7 +44,9 @@ if (json_last_error() === JSON_ERROR_NONE) {
                     $api_file_url = $_SERVER["DOCUMENT_ROOT"] . "/web/api/verify-cable.php";
                     if (file_exists($api_file_url)) {
                         $api_post_info_from_app = array("api_key" => $get_user_info["api_key"], "type" => $network, "iuc_number" => $iuc_number, "package" => $cable_qty);
+                        $GLOBALS['bc_in_process_app_user'] = $get_user_info;
                         include_once($api_file_url);
+                        unset($GLOBALS['bc_in_process_app_user']);
                         if (in_array($json_response_array["status"], array("success", "pending"))) {
                             $status_update = "success";
                             $status_msg = $json_response_array["desc"];

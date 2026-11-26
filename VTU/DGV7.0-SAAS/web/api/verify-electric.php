@@ -17,6 +17,7 @@ if ($select_vendor_table) {
 	} else {
 		$purchase_method = "api";
 		$get_api_post_info = json_decode(file_get_contents('php://input'), true);
+		if (!is_array($get_api_post_info)) $get_api_post_info = $_POST;
 	}
 
 	$get_vendor_details = $select_vendor_table;

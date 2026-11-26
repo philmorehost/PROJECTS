@@ -58,7 +58,7 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
         echo '<td class="px-4">
                 ' . (!empty($row["product_unique_id"]) ? '<div class="text-primary fw-bold mb-1" style="font-size:15px; letter-spacing: 0.5px;">' . htmlspecialchars($row["product_unique_id"]) . '</div>' : '') . '
                 <div class="fw-bold text-dark" style="font-size:13px;">' . htmlspecialchars($type) . '</div>
-                <div class="text-muted" style="font-size:11px;">' . $date . (!empty($show_vendor_col) && !empty($row['username']) ? ' · Customer: <strong>' . htmlspecialchars((string)$row['username'], ENT_QUOTES, 'UTF-8') . '</strong>' : '') . '</div>
+                <div class="text-muted" style="font-size:11px;">' . $date . ((!empty($is_admin) || !empty($show_vendor_col)) && !empty($row['username']) ? ' · Customer: <strong>' . htmlspecialchars((string)$row['username'], ENT_QUOTES, 'UTF-8') . '</strong>' . (!empty($row['recipient_username']) ? ' → <strong>' . htmlspecialchars((string)$row['recipient_username'], ENT_QUOTES, 'UTF-8') . '</strong>' : '') : '') . '</div>
               </td>';
         if ($show_vendor_col) {
             $v_name = trim((string)($row['vendor_name'] ?? ''));

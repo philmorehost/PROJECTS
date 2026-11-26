@@ -76,23 +76,40 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                         header("Location: " . $po_redirect_url);
                         exit();
                     }
+                    @set_time_limit(120);
+                    if (function_exists('bc_ensure_wallet_transactional_schema')) {
+                        bc_ensure_wallet_transactional_schema($connection_server);
+                    }
+                    $GLOBALS['vendor_id'] = $admin_vid;
+                    if (function_exists('resolveVendorID')) resolveVendorID(true);
+
                     // Atomic claim: exactly one concurrent request may move status 2 -> 1.
                     mysqli_query($connection_server, "UPDATE sas_transactions SET status='1' WHERE vendor_id='$admin_vid' AND reference='".$app_ref."' AND product_unique_id='manual_funding' AND status='2' LIMIT 1");
                     if (mysqli_affected_rows($connection_server) !== 1) {
                         $json_response_array = array("desc" => "This order is no longer pending and cannot be approved again.");
                     } else {
-                        if (function_exists('bc_ensure_wallet_transactional_schema')) {
-                            bc_ensure_wallet_transactional_schema($connection_server);
-                        }
-                        $GLOBALS['vendor_id'] = $admin_vid;
-                        if (function_exists('resolveVendorID')) resolveVendorID(true);
+                        $GLOBALS['bc_po_pending_claim'] = array(
+                            'table' => 'sas_transactions',
+                            'where' => "vendor_id='$admin_vid' AND reference='" . $app_ref . "' AND product_unique_id='manual_funding' AND status='1'",
+                            'done'  => false,
+                        );
+                        register_shutdown_function(function () use ($connection_server) {
+                            $claim = $GLOBALS['bc_po_pending_claim'] ?? null;
+                            if (is_array($claim) && empty($claim['done']) && $connection_server instanceof mysqli) {
+                                @mysqli_query($connection_server, "UPDATE " . $claim['table'] . " SET status='2' WHERE " . $claim['where'] . " LIMIT 1");
+                            }
+                        });
                         $app_reference_2 = 'POAPP_' . substr(hash('sha256', $admin_vid . ':' . $app_ref), 0, 20);
                         $app_credit = chargeOtherUser($get_app_order["username"], "credit", "wallet_credit", "Wallet Credit", $app_reference_2, "manual_funding_app:" . $app_ref, $get_app_order["amount"], $get_app_order["discounted_amount"], "Account credited by admin (approved app payment notification)", "APP", $_SERVER["HTTP_HOST"] ?? "WEB", "1");
                         if ($app_credit === "success") {
-                            if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$app_ref, 'Credited NGN ' . number_format((float)$get_app_order["discounted_amount"], 2) . ' to ' . $get_app_order["username"] . ' (app manual funding)');
+                            $GLOBALS['bc_po_pending_claim']['done'] = true;
+                            try {
+                                if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$app_ref, 'Credited NGN ' . number_format((float)$get_app_order["discounted_amount"], 2) . ' to ' . $get_app_order["username"] . ' (app manual funding)');
+                            } catch (Throwable $ignored) {}
                             $json_response_array = array("desc" => ucwords($get_app_order["username"]." credited with N".toDecimal($get_app_order["discounted_amount"], 2)." successfully"));
                         } else {
                             mysqli_query($connection_server, "UPDATE sas_transactions SET status='2' WHERE vendor_id='$admin_vid' AND reference='".$app_ref."' AND product_unique_id='manual_funding' AND status='1' LIMIT 1");
+                            $GLOBALS['bc_po_pending_claim']['done'] = true;
                             $po_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : ("Cannot Proceed Processing Transaction (" . (string)$app_credit . "). Verify user account is active and wallet tables are ready.");
                             $json_response_array = array("desc" => $po_fail_reason);
                         }
@@ -122,7 +139,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         } else {
             $json_response_array = array("desc" => "Order Not Exists");
         }
-        $_SESSION["product_purchase_response"] = $json_response_array["desc"];
+        $_SESSION["product_purchase_response"] = $json_response_array["desc"] ?? "Unable to process payment order.";
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
         header("Location: " . $po_redirect_url);
         exit();
     }
@@ -179,17 +197,30 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 							}
 							else
 							{
+								@set_time_limit(120);
+								if (function_exists('bc_ensure_wallet_transactional_schema')) {
+									bc_ensure_wallet_transactional_schema($connection_server);
+								}
+								$GLOBALS['vendor_id'] = $admin_vid;
+								if (function_exists('resolveVendorID')) resolveVendorID(true);
+
 								// Atomic claim: exactly one concurrent request may transition status 2 -> 1.
 								mysqli_query($connection_server, "UPDATE sas_submitted_payments SET status='1' WHERE vendor_id='$admin_vid' AND reference='".$reference."' AND status='2' LIMIT 1");
 								if (mysqli_affected_rows($connection_server) !== 1) {
 									$json_response_array = array("desc" => "This order is no longer pending and cannot be approved again.");
 									$json_response_encode = json_encode($json_response_array,true);
 								} else {
-									if (function_exists('bc_ensure_wallet_transactional_schema')) {
-										bc_ensure_wallet_transactional_schema($connection_server);
-									}
-									$GLOBALS['vendor_id'] = $admin_vid;
-									if (function_exists('resolveVendorID')) resolveVendorID(true);
+									$GLOBALS['bc_po_pending_claim'] = array(
+										'table' => 'sas_submitted_payments',
+										'where' => "vendor_id='$admin_vid' AND reference='" . $reference . "' AND status='1'",
+										'done'  => false,
+									);
+									register_shutdown_function(function () use ($connection_server) {
+										$claim = $GLOBALS['bc_po_pending_claim'] ?? null;
+										if (is_array($claim) && empty($claim['done']) && $connection_server instanceof mysqli) {
+											@mysqli_query($connection_server, "UPDATE " . $claim['table'] . " SET status='2' WHERE " . $claim['where'] . " LIMIT 1");
+										}
+									});
 									$purchase_method = "WEB";
 									$user = $get_payment_order["username"];
 									$type = "credit";
@@ -199,11 +230,15 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 									$description = ucwords("account ".$type."ed by admin ( payment order )");
 									$credit_other_user = chargeOtherUser($user, $type, $user, ucwords("wallet ".$type), $reference_2, "payment_order_web:" . $reference, $amount, $discounted_amount, $description, $purchase_method, $_SERVER["HTTP_HOST"] ?? "WEB", "1");
 									if($credit_other_user === "success"){
-										if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $get_payment_order["username"] . ' (web payment order)');
+										$GLOBALS['bc_po_pending_claim']['done'] = true;
+										try {
+											if (function_exists('bc_sec_audit')) bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'payment_order_approved', (string)$reference, 'Credited NGN ' . number_format((float)$get_payment_order["discounted_amount"], 2) . ' to ' . $get_payment_order["username"] . ' (web payment order)');
+										} catch (Throwable $ignored) {}
 										$json_response_array = array("desc" => ucwords($get_payment_order["username"]." Credited with N".toDecimal($get_payment_order["discounted_amount"],2)." successfully"));
 										$json_response_encode = json_encode($json_response_array,true);
 									} else {
 										mysqli_query($connection_server, "UPDATE sas_submitted_payments SET status='2' WHERE vendor_id='$admin_vid' AND reference='".$reference."' AND status='1' LIMIT 1");
+										$GLOBALS['bc_po_pending_claim']['done'] = true;
 										$po_fail_reason = !empty($GLOBALS['bc_charge_failure_reason']) ? (string)$GLOBALS['bc_charge_failure_reason'] : ("Cannot Proceed Processing Transaction (" . (string)$credit_other_user . "). Verify user account is active and wallet tables are ready.");
 										$json_response_array = array("desc" => $po_fail_reason);
 										$json_response_encode = json_encode($json_response_array,true);
@@ -239,7 +274,8 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
             $json_response_encode = json_encode($json_response_array,true);
         }
         $json_response_decode = json_decode($json_response_encode,true);
-        $_SESSION["product_purchase_response"] = $json_response_decode["desc"];
+        $_SESSION["product_purchase_response"] = $json_response_decode["desc"] ?? "Unable to process payment order.";
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
         header("Location: " . $po_redirect_url);
 	exit();
     }
@@ -430,7 +466,7 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                     <div class="table-responsive bg-light rounded-4 border p-2">
                                     <?php
                                         $query_result = $get_app_successful_transaction_details;
-                                        $is_admin = false;
+                                        $is_admin = true;
                                         include("../func/history-table.php");
                                     ?>
                                     </div>
@@ -457,7 +493,7 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                     <div class="table-responsive bg-light rounded-4 border p-2">
                                     <?php
                                         $query_result = $get_app_failed_transaction_details;
-                                        $is_admin = false;
+                                        $is_admin = true;
                                         include("../func/history-table.php");
                                     ?>
                                     </div>

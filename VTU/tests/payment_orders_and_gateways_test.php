@@ -88,6 +88,17 @@ pcheck(strpos($po, 'unset($is_payment_order);') !== false, 'PaymentOrders: unset
 pcheck(strpos($po, '$po_redirect_url') !== false && strpos($po, 'HTTP_REFERER') !== false, 'PaymentOrders: preserves tab/searchq across redirects');
 pcheck(strpos($po, "bc_charge_failure_reason") !== false && strpos($po, 'bc_ensure_wallet_transactional_schema') !== false, 'PaymentOrders: ensures wallet schema and surfaces bc_charge_failure_reason');
 pcheck(strpos($po, "\$GLOBALS['vendor_id'] = \$admin_vid") !== false, 'PaymentOrders: pins vendor_id to logged admin before chargeOtherUser');
+pcheck(strpos($po, 'bc_ensure_wallet_transactional_schema($connection_server)') < strpos($po, "UPDATE sas_transactions SET status='1'"), 'PaymentOrders: ensures wallet schema before claiming app order');
+pcheck(strpos($po, 'bc_po_pending_claim') !== false && strpos($po, 'register_shutdown_function') !== false, 'PaymentOrders: guards claimed order with shutdown rollback');
+pcheck(strpos($po, "App Approved") !== false && substr_count($po, '$is_admin = false;') === 0, 'PaymentOrders: passes $is_admin = true for App Approved/Rejected tables');
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $ht_src = file_get_contents("$root/$ed/func/history-table.php");
+    pcheck(strpos($ht_src, '(!empty($is_admin) || !empty($show_vendor_col)) && !empty($row[\'username\'])') !== false, "$ed history-table: displays Customer username in admin rows");
+    $rc_src = file_get_contents("$root/$ed/func/bc-transaction-receipt.php");
+    pcheck(strpos($rc_src, 'sas_submitted_payments') !== false && strpos($rc_src, 'sas_fund_transfer_requests') !== false, "$ed receipt fetch: falls back to payment orders and fund transfers");
+    $pc_src = file_get_contents("$root/$ed/func/bc-php-compat.php");
+    pcheck(strpos($pc_src, 'register_shutdown_function') !== false && strpos($pc_src, 'DGV-FATAL-SHUTDOWN') !== false, "$ed bc-php-compat: registers fatal shutdown handler");
+}
 
 require_once "$root/DGV7.0-SAAS/func/bc-incident-wallet.php";
 if (!function_exists('bc_normalize_mysql_decimal')) {
@@ -109,8 +120,15 @@ pcheck(bc_incident_decimal(bc_normalize_mysql_decimal('0.0000000001')) === null,
 foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
     $fnSrc = file_get_contents("$root/$ed/func/bc-func.php");
     pcheck(strpos($fnSrc, 'bc_normalize_mysql_decimal($amount)') !== false, "$ed bc-func normalizes DECIMAL(65,30) amounts before wallet post");
+    pcheck(strpos($fnSrc, 'bc_wallet_post_with_schema_heal') !== false && strpos($fnSrc, 'WALLET_TRANSACTIONAL_SCHEMA_REQUIRED') !== false, "$ed bc-func heals wallet schema on WALLET_TRANSACTIONAL_SCHEMA_REQUIRED");
     $tblSrc = file_get_contents("$root/$ed/func/bc-tables.php");
     pcheck(strpos($tblSrc, 'function bc_ensure_wallet_transactional_schema(') !== false, "$ed bc-tables defines bc_ensure_wallet_transactional_schema");
+    $smsSrc = file_get_contents("$root/$ed/web/BulkSMS.php");
+    pcheck(strpos($smsSrc, 'name="pin"') !== false && strpos($smsSrc, 'force_security_pin_for_users') !== false, "$ed BulkSMS renders transaction PIN input when forced");
+    foreach (['Cable.php' => 'reset-cable', 'Electric.php' => 'reset-electric', 'Betting.php' => 'reset-betting'] as $pg => $btn) {
+        $pgSrc = file_get_contents("$root/$ed/web/$pg");
+        pcheck(strpos($pgSrc, "name=\"$btn\" type=\"submit\" formnovalidate") !== false, "$ed $pg allows Cancel and Start Over without PIN validation");
+    }
 }
 
 // ── 4. Functional unit checks on bc-payment-gateway-settlement.php ────────────

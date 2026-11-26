@@ -22,6 +22,7 @@ if ($select_vendor_table) {
 	} else {
 		$purchase_method = "api";
 		$get_api_post_info = json_decode(file_get_contents('php://input'), true);
+		if (!is_array($get_api_post_info)) $get_api_post_info = $_POST;
 	}
 	$get_vendor_details = $select_vendor_table;
 	$api_key_sanitized = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($get_api_post_info["api_key"] ?? "")), $vendor_id));

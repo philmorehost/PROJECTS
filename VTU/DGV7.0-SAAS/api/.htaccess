@@ -21,6 +21,9 @@
 # Never execute uploaded/asset PHP here.
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # Preserve Authorization: Bearer <token> header for PHP under Apache/FastCGI/FPM.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
     RewriteRule (?:^|/)(?:uploads?|uploaded-image|assets?|images?|img|media)/.*\.php$ - [F,NC,L]
 
     # The clone/ tree is an old copy of this API that still expects the pre-SAAS schema
