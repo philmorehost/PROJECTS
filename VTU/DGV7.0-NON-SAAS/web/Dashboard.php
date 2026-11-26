@@ -52,6 +52,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 		background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); color: #fff;
 		font-size: 1.2rem; transition: all .2s; backdrop-filter: blur(8px);
 	}
+	.pk-app__wrap .db-round, .db-round, .db-round:hover, .db-round:focus { color: #fff !important; text-decoration: none; }
 	.db-round:hover { background: rgba(255,255,255,.28); color: #fff; transform: translateY(-2px); }
 	.db-round-label { font-size: .62rem; font-weight: 700; letter-spacing: .08em; margin-top: 4px; opacity: .85; }
 	.db-action {
@@ -74,6 +75,7 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 		display: block; text-align: center; padding: .8rem; border-radius: 999px; font-weight: 700; letter-spacing: .04em;
 		background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.26); color: #fff; backdrop-filter: blur(8px); transition: all .2s;
 	}
+	.pk-app__wrap .db-fund, .db-fund, .db-fund:hover, .db-fund:focus { color: #fff !important; text-decoration: none; }
 	.db-fund:hover { background: rgba(255,255,255,.28); color: #fff; }
 
 	.db-card {
