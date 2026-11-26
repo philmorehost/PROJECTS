@@ -13,6 +13,7 @@ set_time_limit(0);
 ini_set('memory_limit', '512M');
 
 require_once("../func/bc-admin-config.php");
+require_once __DIR__ . '/../func/bc-backup-prune.php';
 
 define('ROOT_DIR', dirname(__DIR__)); // NON-SAAS root directory
 define('BACKUP_DIR', ROOT_DIR . '/backups');
@@ -25,91 +26,80 @@ if (!is_dir(BACKUP_DIR)) {
     file_put_contents(BACKUP_DIR . '/.htaccess', "Order allow,deny\nDeny from all");
 }
 
-// Function to delete backups older than 14 days
-function prune_old_backups($backup_dir, $max_days = 14) {
-    if (!is_dir($backup_dir)) return 0;
-
-    $now = time();
-    $cutoff_time = $now - ($max_days * 24 * 60 * 60);
-    $deleted_count = 0;
-
-    $iterator = new DirectoryIterator($backup_dir);
-    foreach ($iterator as $fileinfo) {
-        if ($fileinfo->isFile()) {
-            $extension = strtolower($fileinfo->getExtension());
-            // ONLY target .sql and .zip backup archives to protect htaccess
-            if (in_array($extension, ['sql', 'zip'])) {
-                if ($fileinfo->getMTime() < $cutoff_time) {
-                    @unlink($fileinfo->getRealPath());
-                    $deleted_count++;
-                }
-            }
-        }
-    }
-    return $deleted_count;
+function prune_old_backups($backup_dir, $max_days = 14, $max_keep_sets = 2, $protected_files = []) {
+    return bc_prune_old_backups($backup_dir, (int)$max_keep_sets, (int)$max_days, $protected_files);
 }
+
+$db_backup_path = '';
+$file_backup_path = '';
 
 try {
     if (!$connection_server) {
         throw new Exception("Database connection is not available.");
     }
 
+    // Reclaim disk space BEFORE writing a new snapshot (keep at most 1 prior backup set)
+    $pruned_before = bc_prune_old_backups(BACKUP_DIR, 1, 14);
+
     // ---------------------------------------------------------
-    // STEP A: DATABASE BACKUP (Pure PHP)
+    // STEP A: DATABASE BACKUP (Pure PHP, memory-safe streaming)
     // ---------------------------------------------------------
-    $sql_dump = "-- System Backup: {$timestamp}\n";
-    $sql_dump .= "-- Database: {$mySqlDBName}\n\n";
-    
-    // Disable foreign keys checks during restore to avoid constraint errors
-    $sql_dump .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
+    $db_backup_path = BACKUP_DIR . "/db_backup_{$timestamp}.sql";
+    $fh = fopen($db_backup_path, 'w');
+    if (!$fh) {
+        throw new Exception("Failed to open database backup SQL file for writing.");
+    }
+
+    fwrite($fh, "-- System Backup: {$timestamp}\n");
+    fwrite($fh, "-- Database: {$mySqlDBName}\n\n");
+    fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
 
     // Get all tables
-    $tables = [];
     $result = mysqli_query($connection_server, "SHOW TABLES");
     if (!$result) {
+        fclose($fh);
         throw new Exception("Failed to query database tables: " . mysqli_error($connection_server));
     }
+
+    $tables = [];
     while ($row = mysqli_fetch_row($result)) {
         $tables[] = $row[0];
     }
+    mysqli_free_result($result);
 
     foreach ($tables as $table) {
-        $sql_dump .= "DROP TABLE IF EXISTS `$table`;\n";
-        
+        fwrite($fh, "DROP TABLE IF EXISTS `$table`;\n");
+
         $create_res = mysqli_query($connection_server, "SHOW CREATE TABLE `$table`");
         if ($create_res) {
             $row2 = mysqli_fetch_row($create_res);
-            $sql_dump .= $row2[1] . ";\n\n";
+            fwrite($fh, $row2[1] . ";\n\n");
+            mysqli_free_result($create_res);
         }
-        
-        $data_res = mysqli_query($connection_server, "SELECT * FROM `$table`");
+
+        // Stream data row-by-row without loading entire table into memory
+        $data_res = mysqli_query($connection_server, "SELECT * FROM `$table`", MYSQLI_USE_RESULT);
         if ($data_res) {
             $num_columns = mysqli_num_fields($data_res);
             while ($row = mysqli_fetch_row($data_res)) {
-                $sql_dump .= "INSERT INTO `$table` VALUES(";
+                $values = [];
                 for ($j = 0; $j < $num_columns; $j++) {
                     if (isset($row[$j])) {
-                        $escaped_val = mysqli_real_escape_string($connection_server, $row[$j]);
-                        $sql_dump .= '"' . $escaped_val . '"';
+                        $values[] = '"' . mysqli_real_escape_string($connection_server, $row[$j]) . '"';
                     } else {
-                        $sql_dump .= 'NULL';
-                    }
-                    if ($j < ($num_columns - 1)) {
-                        $sql_dump .= ',';
+                        $values[] = 'NULL';
                     }
                 }
-                $sql_dump .= ");\n";
+                fwrite($fh, "INSERT INTO `$table` VALUES(" . implode(',', $values) . ");\n");
+                unset($row, $values);
             }
-            $sql_dump .= "\n\n";
+            mysqli_free_result($data_res);
+            fwrite($fh, "\n\n");
         }
     }
-    
-    $sql_dump .= "SET FOREIGN_KEY_CHECKS=1;\n";
 
-    $db_backup_path = BACKUP_DIR . "/db_backup_{$timestamp}.sql";
-    if (file_put_contents($db_backup_path, $sql_dump) === false) {
-        throw new Exception("Failed to write database backup SQL file.");
-    }
+    fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
+    fclose($fh);
 
     // ---------------------------------------------------------
     // STEP B: FILE BACKUP (Using ZipArchive)
@@ -127,33 +117,14 @@ try {
             if (!$file->isDir()) {
                 $file_path = $file->getRealPath();
                 $relative_path = substr($file_path, strlen(ROOT_DIR) + 1);
-                
+
                 // Normalise separators
                 $norm_rel = str_replace('\\', '/', $relative_path);
-                
+
                 // Exclude folders that are not part of the web application deployment or are too large
                 $norm_rel_lower = strtolower($norm_rel);
-                $exclude_prefixes = [
-                    'backups/',
-                    'tmp_update/',
-                    'dg7-android/',
-                    'dg7-ios/',
-                    'dg6-android/',
-                    'dg6-ios/',
-                    'mzeevtu/',
-                    'mzeevtu-android/',
-                    'mzeevtu-ios/',
-                    'payhub-android/',
-                    'payhub-ios/',
-                    'uploaded-image/',
-                    'downloads/',
-                    'logs/',
-                    'scratch/',
-                    'tests/',
-                    '.git/',
-                    '.github/'
-                ];
-                
+                $exclude_prefixes = bc_backup_excluded_prefixes();
+
                 $should_exclude = false;
                 foreach ($exclude_prefixes as $prefix) {
                     if (strpos($norm_rel_lower, $prefix) === 0) {
@@ -161,16 +132,16 @@ try {
                         break;
                     }
                 }
-                
+
                 // Also exclude any zip archives to avoid zipping nested massive backups
                 if (strtolower(pathinfo($norm_rel_lower, PATHINFO_EXTENSION)) === 'zip') {
                     $should_exclude = true;
                 }
-                
+
                 if ($should_exclude) {
                     continue;
                 }
-                
+
                 $zip->addFile($file_path, $relative_path);
             }
         }
@@ -180,9 +151,10 @@ try {
     }
 
     // ---------------------------------------------------------
-    // STEP C: CLEANUP (Prune backups older than 14 days)
+    // STEP C: CLEANUP (Keep at most 2 newest backup sets & <= 14 days)
     // ---------------------------------------------------------
-    $deleted_files = prune_old_backups(BACKUP_DIR, 14);
+    $pruned_after = bc_prune_old_backups(BACKUP_DIR, 2, 14, [basename($file_backup_path), basename($db_backup_path)]);
+    $deleted_files = $pruned_before + $pruned_after;
 
     echo json_encode([
         'status' => 'success',
@@ -194,6 +166,12 @@ try {
     exit;
 
 } catch (Exception $e) {
+    if ($db_backup_path !== '' && is_file($db_backup_path)) {
+        @unlink($db_backup_path);
+    }
+    if ($file_backup_path !== '' && is_file($file_backup_path)) {
+        @unlink($file_backup_path);
+    }
     echo json_encode(['status' => 'error', 'message' => 'Backup failed: ' . $e->getMessage()]);
     exit;
 }

@@ -244,9 +244,15 @@ try {
 
     // B. SNAPSHOT BACKUP
     write_log("Step 2/4: Generating safety backups...");
+    require_once ROOT_DIR . '/func/bc-backup-prune.php';
     if (!is_dir(BACKUP_DIR)) {
         mkdir(BACKUP_DIR, 0755, true);
         file_put_contents(BACKUP_DIR . '/.htaccess', "Order allow,deny\nDeny from all");
+    } else {
+        $pruned_pre = bc_prune_old_backups(BACKUP_DIR, 1, 14);
+        if ($pruned_pre > 0) {
+            write_log("Pruned {$pruned_pre} old backup file(s) before creating snapshot.");
+        }
     }
 
     // Database Dump
@@ -302,11 +308,7 @@ try {
                 $norm_rel = str_replace('\\', '/', $relative_path);
                 $norm_rel_lower = strtolower($norm_rel);
 
-                $exclude_prefixes = [
-                    'backups/', 'tmp_update/', 'dg7-android/', 'dg7-ios/', 'dg6-android/', 'dg6-ios/',
-                    'mzeevtu/', 'mzeevtu-android/', 'mzeevtu-ios/', 'payhub-android/', 'payhub-ios/',
-                    'uploaded-image/', 'downloads/', 'logs/', 'scratch/', 'tests/', '.git/', '.github/'
-                ];
+                $exclude_prefixes = bc_backup_excluded_prefixes();
                 
                 $should_exclude = false;
                 foreach ($exclude_prefixes as $prefix) {
@@ -427,8 +429,12 @@ try {
         mysqli_stmt_close($vStmt);
     }
 
-    // Clean temp files
+    // Clean temp files & enforce backup retention (max 2 recent backup sets)
     remove_directory(TEMP_DIR);
+    $pruned_post = bc_prune_old_backups(BACKUP_DIR, 2, 14, array_filter([(string)$backup_zip, (string)$backup_sql]));
+    if ($pruned_post > 0) {
+        write_log("Pruned {$pruned_post} old backup file(s) after update.");
+    }
     write_log("Update successfully completed! System is now running v{$new_version}.");
 
     // Send Success Email Notification

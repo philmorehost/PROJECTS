@@ -13,6 +13,7 @@ set_time_limit(0);
 ini_set('memory_limit', '512M');
 
 require_once("../func/bc-spadmin-config.php");
+require_once __DIR__ . '/../func/bc-backup-prune.php';
 
 define('ROOT_DIR', dirname(__DIR__)); // SAAS root directory
 define('BACKUP_DIR', ROOT_DIR . '/backups');
@@ -25,34 +26,20 @@ if (!is_dir(BACKUP_DIR)) {
     file_put_contents(BACKUP_DIR . '/.htaccess', "Order allow,deny\nDeny from all");
 }
 
-// Function to delete backups older than 14 days
-function prune_old_backups($backup_dir, $max_days = 14) {
-    if (!is_dir($backup_dir)) return 0;
-
-    $now = time();
-    $cutoff_time = $now - ($max_days * 24 * 60 * 60);
-    $deleted_count = 0;
-
-    $iterator = new DirectoryIterator($backup_dir);
-    foreach ($iterator as $fileinfo) {
-        if ($fileinfo->isFile()) {
-            $extension = strtolower($fileinfo->getExtension());
-            // ONLY target .sql and .zip backup archives to protect htaccess
-            if (in_array($extension, ['sql', 'zip'])) {
-                if ($fileinfo->getMTime() < $cutoff_time) {
-                    @unlink($fileinfo->getRealPath());
-                    $deleted_count++;
-                }
-            }
-        }
-    }
-    return $deleted_count;
+function prune_old_backups($backup_dir, $max_days = 14, $max_keep_sets = 2, $protected_files = []) {
+    return bc_prune_old_backups($backup_dir, (int)$max_keep_sets, (int)$max_days, $protected_files);
 }
+
+$db_backup_path = '';
+$file_backup_path = '';
 
 try {
     if (!$connection_server) {
         throw new Exception("Database connection is not available.");
     }
+
+    // Reclaim disk space BEFORE writing a new snapshot (keep at most 1 prior backup set)
+    $pruned_before = bc_prune_old_backups(BACKUP_DIR, 1, 14);
 
     // ---------------------------------------------------------
     // STEP A: DATABASE BACKUP (Pure PHP, memory-safe streaming)
@@ -137,26 +124,7 @@ try {
                 
                 // Exclude folders that are not part of the web application deployment or are too large
                 $norm_rel_lower = strtolower($norm_rel);
-                $exclude_prefixes = [
-                    'backups/',
-                    'tmp_update/',
-                    'dg7-android/',
-                    'dg7-ios/',
-                    'dg6-android/',
-                    'dg6-ios/',
-                    'mzeevtu/',
-                    'mzeevtu-android/',
-                    'mzeevtu-ios/',
-                    'payhub-android/',
-                    'payhub-ios/',
-                    'uploaded-image/',
-                    'downloads/',
-                    'logs/',
-                    'scratch/',
-                    'tests/',
-                    '.git/',
-                    '.github/'
-                ];
+                $exclude_prefixes = bc_backup_excluded_prefixes();
                 
                 $should_exclude = false;
                 foreach ($exclude_prefixes as $prefix) {
@@ -184,9 +152,10 @@ try {
     }
 
     // ---------------------------------------------------------
-    // STEP C: CLEANUP (Prune backups older than 14 days)
+    // STEP C: CLEANUP (Keep at most 2 newest backup sets & <= 14 days)
     // ---------------------------------------------------------
-    $deleted_files = prune_old_backups(BACKUP_DIR, 14);
+    $pruned_after = bc_prune_old_backups(BACKUP_DIR, 2, 14, [basename($file_backup_path), basename($db_backup_path)]);
+    $deleted_files = $pruned_before + $pruned_after;
 
     echo json_encode([
         'status' => 'success',
@@ -198,6 +167,12 @@ try {
     exit;
 
 } catch (Exception $e) {
+    if ($db_backup_path !== '' && is_file($db_backup_path)) {
+        @unlink($db_backup_path);
+    }
+    if ($file_backup_path !== '' && is_file($file_backup_path)) {
+        @unlink($file_backup_path);
+    }
     echo json_encode(['status' => 'error', 'message' => 'Backup failed: ' . $e->getMessage()]);
     exit;
 }
