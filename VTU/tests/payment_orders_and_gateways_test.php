@@ -132,8 +132,15 @@ foreach ([0, -50, '99.99', '1000000.01', '1e4', '100.001', 'NaN', ''] as $badAmt
 }
 
 pcheck(bc_pg_sanitize_reference('CHK_abcdef123456') === 'CHK_abcdef123456', 'sanitize accepts valid ref');
+pcheck(bc_pg_sanitize_reference('MNFY|28|20261126080000|000123') === 'MNFY|28|20261126080000|000123', 'sanitize accepts Monnify pipe ref');
 pcheck(bc_pg_sanitize_reference('../etc/passwd') === '', 'sanitize rejects path traversal');
 pcheck(bc_pg_sanitize_reference('bad ref') === '', 'sanitize rejects spaces');
+pcheck(bc_pg_infer_bank_gateway(['bank_name' => '9PSB']) === 'payvessel', 'infer detects PayVessel 9PSB');
+$pgSettleSrc = file_get_contents("$root/DGV7.0-SAAS/func/bc-payment-gateway-settlement.php");
+pcheck(strpos($pgSettleSrc, "'api/transaction/verify/' . rawurlencode(\$verify_ref)") !== false, 'PayHub verify uses path parameter endpoint');
+pcheck(strpos($pgSettleSrc, "bc_pg_payhub_secret_candidates(") !== false, 'PayHub webhook checks vendor and platform secrets');
+pcheck(strpos($pgSettleSrc, "\$meta_local_ref") !== false && strpos($pgSettleSrc, "provider_reference") !== false, 'Checkout webhook & verify link local_reference and provider_reference');
+pcheck(strpos($pgSettleSrc, "ENGINE=InnoDB") !== false && strpos($pgSettleSrc, "api_reference") !== false, 'Webhook bootstrap heals InnoDB and api_reference');
 
 $rawBody = '{"event":"charge.success","data":{"reference":"CHK_123"}}';
 $goodSig512 = hash_hmac('sha512', $rawBody, 'sk_live_secret');

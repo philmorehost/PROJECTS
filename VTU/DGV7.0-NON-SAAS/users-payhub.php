@@ -5,12 +5,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $json_peek = json_decode($raw_peek, true);
         if (is_array($json_peek)) {
             $d = is_array($json_peek['data'] ?? null) ? $json_peek['data'] : $json_peek;
+            $meta_peek = is_array($d['metadata'] ?? null) ? $d['metadata'] : [];
             $has_dva = trim((string)($d['receiving_account_number'] ?? ($json_peek['receiving_account_number'] ?? ''))) !== '';
-            $has_ref = trim((string)($d['reference'] ?? ($json_peek['reference'] ?? ''))) !== '';
+            $has_ref = trim((string)($d['reference'] ?? ($json_peek['reference'] ?? ($meta_peek['checkout_reference'] ?? ($meta_peek['local_reference'] ?? ''))))) !== '';
             if (!$has_dva && $has_ref) {
                 require_once __DIR__ . '/func/bc-connect.php';
                 require_once __DIR__ . '/func/bc-payment-gateway-settlement.php';
-                if (bc_pg_try_handle_payhub_checkout_webhook($connection_server)) {
+                if (bc_pg_try_handle_payhub_checkout_webhook($connection_server, $raw_peek)) {
                     exit;
                 }
             }

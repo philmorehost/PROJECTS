@@ -38,6 +38,9 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
     function bc_pg_ensure_tables($db)
     {
         if (!($db instanceof mysqli)) return false;
+        static $pg_schema_ready = [];
+        $db_id = function_exists('spl_object_id') ? spl_object_id($db) : 1;
+        if (!empty($pg_schema_ready[$db_id])) return true;
         if (function_exists('bc_fintech_ensure_schema') && !bc_fintech_ensure_schema()) {
             return false;
         }
@@ -49,6 +52,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 provider VARCHAR(32) NOT NULL,
                 currency VARCHAR(10) NOT NULL,
                 amount DECIMAL(20,2) NOT NULL,
+                provider_reference VARCHAR(100) NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB",
             "CREATE TABLE IF NOT EXISTS sas_provider_settlement_claims (
@@ -73,6 +77,47 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 return false;
             }
         }
+        $chk_pr = @mysqli_query($db, "SHOW COLUMNS FROM `sas_secure_payment_intents` LIKE 'provider_reference'");
+        if ($chk_pr && mysqli_num_rows($chk_pr) === 0) {
+            @mysqli_query($db, "ALTER TABLE `sas_secure_payment_intents` ADD COLUMN provider_reference VARCHAR(100) NULL DEFAULT NULL AFTER amount");
+        }
+        $chk_ar = @mysqli_query($db, "SHOW COLUMNS FROM `sas_transactions` LIKE 'api_reference'");
+        if ($chk_ar && mysqli_num_rows($chk_ar) === 0) {
+            @mysqli_query($db, "ALTER TABLE `sas_transactions` ADD COLUMN api_reference VARCHAR(225) AFTER reference");
+        }
+        $innodb_tables = [
+            'sas_users',
+            'sas_transactions',
+            'sas_fintech_ledger',
+            'sas_webhook_events',
+            'sas_provider_settlement_claims',
+            'sas_secure_payment_intents',
+            'sas_user_payment_checkouts',
+        ];
+        $in_list = "'" . implode("','", $innodb_tables) . "'";
+        $q_eng = @mysqli_query($db, "SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ($in_list)");
+        if ($q_eng) {
+            $non_innodb = [];
+            while ($r_eng = mysqli_fetch_assoc($q_eng)) {
+                if (strtoupper((string)($r_eng['ENGINE'] ?? '')) !== 'INNODB') {
+                    $non_innodb[] = $r_eng['TABLE_NAME'];
+                }
+            }
+            mysqli_free_result($q_eng);
+            if (!empty($non_innodb)) {
+                $orig_mode = null;
+                $qm = @mysqli_query($db, "SELECT @@SESSION.sql_mode AS m");
+                if ($qm && ($rm = mysqli_fetch_assoc($qm))) $orig_mode = $rm['m'];
+                foreach ($non_innodb as $tbl) {
+                    if (!@mysqli_query($db, "ALTER TABLE `$tbl` ENGINE=InnoDB")) {
+                        if ($orig_mode !== null) @mysqli_query($db, "SET SESSION sql_mode=''");
+                        @mysqli_query($db, "ALTER TABLE `$tbl` ENGINE=InnoDB");
+                        if ($orig_mode !== null) @mysqli_query($db, "SET SESSION sql_mode='" . mysqli_real_escape_string($db, $orig_mode) . "'");
+                    }
+                }
+            }
+        }
+        $pg_schema_ready[$db_id] = true;
         return true;
     }
 
@@ -95,7 +140,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         if (strpos($bank_name, 'PAYSTACK') !== false || strcasecmp($bank_code, 'Paystack') === 0) {
             return 'paystack';
         }
-        if ($bank_code === '101' || $bank_code === '120001' || strpos($bank_name, 'GLOBUS') !== false || strpos($bank_name, 'TITAN') !== false || strpos($bank_name, 'PAYVESSEL') !== false) {
+        if ($bank_code === '101' || $bank_code === '120001' || strpos($bank_name, '9PSB') !== false || strpos($bank_name, '9 PAYMENT') !== false || strpos($bank_name, 'GLOBUS') !== false || strpos($bank_name, 'TITAN') !== false || strpos($bank_name, 'PAYVESSEL') !== false) {
             return 'payvessel';
         }
         if (strpos($bank_name, 'WEMA') !== false || strpos($bank_name, 'VFD') !== false || strpos($bank_name, 'MONNIFY') !== false || strpos($bank_name, 'STERLING') !== false || strpos($bank_name, 'MONIEPOINT') !== false) {
@@ -209,7 +254,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
     {
         if (!is_string($ref)) return '';
         $ref = trim($ref);
-        if ($ref === '' || !preg_match('/\A[A-Za-z0-9._:-]{6,96}\z/', $ref)) {
+        if ($ref === '' || !preg_match('/\A[A-Za-z0-9._:|-]{6,96}\z/', $ref)) {
             return '';
         }
         return $ref;
@@ -471,8 +516,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             if (!$ph_ok || $auth_url === '' || $ph_ref === '') {
                 return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize PayHub checkout. Please try again.'];
             }
-            // Bind the PayHub-issued reference to the exact same user, vendor, and charge amount.
+            // Bind the PayHub-issued reference to the exact same user, vendor, and charge amount,
+            // and link provider_reference on the local_reference row for verify-funding polls.
             bc_pg_register_intent($db, $vid, $username, 'payhub', $charge_amount, $ph_ref);
+            $loc_esc = mysqli_real_escape_string($db, $ref);
+            $ph_esc = mysqli_real_escape_string($db, $ph_ref);
+            @mysqli_query($db, "UPDATE sas_secure_payment_intents SET provider_reference='$ph_esc' WHERE reference='$loc_esc' AND vendor_id='$vid' LIMIT 1");
             return [
                 'ok' => true,
                 'mode' => 'redirect',
@@ -599,6 +648,33 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         return ['ok' => false, 'code' => 'UNSUPPORTED_GATEWAY', 'message' => 'Unsupported gateway.'];
     }
 
+    function bc_pg_payhub_secret_candidates($db, $vendor_id)
+    {
+        $secrets = [];
+        $cfg = bc_pg_gateway_config($db, $vendor_id, 'payhub', false);
+        if (is_array($cfg)) {
+            foreach (['webhook_secret', 'secret_key', 'encrypt_key'] as $k) {
+                $val = trim((string)($cfg[$k] ?? ''));
+                if ($val !== '') $secrets[] = $val;
+            }
+        }
+        if (!$cfg || trim((string)($cfg['secret_key'] ?? '')) === '') {
+            if ($db instanceof mysqli) {
+                $sq = @mysqli_query(
+                    $db,
+                    "SELECT * FROM sas_super_admin_payment_gateways WHERE LOWER(TRIM(gateway_name))='payhub' ORDER BY (TRIM(COALESCE(secret_key,''))<>'') DESC LIMIT 1"
+                );
+                if ($sq && ($srow = mysqli_fetch_assoc($sq))) {
+                    foreach (['webhook_secret', 'secret_key', 'encrypt_key'] as $k) {
+                        $val = trim((string)($srow[$k] ?? ''));
+                        if ($val !== '') $secrets[] = $val;
+                    }
+                }
+            }
+        }
+        return array_values(array_unique($secrets));
+    }
+
     function bc_pg_verify_with_provider($db, $vendor_id, $provider, $reference, array $extra = [])
     {
         $vid = (int)$vendor_id;
@@ -608,6 +684,12 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return ['ok' => false, 'code' => 'INVALID_REFERENCE', 'message' => 'Invalid payment reference.'];
         }
         $cfg = bc_pg_gateway_config($db, $vid, $provider, false);
+        if (!$cfg && $provider === 'payhub' && ($db instanceof mysqli)) {
+            $sq = @mysqli_query($db, "SELECT * FROM sas_super_admin_payment_gateways WHERE LOWER(TRIM(gateway_name))='payhub' LIMIT 1");
+            if ($sq && mysqli_num_rows($sq) === 1) {
+                $cfg = mysqli_fetch_assoc($sq);
+            }
+        }
         if (!$cfg) {
             return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Payment gateway is not configured.'];
         }
@@ -663,27 +745,50 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             if (!function_exists('makePayhubRequest')) {
                 return ['ok' => false, 'code' => 'GATEWAY_UNAVAILABLE', 'message' => 'PayHub client unavailable.'];
             }
-            $raw = makePayhubRequest('GET', 'api/transaction/verify?reference=' . rawurlencode($reference), [], $vid);
-            $outer = is_string($raw) ? json_decode($raw, true) : (is_array($raw) ? $raw : null);
-            $res = (is_array($outer) && !empty($outer['json_result']) && is_string($outer['json_result']))
-                ? json_decode($outer['json_result'], true)
-                : $outer;
-            $data = is_array($res['data'] ?? null) ? $res['data'] : null;
-            if (!is_array($outer) || (($outer['status'] ?? '') !== 'success') || !is_array($res) || empty($res['status']) || !is_array($data)) {
+            $verify_ref = $reference;
+            if (!empty($extra['provider_reference'])) {
+                $pr = bc_pg_sanitize_reference((string)$extra['provider_reference']);
+                if ($pr !== '') $verify_ref = $pr;
+            } elseif ($db instanceof mysqli) {
+                $ref_esc = mysqli_real_escape_string($db, $reference);
+                $prq = @mysqli_query($db, "SELECT provider_reference FROM sas_secure_payment_intents WHERE reference='$ref_esc' AND vendor_id='$vid' LIMIT 1");
+                if ($prq && ($prr = mysqli_fetch_assoc($prq))) {
+                    $pr = bc_pg_sanitize_reference((string)($prr['provider_reference'] ?? ''));
+                    if ($pr !== '') $verify_ref = $pr;
+                }
+            }
+            $parse_ph_verify = function ($raw_resp) {
+                $outer = is_string($raw_resp) ? json_decode($raw_resp, true) : (is_array($raw_resp) ? $raw_resp : null);
+                $res = (is_array($outer) && !empty($outer['json_result']) && is_string($outer['json_result']))
+                    ? json_decode($outer['json_result'], true)
+                    : $outer;
+                $data = is_array($res['data'] ?? null) ? $res['data'] : null;
+                $ok = is_array($outer) && (($outer['status'] ?? '') === 'success') && is_array($res) && !empty($res['status']) && is_array($data);
+                return [$ok, $res, $data];
+            };
+            $raw = makePayhubRequest('GET', 'api/transaction/verify/' . rawurlencode($verify_ref), [], $vid);
+            [$ph_ok, $res, $data] = $parse_ph_verify($raw);
+            if (!$ph_ok) {
+                $raw_q = makePayhubRequest('GET', 'api/transaction/verify?reference=' . rawurlencode($verify_ref), [], $vid);
+                [$ph_ok, $res, $data] = $parse_ph_verify($raw_q);
+            }
+            if (!$ph_ok) {
                 return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify PayHub transaction.'];
             }
             if (strtolower((string)($data['domain'] ?? 'live')) === 'test') {
                 return ['ok' => false, 'code' => 'TEST_MODE_REJECTED', 'message' => 'Test-mode PayHub transactions cannot credit live wallets.'];
             }
             $st = strtolower((string)($data['status'] ?? ''));
-            if (!in_array($st, ['paid', 'success', 'successful'], true)) {
+            if (!in_array($st, ['paid', 'success', 'successful'], true) || (isset($data['paid']) && $data['paid'] === false)) {
                 return ['ok' => false, 'code' => 'NOT_PAID', 'message' => 'Payment is still pending confirmation.'];
             }
-            $gross_kobo = is_numeric($data['gateway_amount'] ?? null) ? (float)$data['gateway_amount'] : (is_numeric($data['amount'] ?? null) ? (float)$data['amount'] : 0.0);
-            $settled_kobo = is_numeric($data['settled_amount'] ?? null) ? (float)$data['settled_amount'] : 0.0;
-            $gross = round($gross_kobo / 100.0, 2);
-            if ($settled_kobo > 0) {
-                $credit = min($gross, round($settled_kobo / 100.0, 2));
+            $is_major = strtolower((string)($data['amount_unit'] ?? '')) === 'major';
+            $div = $is_major ? 1.0 : 100.0;
+            $gross_raw = is_numeric($data['gateway_amount'] ?? null) ? (float)$data['gateway_amount'] : (is_numeric($data['amount'] ?? null) ? (float)$data['amount'] : 0.0);
+            $settled_raw = is_numeric($data['settled_amount'] ?? null) ? (float)$data['settled_amount'] : 0.0;
+            $gross = round($gross_raw / $div, 2);
+            if ($settled_raw > 0) {
+                $credit = min($gross, round($settled_raw / $div, 2));
                 $fee = round(max(0.0, $gross - $credit), 2);
             } else {
                 $fee = $pct > 0 ? round($gross * ($pct / 100), 2) : 0.0;
@@ -692,8 +797,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return [
                 'ok' => ($credit > 0),
                 'provider' => 'payhub',
-                'canonical_reference' => bc_pg_sanitize_reference((string)($data['reference'] ?? $reference)) ?: $reference,
-                'event_id' => (string)($data['reference'] ?? $reference),
+                'canonical_reference' => bc_pg_sanitize_reference((string)($data['reference'] ?? $verify_ref)) ?: $verify_ref,
+                'event_id' => (string)($data['reference'] ?? $verify_ref),
                 'gross_amount' => $gross,
                 'credit_amount' => $credit,
                 'fee' => $fee,
@@ -762,14 +867,22 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             }
             $tx_ref = trim((string)($extra['transaction_reference'] ?? ''));
             if ($tx_ref !== '' && stripos($tx_ref, 'MNFY|') === 0) {
-                $url = 'https://api.monnify.com/api/v2/transactions/' . rawurlencode($tx_ref);
+                $res = bc_pg_http_json('GET', 'https://api.monnify.com/api/v2/transactions/' . rawurlencode($tx_ref), [
+                    'Authorization: Bearer ' . $token,
+                    'Content-Type: application/json',
+                ]);
+                if (empty($res['ok']) || empty($res['json']['requestSuccessful']) || !is_array($res['json']['responseBody'] ?? null)) {
+                    $res = bc_pg_http_json('GET', 'https://api.monnify.com/api/v2/merchant/transactions/query?paymentReference=' . rawurlencode($reference), [
+                        'Authorization: Bearer ' . $token,
+                        'Content-Type: application/json',
+                    ]);
+                }
             } else {
-                $url = 'https://api.monnify.com/api/v2/merchant/transactions/query?paymentReference=' . rawurlencode($reference);
+                $res = bc_pg_http_json('GET', 'https://api.monnify.com/api/v2/merchant/transactions/query?paymentReference=' . rawurlencode($reference), [
+                    'Authorization: Bearer ' . $token,
+                    'Content-Type: application/json',
+                ]);
             }
-            $res = bc_pg_http_json('GET', $url, [
-                'Authorization: Bearer ' . $token,
-                'Content-Type: application/json',
-            ]);
             $body = $res['json']['responseBody'] ?? null;
             if (empty($res['ok']) || empty($res['json']['requestSuccessful']) || !is_array($body)) {
                 return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Monnify transaction.'];
@@ -890,9 +1003,15 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ];
         }
 
-        // Mark both the canonical reference and any local alias reference completed.
+        // Mark the canonical reference, caller reference, and any linked local/provider reference completed.
         $can_esc = mysqli_real_escape_string($db, $canonical_ref);
-        mysqli_query($db, "UPDATE sas_user_payment_checkouts SET status='1' WHERE vendor_id='$vid' AND username='$user_esc' AND reference IN ('$ref_esc', '$can_esc')");
+        $refs_to_mark = [$ref_esc, $can_esc];
+        $loc_meta_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ''));
+        if ($loc_meta_ref !== '') $refs_to_mark[] = mysqli_real_escape_string($db, $loc_meta_ref);
+        $prov_intent_ref = bc_pg_sanitize_reference((string)($intent['provider_reference'] ?? ''));
+        if ($prov_intent_ref !== '') $refs_to_mark[] = mysqli_real_escape_string($db, $prov_intent_ref);
+        $in_refs = "'" . implode("','", array_unique($refs_to_mark)) . "'";
+        mysqli_query($db, "UPDATE sas_user_payment_checkouts SET status='1' WHERE vendor_id='$vid' AND username='$user_esc' AND reference IN ($in_refs)");
 
         if (($ledger['reason'] ?? '') === 'ok' && function_exists('bc_fintech_notify_wallet_credit')) {
             bc_fintech_notify_wallet_credit($vid, $username, 'NGN', $credit, $fee, $canonical_ref, $ledger['balance_after'] ?? null);
@@ -1020,6 +1139,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             bc_pg_emit_webhook_json(405, ['status' => 'error', 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'POST required']);
             return;
         }
+        bc_pg_ensure_tables($db);
         $raw = bc_fintech_webhook_raw_input();
         $headers = bc_fintech_webhook_headers();
         $payload = json_decode($raw, true);
@@ -1034,17 +1154,20 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         }
 
         $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $meta = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
         $ref = bc_pg_sanitize_reference((string)($data['reference'] ?? ''));
+        $meta_local_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ($meta['reference'] ?? '')));
         $rec_acct = (string)(
             $data['authorization']['receiver_bank_account_number']
-            ?? ($data['metadata']['receiver_account_number']
+            ?? ($meta['receiver_account_number']
             ?? ($data['dedicated_account']['account_number'] ?? ''))
         );
 
         $host_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
         $vid = 0;
         $username = '';
-        $intent = $ref !== '' ? bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0) : null;
+        $intent = ($ref !== '' ? bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0) : null)
+            ?: ($meta_local_ref !== '' ? bc_pg_lookup_intent($db, $meta_local_ref, $host_vid > 0 ? $host_vid : 0) : null);
         if ($intent) {
             $vid = (int)$intent['vendor_id'];
             $username = (string)$intent['username'];
@@ -1095,6 +1218,11 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             (float)$verified['fee'],
             'paystack_webhook'
         );
+        if (!empty($res['ok']) && $meta_local_ref !== '' && ($db instanceof mysqli)) {
+            $lr_esc = mysqli_real_escape_string($db, $meta_local_ref);
+            $u_esc = mysqli_real_escape_string($db, $username);
+            @mysqli_query($db, "UPDATE sas_user_payment_checkouts SET status='1' WHERE vendor_id='$vid' AND username='$u_esc' AND reference='$lr_esc'");
+        }
         bc_pg_emit_webhook_json($res['http'], $res);
     }
 
@@ -1104,6 +1232,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             bc_pg_emit_webhook_json(405, ['status' => 'error', 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'POST required']);
             return;
         }
+        bc_pg_ensure_tables($db);
         $raw = bc_fintech_webhook_raw_input();
         $headers = bc_fintech_webhook_headers();
         $payload = json_decode($raw, true);
@@ -1119,7 +1248,9 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return;
         }
 
+        $meta = is_array($data['metaData'] ?? null) ? $data['metaData'] : [];
         $payment_ref = bc_pg_sanitize_reference((string)($data['paymentReference'] ?? ''));
+        $meta_local_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ''));
         $tx_ref = trim((string)($data['transactionReference'] ?? ''));
         $acct_no = (string)($data['destinationAccountInformation']['accountNumber'] ?? ($data['accountDetails']['accountNumber'] ?? ''));
         $prod_ref = trim((string)($data['product']['reference'] ?? ''));
@@ -1127,7 +1258,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         $host_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
         $vid = 0;
         $username = '';
-        $intent = $payment_ref !== '' ? bc_pg_lookup_intent($db, $payment_ref, $host_vid > 0 ? $host_vid : 0) : null;
+        $intent = ($payment_ref !== '' ? bc_pg_lookup_intent($db, $payment_ref, $host_vid > 0 ? $host_vid : 0) : null)
+            ?: ($meta_local_ref !== '' ? bc_pg_lookup_intent($db, $meta_local_ref, $host_vid > 0 ? $host_vid : 0) : null);
         if ($intent) {
             $vid = (int)$intent['vendor_id'];
             $username = (string)$intent['username'];
@@ -1137,7 +1269,8 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 $vid = (int)$bank_row['vendor_id'];
                 $username = (string)$bank_row['username'];
             }
-        } elseif ($prod_ref !== '') {
+        }
+        if ($vid <= 0 && $prod_ref !== '') {
             $pr_esc = mysqli_real_escape_string($db, $prod_ref);
             $vid_clause = $host_vid > 0 ? " AND vendor_id='$host_vid'" : "";
             $bq = mysqli_query($db, "SELECT vendor_id, username FROM sas_user_banks WHERE reference='$pr_esc' AND status='1'$vid_clause");
@@ -1189,6 +1322,11 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             (float)$verified['fee'],
             'monnify_webhook'
         );
+        if (!empty($res['ok']) && $payment_ref !== '' && ($db instanceof mysqli)) {
+            $pr_esc = mysqli_real_escape_string($db, $payment_ref);
+            $u_esc = mysqli_real_escape_string($db, $username);
+            @mysqli_query($db, "UPDATE sas_user_payment_checkouts SET status='1' WHERE vendor_id='$vid' AND username='$u_esc' AND reference='$pr_esc'");
+        }
         bc_pg_emit_webhook_json($res['http'], $res);
     }
 
@@ -1198,6 +1336,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             bc_pg_emit_webhook_json(405, ['status' => 'error', 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'POST required']);
             return;
         }
+        bc_pg_ensure_tables($db);
         $raw = bc_fintech_webhook_raw_input();
         $headers = bc_fintech_webhook_headers();
         $payload = json_decode($raw, true);
@@ -1218,13 +1357,16 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return;
         }
 
+        $meta = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
         $ref = bc_pg_sanitize_reference((string)($data['reference'] ?? ($payload['reference'] ?? ($data['tx_ref'] ?? ($data['transaction_reference'] ?? '')))));
-        $acct_no = (string)($data['account_number'] ?? ($data['virtual_account']['account_number'] ?? ''));
+        $meta_local_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ''));
+        $acct_no = (string)($data['account_number'] ?? ($data['virtual_account']['account_number'] ?? ($data['destination']['account_number'] ?? '')));
         $host_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
 
         $vid = 0;
         $username = '';
-        $intent = $ref !== '' ? bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0) : null;
+        $intent = ($ref !== '' ? bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0) : null)
+            ?: ($meta_local_ref !== '' ? bc_pg_lookup_intent($db, $meta_local_ref, $host_vid > 0 ? $host_vid : 0) : null);
         if ($intent) {
             $vid = (int)$intent['vendor_id'];
             $username = (string)$intent['username'];
@@ -1246,12 +1388,28 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             bc_pg_emit_webhook_json(403, ['status' => 'error', 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'BeeWave not configured']);
             return;
         }
-        $expected_secret = trim((string)($cfg['webhook_secret'] ?? ''));
-        if ($expected_secret === '') {
-            $expected_secret = trim((string)($cfg['secret_key'] ?? ''));
+        $secret_candidates = [];
+        foreach (['webhook_secret', 'secret_key', 'encrypt_key'] as $sk) {
+            $sv = trim((string)($cfg[$sk] ?? ''));
+            if ($sv !== '') $secret_candidates[] = $sv;
         }
+        $secret_candidates = array_values(array_unique($secret_candidates));
         $presented_secret = trim((string)($_GET['secret'] ?? ($headers['x-beewave-secret'] ?? ($headers['x-webhook-secret'] ?? ''))));
-        if ($expected_secret === '' || $presented_secret === '' || !hash_equals($expected_secret, $presented_secret)) {
+        $presented_sig = trim((string)($headers['x-beewave-signature'] ?? ($headers['x-webhook-signature'] ?? '')));
+        $secret_ok = false;
+        if ($presented_secret !== '') {
+            foreach ($secret_candidates as $sc) {
+                if (hash_equals($sc, $presented_secret)) {
+                    $secret_ok = true;
+                    break;
+                }
+            }
+        }
+        if (!$secret_ok && $presented_sig !== '') {
+            $secret_ok = bc_pg_verify_hmac_candidates('sha256', $raw, $presented_sig, $secret_candidates)
+                || bc_pg_verify_hmac_candidates('sha512', $raw, $presented_sig, $secret_candidates);
+        }
+        if (empty($secret_candidates) || !$secret_ok) {
             bc_pg_emit_webhook_json(401, ['status' => 'error', 'code' => 'INVALID_SECRET', 'message' => 'Invalid BeeWave webhook secret']);
             return;
         }
@@ -1288,6 +1446,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             bc_pg_emit_webhook_json(405, ['status' => 'error', 'code' => 'METHOD_NOT_ALLOWED', 'message' => 'POST required']);
             return;
         }
+        bc_pg_ensure_tables($db);
         $raw = bc_fintech_webhook_raw_input();
         $headers = bc_fintech_webhook_headers();
         $payload = json_decode($raw, true);
@@ -1296,7 +1455,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return;
         }
 
-        $acct_no = (string)($payload['virtualAccount']['virtualAccountNumber'] ?? ($payload['order']['virtualAccountNumber'] ?? ''));
+        $acct_no = (string)($payload['virtualAccount']['virtualAccountNumber'] ?? ($payload['order']['virtualAccountNumber'] ?? ($payload['virtual_account']['account_number'] ?? '')));
         $ref = bc_pg_sanitize_reference((string)($payload['transaction']['reference'] ?? ($payload['order']['trackingReference'] ?? '')));
         $host_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
         $bank_row = $acct_no !== '' ? bc_pg_resolve_bank_owner($db, $acct_no, 'payvessel', $host_vid > 0 ? $host_vid : 0) : null;
@@ -1341,10 +1500,10 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         bc_pg_emit_webhook_json($res['http'], $res);
     }
 
-    function bc_pg_try_handle_payhub_checkout_webhook($db)
+    function bc_pg_try_handle_payhub_checkout_webhook($db, $raw_body = null)
     {
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') return false;
-        $raw = bc_fintech_webhook_raw_input();
+        $raw = is_string($raw_body) && $raw_body !== '' ? $raw_body : bc_fintech_webhook_raw_input();
         if (trim($raw) === '') return false;
         $payload = json_decode($raw, true);
         if (!is_array($payload)) return false;
@@ -1356,41 +1515,89 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             return false;
         }
 
+        $meta = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
         $ref = bc_pg_sanitize_reference((string)($data['reference'] ?? ($payload['reference'] ?? '')));
-        if ($ref === '') return false;
+        $meta_checkout_ref = bc_pg_sanitize_reference((string)($meta['checkout_reference'] ?? ''));
+        $meta_local_ref = bc_pg_sanitize_reference((string)($meta['local_reference'] ?? ''));
+        if ($ref === '' && $meta_checkout_ref === '' && $meta_local_ref === '') return false;
 
+        $is_checkout_payload = (($meta['target'] ?? '') === 'user')
+            || $meta_local_ref !== ''
+            || $meta_checkout_ref !== ''
+            || (is_array($data['source'] ?? null) && (($data['source']['source'] ?? '') === 'checkout'));
+
+        $event = strtolower(trim((string)($payload['event'] ?? '')));
+        if ($event !== '' && $event !== 'charge.success') {
+            if ($is_checkout_payload) {
+                bc_pg_emit_webhook_json(200, ['status' => 'ignored', 'code' => 'EVENT_IGNORED', 'message' => 'Event ignored']);
+                return true;
+            }
+            return false;
+        }
+
+        bc_pg_ensure_tables($db);
         $host_vid = function_exists('resolveVendorID') ? (int)resolveVendorID() : 0;
-        $intent = bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0);
-        if (!$intent) {
-            return false;
+        $intent = ($ref !== '' ? bc_pg_lookup_intent($db, $ref, $host_vid > 0 ? $host_vid : 0) : null)
+            ?: ($meta_checkout_ref !== '' ? bc_pg_lookup_intent($db, $meta_checkout_ref, $host_vid > 0 ? $host_vid : 0) : null)
+            ?: ($meta_local_ref !== '' ? bc_pg_lookup_intent($db, $meta_local_ref, $host_vid > 0 ? $host_vid : 0) : null);
+
+        $vid = 0;
+        $username = '';
+        if ($intent) {
+            $vid = (int)$intent['vendor_id'];
+            $username = (string)$intent['username'];
+        } elseif ($is_checkout_payload && !empty($meta['vendor_id']) && !empty($meta['username'])) {
+            $cand_vid = (int)$meta['vendor_id'];
+            $cand_user = trim((string)$meta['username']);
+            if ($cand_vid > 0 && $cand_user !== '' && ($host_vid <= 0 || $cand_vid === $host_vid) && ($db instanceof mysqli)) {
+                $cu_esc = mysqli_real_escape_string($db, $cand_user);
+                $uq = @mysqli_query($db, "SELECT username FROM sas_users WHERE vendor_id='$cand_vid' AND username='$cu_esc' AND status='1' AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
+                if ($uq && ($ur = mysqli_fetch_assoc($uq))) {
+                    $vid = $cand_vid;
+                    $username = (string)$ur['username'];
+                }
+            }
         }
 
-        $vid = (int)$intent['vendor_id'];
-        $username = (string)$intent['username'];
         if ($vid <= 0 || $username === '' || ($host_vid > 0 && $vid !== $host_vid)) {
+            if ($is_checkout_payload) {
+                bc_pg_emit_webhook_json(200, ['status' => 'ignored', 'code' => 'OWNER_NOT_RESOLVED', 'message' => 'Checkout owner not resolved']);
+                return true;
+            }
             return false;
         }
 
-        $cfg = bc_pg_gateway_config($db, $vid, 'payhub', false);
-        if (!$cfg) {
+        $secrets = bc_pg_payhub_secret_candidates($db, $vid);
+        if (empty($secrets)) {
             bc_pg_emit_webhook_json(403, ['status' => 'error', 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'PayHub not configured']);
             return true;
         }
 
         $headers = bc_fintech_webhook_headers();
-        $sig = $headers['x-payhub-signature'] ?? '';
-        if (!bc_pg_verify_hmac_candidates('sha256', $raw, $sig, [$cfg['webhook_secret'] ?? '', $cfg['secret_key'] ?? ''])) {
+        $sig = $headers['x-payhub-signature'] ?? ($_SERVER['HTTP_X_PAYHUB_SIGNATURE'] ?? '');
+        if (!bc_pg_verify_hmac_candidates('sha256', $raw, $sig, $secrets)) {
             bc_pg_emit_webhook_json(401, ['status' => 'error', 'code' => 'INVALID_SIGNATURE', 'message' => 'Invalid PayHub signature']);
             return true;
         }
 
-        $verified = bc_pg_verify_with_provider($db, $vid, 'payhub', $ref);
+        $verify_ref = $ref !== '' ? $ref : $meta_checkout_ref;
+        $verified = bc_pg_verify_with_provider($db, $vid, 'payhub', $verify_ref);
         if (empty($verified['ok'])) {
             bc_pg_emit_webhook_json(200, ['status' => 'ignored', 'code' => $verified['code'] ?? 'VERIFY_FAILED', 'message' => $verified['message'] ?? 'Verification skipped']);
             return true;
         }
 
-        if (is_numeric($intent['amount'] ?? null) && (float)$intent['amount'] > 0 && ((float)$verified['gross_amount'] + 0.01) < (float)$intent['amount']) {
+        $v_meta = (array)($verified['metadata'] ?? []);
+        if (isset($v_meta['vendor_id']) && (int)$v_meta['vendor_id'] > 0 && (int)$v_meta['vendor_id'] !== $vid) {
+            bc_pg_emit_webhook_json(403, ['status' => 'error', 'code' => 'OWNERSHIP_MISMATCH', 'message' => 'Payment vendor mismatch']);
+            return true;
+        }
+        if (!empty($v_meta['username']) && strcasecmp((string)$v_meta['username'], $username) !== 0) {
+            bc_pg_emit_webhook_json(403, ['status' => 'error', 'code' => 'OWNERSHIP_MISMATCH', 'message' => 'Payment user mismatch']);
+            return true;
+        }
+
+        if ($intent && is_numeric($intent['amount'] ?? null) && (float)$intent['amount'] > 0 && ((float)$verified['gross_amount'] + 0.01) < (float)$intent['amount']) {
             bc_pg_emit_webhook_json(422, ['status' => 'error', 'code' => 'UNDERPAID', 'message' => 'Amount below checkout intent']);
             return true;
         }
@@ -1407,6 +1614,18 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             (float)$verified['fee'],
             'payhub_checkout_webhook'
         );
+        if (!empty($res['ok']) && ($db instanceof mysqli)) {
+            $u_esc = mysqli_real_escape_string($db, $username);
+            $mark_refs = [];
+            foreach ([$ref, $meta_checkout_ref, $meta_local_ref, $verified['canonical_reference']] as $mr) {
+                $mr = bc_pg_sanitize_reference((string)$mr);
+                if ($mr !== '') $mark_refs[] = mysqli_real_escape_string($db, $mr);
+            }
+            if (!empty($mark_refs)) {
+                $in_mr = "'" . implode("','", array_unique($mark_refs)) . "'";
+                @mysqli_query($db, "UPDATE sas_user_payment_checkouts SET status='1' WHERE vendor_id='$vid' AND username='$u_esc' AND reference IN ($in_mr)");
+            }
+        }
         bc_pg_emit_webhook_json($res['http'], $res);
         return true;
     }
