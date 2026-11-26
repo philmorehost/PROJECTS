@@ -5,26 +5,43 @@ header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 include_once("../../func/bc-crypto-func.php");
 
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
-if (empty($input)) {
+if (!is_array($input) || empty($input)) {
     $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
+$vendor_id = resolveVendorID();
+if ($vendor_id <= 0) {
+    echo json_encode(["status" => "error", "message" => "Vendor not found or inactive"]);
+    exit;
+}
+
+$vendor_check = mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1");
+if (!$vendor_check || mysqli_num_rows($vendor_check) !== 1) {
+    echo json_encode(["status" => "error", "message" => "Vendor not found or inactive"]);
+    exit;
+}
+
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), $vendor_id));
 
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     exit;
 }
 
-$vendor_id = resolveVendorID();
-$check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' LIMIT 1");
-if (mysqli_num_rows($check_user) != 1) {
-    echo json_encode(["status" => "error", "message" => "Invalid API Key"]);
+$check_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND api_key='$api_key' AND status=1 AND (is_blocked IS NULL OR is_blocked=0) LIMIT 1");
+if (!$check_user || mysqli_num_rows($check_user) != 1) {
+    echo json_encode(["status" => "error", "message" => "Invalid API Key or inactive account"]);
     exit;
 }
 $user = mysqli_fetch_assoc($check_user);
 $username = $user['username'];
+$username_esc = mysqli_real_escape_string($connection_server, $username);
 
 if(!isServiceEnabled('crypto_hub')){
     echo json_encode(["status" => "error", "message" => "Crypto Hub is currently disabled"]);
@@ -116,7 +133,7 @@ elseif ($action === 'withdraw') {
 
 elseif ($action === 'history') {
     $history = [];
-    $q = mysqli_query($connection_server, "SELECT * FROM sas_crypto_transactions WHERE vendor_id='$vendor_id' AND username='$username' ORDER BY id DESC LIMIT 50");
+    $q = mysqli_query($connection_server, "SELECT * FROM sas_crypto_transactions WHERE vendor_id='$vendor_id' AND username='$username_esc' ORDER BY id DESC LIMIT 50");
     while ($r = mysqli_fetch_assoc($q)) {
         $history[] = [
             "id" => (int)$r['id'],

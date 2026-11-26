@@ -1,5 +1,14 @@
 <?php
 header("Content-Type: application/json");
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "failed", "desc" => "Method not allowed"]);
+    exit;
+}
 include_once("../../func/bc-connect.php");
 
 $vendor_id = resolveVendorID();
@@ -17,19 +26,22 @@ if ($get_vendor_details['nin_card_enabled'] != 1) {
     exit;
 }
 
-$get_api_post_info = json_decode(file_get_contents('php://input'), true) ?? [];
+$get_api_post_info = json_decode(file_get_contents('php://input'), true);
+if (!is_array($get_api_post_info) || empty($get_api_post_info)) {
+    $get_api_post_info = $_POST;
+}
 
 $api_key_sanitized = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($get_api_post_info["api_key"] ?? "")), $vendor_id));
 $purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
 $get_user_detail_via_apikey = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='".$get_vendor_details["id"]."' AND api_key='$api_key_sanitized' LIMIT 1");
 $get_logged_user_details = mysqli_fetch_array($get_user_detail_via_apikey);
 
-if (mysqli_num_rows($get_user_detail_via_apikey) != 1) {
+if (!$get_user_detail_via_apikey || mysqli_num_rows($get_user_detail_via_apikey) != 1) {
     echo json_encode(["status" => "failed", "desc" => "Invalid API key"]);
     exit;
 }
 
-if (!($get_logged_user_details["api_status"] == 1 || $purchase_method == "app") || $get_logged_user_details["status"] != 1) {
+if (!($get_logged_user_details["api_status"] == 1 || $purchase_method == "app") || $get_logged_user_details["status"] != 1 || (int)($get_logged_user_details["is_blocked"] ?? 0) === 1) {
     echo json_encode(["status" => "failed", "desc" => "API access not approved or account inactive"]);
     exit;
 }
@@ -45,6 +57,12 @@ $acc_level = (int)$get_logged_user_details["account_level"];
 if ($acc_level == 3) $service_fee = (float)$get_vendor_details['nin_card_fee_api'];
 elseif ($acc_level == 2) $service_fee = (float)$get_vendor_details['nin_card_fee_agent'];
 else $service_fee = (float)$get_vendor_details['nin_card_fee'];
+
+if (!is_finite($service_fee) || $service_fee <= 0) {
+    echo json_encode(["status" => "failed", "desc" => "Service fee not configured"]);
+    exit;
+}
+$service_fee = round($service_fee, 2);
 
 // Check balance
 $balance_res = mysqli_fetch_array(mysqli_query($connection_server, "SELECT balance FROM sas_users WHERE id='".$get_logged_user_details["id"]."'"));

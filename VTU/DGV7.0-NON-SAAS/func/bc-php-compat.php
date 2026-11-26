@@ -57,7 +57,6 @@ set_exception_handler(function ($e) {
     } elseif (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) {
         $is_json_route = true;
     } elseif (isset($_SERVER['HTTP_X_APP_SOURCE']) && !empty($_SERVER['HTTP_X_APP_SOURCE'])) {
-        // Mobile app requests always include X-App-Source header — always return JSON
         $is_json_route = true;
     } elseif (isset($_SERVER['REQUEST_URI']) && (
         stripos($_SERVER['REQUEST_URI'], '/api/') !== false ||
@@ -71,11 +70,7 @@ set_exception_handler(function ($e) {
 
     if (!headers_sent()) {
         http_response_code(500);
-        if ($is_json_route) {
-            header('Content-Type: application/json; charset=utf-8');
-        } else {
-            header('Content-Type: text/html; charset=utf-8');
-        }
+        header('Content-Type: ' . ($is_json_route ? 'application/json' : 'text/html') . '; charset=utf-8');
     }
 
     if (!defined('CRON_CLI')) {
@@ -83,7 +78,7 @@ set_exception_handler(function ($e) {
             echo json_encode([
                 'status'  => 'error',
                 'code'    => 'SYSTEM_ERROR',
-                'message' => 'System error occurred: ' . $e->getMessage()
+                'message' => 'System error occurred. Please try again.'
             ]);
         } else {
             echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>System Error</title>'
@@ -164,5 +159,6 @@ if (!headers_sent() && !defined('CRON_CLI')) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-XSS-Protection: 1; mode=block');
+    header('Permissions-Policy: camera=(self), microphone=(self), clipboard-write=(self "https://merchant.payhub.com.ng" "https://checkout.paystack.com" "https://checkout.flutterwave.com")');
     @header_remove('X-Powered-By');
 }

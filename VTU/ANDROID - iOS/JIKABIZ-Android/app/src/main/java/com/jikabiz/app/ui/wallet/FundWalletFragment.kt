@@ -743,13 +743,27 @@ class ManualDepositTabFragment : Fragment() {
                     "amount" to amount,
                     "gateway" to gateway.ifEmpty { "Manual Bank Deposit" }
                 ))
-                val status = resp.body()?.get("status") as? String ?: "error"
-                val msg = resp.body()?.get("message") as? String ?: "Unknown error"
+                val body = resp.body()
+                var status = body?.get("status") as? String
+                var msg = body?.get("message") as? String
+                if (body == null || msg.isNullOrBlank()) {
+                    val errText = try { resp.errorBody()?.string() } catch (_: Exception) { null }
+                    if (!errText.isNullOrBlank()) {
+                        try {
+                            val obj = org.json.JSONObject(errText)
+                            status = status ?: obj.optString("status", "error")
+                            msg = obj.optString("message").ifBlank { obj.optString("desc", "") }
+                        } catch (_: Exception) {}
+                    }
+                }
+                val finalStatus = status ?: if (resp.isSuccessful) "success" else "error"
+                val finalMsg = msg?.takeIf { it.isNotBlank() }
+                    ?: if (!resp.isSuccessful) "Request failed (HTTP ${resp.code()}). Please try again." else "Unknown error"
                 activity?.runOnUiThread {
                     btn.isEnabled = true
-                    if (status.contains("success", true)) {
-                        android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_LONG).show()
-                    } else snack(view, msg)
+                    if (finalStatus.contains("success", true)) {
+                        android.widget.Toast.makeText(requireContext(), finalMsg, android.widget.Toast.LENGTH_LONG).show()
+                    } else snack(view, finalMsg)
                 }
             } catch (e: Exception) {
                 activity?.runOnUiThread { btn.isEnabled = true; snack(view, e.message ?: "Error") }

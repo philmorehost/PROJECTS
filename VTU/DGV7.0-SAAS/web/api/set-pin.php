@@ -4,6 +4,12 @@ require_once __DIR__ . '/../../func/bc-secure-session.php';
 header("Content-Type: application/json");
 include_once("../../func/bc-connect.php");
 
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    http_response_code(405);
+    echo json_encode(["status" => "failed", "desc" => "Method not allowed"]);
+    exit;
+}
+
 // Identify Vendor
 $vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
@@ -15,7 +21,7 @@ if (!$get_vendor) {
 
 // Get Request Data
 $data = json_decode(file_get_contents('php://input'), true);
-if (empty($data)) $data = $_REQUEST;
+if (!is_array($data)) $data = $_POST;
 if (!is_array($data)) $data = array();
 
 $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($data['api_key'] ?? '')), $vendor_id));
@@ -47,6 +53,10 @@ if (!$q_check || mysqli_num_rows($q_check) != 1) {
     exit;
 }
 $user_row = mysqli_fetch_assoc($q_check);
+if ((int)($user_row['status'] ?? 0) !== 1 || !empty($user_row['is_blocked'])) {
+    echo json_encode(["status" => "failed", "desc" => "Account is not active."]);
+    exit;
+}
 
 // Only an account with NO PIN may set one with the api_key alone. Changing an existing PIN
 // requires proving the current one - otherwise a stolen api_key (the very thing that was

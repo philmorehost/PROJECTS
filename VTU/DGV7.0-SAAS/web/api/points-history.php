@@ -28,14 +28,14 @@ if (isset($api_post_info_from_app) && is_array($api_post_info_from_app)) {
     if (empty($input)) $input = $_REQUEST;
 }
 
-$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), 0));
+$vendor_id = resolveVendorID();
+$api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential(trim(strip_tags($input["api_key"] ?? '')), $vendor_id));
 $purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_array($api_post_info_from_app)) ? "app" : "api";
 if (empty($api_key)) {
     echo json_encode(["status" => "error", "message" => "API Key is required"]);
     exit;
 }
 
-$vendor_id = resolveVendorID();
 $get_vendor = mysqli_fetch_array(mysqli_query($connection_server, "SELECT id FROM sas_vendors WHERE id='$vendor_id' AND status=1 LIMIT 1"));
 if (!$get_vendor) {
     echo json_encode(["status" => "error", "message" => "Vendor not found"]);
@@ -48,7 +48,7 @@ if (mysqli_num_rows($check_user) != 1) {
     exit;
 }
 $user = mysqli_fetch_assoc($check_user);
-if ($user['status'] != 1) {
+if ((int)($user['status'] ?? 0) !== 1 || !empty($user['is_blocked'])) {
     echo json_encode(["status" => "error", "message" => "Account is not active"]);
     exit;
 }

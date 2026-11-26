@@ -33,7 +33,7 @@ $purchase_method = bc_api_is_app_session(isset($api_post_info_from_app) && is_ar
 	$get_user_detail_via_apikey = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='" . $get_vendor_details["id"] . "' && api_key='" . $api_key_sanitized . "' LIMIT 1");
 	$get_logged_user_details = mysqli_fetch_array($get_user_detail_via_apikey);
 	if (mysqli_num_rows($get_user_detail_via_apikey) == 1) {
-		if (($get_logged_user_details["api_status"] == 1 || $purchase_method == "app") && $get_logged_user_details["status"] == 1) {
+		if (($get_logged_user_details["api_status"] == 1 || $purchase_method == "app") && (int)$get_logged_user_details["status"] === 1 && empty($get_logged_user_details["is_blocked"])) {
 			$action_function = 2;
 			$_SESSION["user_session"] = $get_logged_user_details["username"];
 			include("../func/requery-transaction.php");

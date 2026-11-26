@@ -194,7 +194,7 @@ if (!function_exists('bc_app_brand_slug')) {
     }
 }
 
-if (function_exists('resolveVendorID')) return;
+if (!function_exists('resolveVendorID')) {
 function resolveVendorID($force_recompute = false) {
     global $connection_server;
     static $static_vendor_id = null;
@@ -258,6 +258,7 @@ function resolveVendorID($force_recompute = false) {
     }
 
     return 0;
+}
 }
 
 function bc_clean_vendor_domain($value) {

@@ -44,7 +44,8 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
                 $type = ucwords($row["type_alternative"] ?? $row["description"] ?? 'Transaction');
             }
             $ref = $row['reference'];
-            $amount = number_format($row['discounted_amount'] ?? $row['amount'] ?? 0, 2);
+            $raw_amt = $row['discounted_amount'] ?? ($row['amount'] ?? 0);
+            $amount = number_format(is_numeric($raw_amt) ? (float)$raw_amt : 0.0, 2);
             $amount_display = '<div class="fw-bold">₦'.$amount.'</div>';
             $status_text = tranStatus($row['status']);
             $status_class = ($row['status'] == 1 ? 'text-success' : ($row['status'] == 2 ? 'text-warning' : 'text-danger'));

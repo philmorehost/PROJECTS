@@ -81,10 +81,21 @@ function bc_public_directory_html() {
 </style>
 <?php
     }
+    $dir_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : '';
     echo '<nav class="public-directory" aria-label="Explore more"><div class="public-directory__intro"><h2 class="public-directory__title">Explore more</h2><p class="public-directory__description">Find the right service, resources and support.</p></div><div class="public-directory__grid">';
     foreach (bc_public_directory_groups() as $title => $links) {
         echo '<div class="public-directory__group"><h3 class="public-directory__heading">'.htmlspecialchars($title, ENT_QUOTES, 'UTF-8').'</h3><ul class="public-directory__list">';
-        foreach ($links as $link) echo '<li><a class="public-directory__link" href="'.htmlspecialchars($link[1], ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($link[0], ENT_QUOTES, 'UTF-8').'</a></li>';
+        $emitted_dash = false;
+        foreach ($links as $link) {
+            if ($dir_dash !== '' && ($link[1] === '/web/Register.php' || $link[1] === '/web/Login.php')) {
+                if (!$emitted_dash) {
+                    $emitted_dash = true;
+                    echo '<li><a class="public-directory__link" href="'.htmlspecialchars($dir_dash, ENT_QUOTES, 'UTF-8').'">Dashboard</a></li>';
+                }
+                continue;
+            }
+            echo '<li><a class="public-directory__link" href="'.htmlspecialchars($link[1], ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($link[0], ENT_QUOTES, 'UTF-8').'</a></li>';
+        }
         echo '</ul></div>';
     }
     echo '</div></nav>';
@@ -127,9 +138,14 @@ function bc_public_render($ctx, $key) {
                         <h1><?php echo bc_landing_e($p[0]); ?></h1>
                         <p class="lede">One workspace for collections, payouts, POS terminals, and wholesale VTU APIs — gated live by your platform’s Service Control Center.</p>
                         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+                            <?php $pg_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
                             <a class="btn primary" href="/web/BusinessUpgrade.php">Open business access</a>
                             <a class="btn ghost" href="/Developers.php">View VTU &amp; API guide</a>
-                            <a class="btn ghost" href="/web/Register.php">Create account</a>
+                            <?php if ($pg_dash !== ''): ?>
+                                <a class="btn ghost" href="<?php echo bc_landing_e($pg_dash); ?>">Dashboard</a>
+                            <?php else: ?>
+                                <a class="btn ghost" href="/web/Register.php">Create account</a>
+                            <?php endif; ?>
                         </div>
                         <div class="bz-trust">
                             <span>Payment Links &amp; Invoices</span>

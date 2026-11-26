@@ -26,7 +26,18 @@ if (in_array($purchase_method, $purchase_method_array)) {
 
     $data_type_array = array("datacard", "rechargecard");
     if (in_array($type, $data_type_array)) {
-        if (!empty(userBalance(1)) && is_numeric(userBalance(1)) && (userBalance(1) > 0)) {
+        $__pin_enforced = in_array($purchase_method, array("WEB", "APP")) || !empty($GLOBALS['pin_required_for_api_purchase']);
+        $__pin_input = ($purchase_method === "WEB") ? $_POST : ($get_api_post_info ?? array());
+        if ($__pin_enforced && function_exists('requireTransactionPin') && !requireTransactionPin($get_vendor_details ?? array(), $get_logged_user_details, $__pin_input, $__pin_error)) {
+            $json_response_array = array("status" => "failed", "code" => "pin_required", "desc" => $__pin_error);
+            $json_response_encode = json_encode($json_response_array, true);
+        } elseif ($get_logged_user_details["status"] != 1 || !empty($get_logged_user_details["is_blocked"])) {
+            $json_response_array = array("status" => "failed", "desc" => "Your account is currently suspended. Please contact support.");
+            $json_response_encode = json_encode($json_response_array, true);
+        } elseif (!ctype_digit((string)$qty_number) || (int)$qty_number < 1) {
+            $json_response_array = array("status" => "failed", "desc" => "Quantity must be a positive whole number.");
+            $json_response_encode = json_encode($json_response_array, true);
+        } elseif (!empty(userBalance(1)) && is_numeric(userBalance(1)) && (userBalance(1) > 0)) {
             if (!empty($isp) && !empty($qty_number) && is_numeric($qty_number) && ($qty_number >= 1) && !empty($type) && !empty($quantity)) {
 
                 $data_type_table_name_arrays = array("datacard" => "sas_datacard_status", "rechargecard" => "sas_rechargecard_status");

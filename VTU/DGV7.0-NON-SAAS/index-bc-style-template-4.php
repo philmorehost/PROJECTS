@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/func/bc-public-app-brand.php';
 // Initialize variables to be used in the template
 // §46: default to this site's own host; the vendor's saved Site Name overwrites it below.
 $site_title       = (string)($_SERVER['HTTP_HOST'] ?? '');
@@ -282,7 +283,8 @@ if (sscanf($t4_primary, '#%02x%02x%02x', $r4, $g4, $b4) === 3 && strtolower($t4_
                 <li><a href="/">Home</a></li>
                 <li><a href="/web/Pricing.php">Pricing</a></li>
                 <li><a href="/web/APIDocs.php">Developers</a></li>
-                <li><a href="/web/Login.php" class="nav-cta">Log In</a></li>
+                <?php $t4_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
+                <li><a href="<?php echo htmlspecialchars($t4_dash !== '' ? $t4_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t4_dash !== '' ? 'Dashboard' : 'Log In'; ?></a></li>
             </ul>
         </div>
     </header>
@@ -293,7 +295,11 @@ if (sscanf($t4_primary, '#%02x%02x%02x', $r4, $g4, $b4) === 3 && strtolower($t4_
                 <h1>A cleaner way to handle everyday utility bills.</h1>
                 <p>Buy discounted data plans, recharge airtime, clear electricity tokens, and manage cable subscriptions on an incredibly simple, robust, high-performance platform.</p>
                 <div class="btn-group">
-                    <a href="/web/Register.php" class="btn btn-primary">Start Free <i class="fas fa-arrow-right"></i></a>
+                    <?php if ($t4_dash !== ''): ?>
+                        <a href="<?php echo htmlspecialchars($t4_dash); ?>" class="btn btn-primary">Dashboard <i class="fas fa-arrow-right"></i></a>
+                    <?php else: ?>
+                        <a href="/web/Register.php" class="btn btn-primary">Start Free <i class="fas fa-arrow-right"></i></a>
+                    <?php endif; ?>
                     <?php if(!empty($apk_download_url)): ?>
                     <a href="<?php echo htmlspecialchars($apk_download_url); ?>" class="btn btn-secondary"><i class="fab fa-android"></i> Android Client</a>
                     <?php endif; ?>

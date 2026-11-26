@@ -1,4 +1,22 @@
 <?php
+function bc_public_dashboard_url() {
+    if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        $compat = __DIR__ . '/bc-secure-session.php';
+        if (is_file($compat)) {
+            require_once $compat;
+            if (function_exists('bc_secure_session_start')) {
+                @bc_secure_session_start();
+            }
+        }
+    }
+    if (!empty($_SESSION['admin_session'])) {
+        return '/bc-admin/Dashboard.php';
+    }
+    if (!empty($_SESSION['user_session'])) {
+        return '/web/Dashboard.php';
+    }
+    return '';
+}
 function bc_public_short_brand($name) {
     $words=preg_split('/[\s\p{Z}]+/u',trim((string)$name),-1,PREG_SPLIT_NO_EMPTY);
     return is_array($words)&&$words?strip_tags($words[0]):'Platform';

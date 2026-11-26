@@ -27,7 +27,7 @@ if ($select_vendor_table) {
     $get_logged_user_details = mysqli_fetch_array($get_user_query);
 
     if (mysqli_num_rows($get_user_query) == 1) {
-        if ($get_logged_user_details["status"] == 1) {
+        if ((int)($get_logged_user_details["status"] ?? 0) === 1 && empty($get_logged_user_details["is_blocked"])) {
 
             $sender_ids = [];
             $q = mysqli_query($connection_server, "SELECT sender_id, status FROM sas_bulk_sms_sender_id WHERE vendor_id='" . $get_logged_user_details["vendor_id"] . "' AND username='" . $get_logged_user_details["username"] . "'");

@@ -30,6 +30,7 @@ if (json_last_error() === JSON_ERROR_NONE) {
             in_array($education_type, $education_type_array) && 
             !empty($education_qty)
         ) {
+            bc_app_backend_preauth_guard($select_vendor_table, $password, $username);
             $checkuser = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND  (username = '" . $username . "' OR email='" . $username . "')");
             if (mysqli_num_rows($checkuser) == 1) {
                 $checkuser_pass = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND (username = '" . $username . "' OR email='" . $username . "') AND password = '" . $password . "'");

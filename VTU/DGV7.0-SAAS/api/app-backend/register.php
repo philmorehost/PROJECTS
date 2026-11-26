@@ -20,10 +20,20 @@ if (json_last_error() === JSON_ERROR_NONE) {
         $email = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["email"])));
         $address = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["address"])));
         $password = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["encoded-passkey"])));
-        $referral = mysqli_real_escape_string($connection_server, trim(strip_tags($decode_post_request["referral"])));
+        $referral_raw = trim((string)($decode_post_request["referral"] ?? ''));
+        $referral = mysqli_real_escape_string($connection_server, trim(strip_tags($referral_raw)));
 
         $status_update = "failed";
         $status_msg = "Unknown Error";
+
+        if (function_exists('bc_registration_enabled') && !bc_registration_enabled($select_vendor_table["id"])) {
+            echo json_encode(array(
+                "json-status" => "success",
+                "status" => "failed",
+                "status-msg" => "Registration is currently disabled."
+            ));
+            exit;
+        }
 
         if (
             !empty($firstname) &&
@@ -36,7 +46,8 @@ if (json_last_error() === JSON_ERROR_NONE) {
             !empty($email) &&
             filter_var($email, FILTER_VALIDATE_EMAIL) &&
             !empty($address) &&
-            !empty($password)
+            !empty($password) &&
+            preg_match('/^[a-f0-9]{32}$/i', $password)
         ) {
             // Legacy endpoint: these old clients have no way to submit an emailed code, so when
             // email verification is on the only safe answer is to refuse and point at the update.
@@ -56,17 +67,24 @@ if (json_last_error() === JSON_ERROR_NONE) {
             if (mysqli_num_rows($checkuser) == 0) {
                 $proceed_register = false;
                 $refined_referral = "";
-                if (!empty($referral)) {
-                    $check_referral_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE  vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . base64_decode($referral) . "'");
-                    if (mysqli_num_rows($check_referral_user) == 1) {
-                        $proceed_register = true;
-                        $get_referral_details = mysqli_fetch_array($check_referral_user);
-                            
-                        $refined_referral = $get_referral_details["id"];
-                    } elseif (mysqli_num_rows($check_referral_user) == 0) {
+                if (!empty($referral_raw)) {
+                    $decoded_ref = base64_decode($referral_raw, true);
+                    $clean_ref = ($decoded_ref !== false) ? trim(strip_tags($decoded_ref)) : '';
+                    if ($clean_ref === '') {
                         $status_msg = "Invalid Referral Code";
-                    } elseif (mysqli_num_rows($check_referral_user) > 1) {
-                        $status_msg = "Multiple Referral Records, Contact Admin";
+                    } else {
+                        $ref_esc = mysqli_real_escape_string($connection_server, $clean_ref);
+                        $check_referral_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id = '" . $select_vendor_table["id"] . "' AND username = '" . $ref_esc . "'");
+                        if ($check_referral_user && mysqli_num_rows($check_referral_user) == 1) {
+                            $proceed_register = true;
+                            $get_referral_details = mysqli_fetch_array($check_referral_user);
+
+                            $refined_referral = $get_referral_details["id"];
+                        } elseif (!$check_referral_user || mysqli_num_rows($check_referral_user) == 0) {
+                            $status_msg = "Invalid Referral Code";
+                        } elseif (mysqli_num_rows($check_referral_user) > 1) {
+                            $status_msg = "Multiple Referral Records, Contact Admin";
+                        }
                     }
                 } else {
                     $proceed_register = true;

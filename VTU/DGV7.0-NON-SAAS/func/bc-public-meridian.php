@@ -555,12 +555,17 @@ if (!function_exists('bc_meridian_header_and_menu')) {
                         <a href="<?php echo bc_meridian_e($ni['href']); ?>"<?php echo $ni['active'] ? ' class="is-active" aria-current="page"' : ''; ?>><?php echo bc_meridian_e($ni['label']); ?></a>
                     <?php endforeach; ?>
                 </nav>
+                <?php $mer_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
                 <div class="nav-r">
-                    <a class="btn ghost" href="/web/Login.php">Log in</a>
-                    <?php if (!empty($ctx['app_url'])): ?>
-                        <button class="btn primary get" type="button" data-open-get="1" id="navGet">Get the app</button>
+                    <?php if ($mer_dash !== ''): ?>
+                        <a class="btn primary get" href="<?php echo bc_meridian_e($mer_dash); ?>" id="navGet">Dashboard</a>
                     <?php else: ?>
-                        <a class="btn primary get" href="/web/Register.php" id="navGet">Get started</a>
+                        <a class="btn ghost" href="/web/Login.php">Log in</a>
+                        <?php if (!empty($ctx['app_url'])): ?>
+                            <button class="btn primary get" type="button" data-open-get="1" id="navGet">Get the app</button>
+                        <?php else: ?>
+                            <a class="btn primary get" href="/web/Register.php" id="navGet">Get started</a>
+                        <?php endif; ?>
                     <?php endif; ?>
                     <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sheet">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h16M4 16h16"/></svg>
@@ -583,8 +588,12 @@ if (!function_exists('bc_meridian_header_and_menu')) {
                     <?php endforeach; ?>
                 </div>
                 <div class="row">
-                    <a class="btn ghost" href="/web/Login.php" style="flex:1">Log in</a>
-                    <a class="btn primary" href="/web/Register.php" style="flex:1">Create account</a>
+                    <?php if ($mer_dash !== ''): ?>
+                        <a class="btn primary" href="<?php echo bc_meridian_e($mer_dash); ?>" style="flex:1">Dashboard</a>
+                    <?php else: ?>
+                        <a class="btn ghost" href="/web/Login.php" style="flex:1">Log in</a>
+                        <a class="btn primary" href="/web/Register.php" style="flex:1">Create account</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -670,8 +679,12 @@ if (!function_exists('bc_meridian_footer')) {
                         <details class="fg" open>
                             <summary><h4>Account &amp; legal</h4></summary>
                             <nav class="fl" aria-label="Account and legal">
-                                <a href="/web/Register.php">Create account</a>
-                                <a href="/web/Login.php">Log in</a>
+                                <?php if (!empty($mer_dash)): ?>
+                                    <a href="<?php echo bc_meridian_e($mer_dash); ?>">Dashboard</a>
+                                <?php else: ?>
+                                    <a href="/web/Register.php">Create account</a>
+                                    <a href="/web/Login.php">Log in</a>
+                                <?php endif; ?>
                                 <a href="/Privacy.php">Privacy policy</a>
                                 <a href="/Terms.php">Terms of service</a>
                                 <a href="/CookiePolicy.php">Cookie policy</a>

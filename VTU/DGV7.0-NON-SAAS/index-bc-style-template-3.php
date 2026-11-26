@@ -367,7 +367,8 @@ if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
                 <li><a href="/ReferAndEarn.php">Refer &amp; Earn</a></li>
                 <li><a href="/web/Pricing.php">Pricing</a></li>
                 <li><a href="/web/APIDocs.php">Developer API</a></li>
-                <li><a href="/web/Login.php" class="nav-cta">Access Node</a></li>
+                <?php $t3_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
+                <li><a href="<?php echo htmlspecialchars($t3_dash !== '' ? $t3_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t3_dash !== '' ? 'Dashboard' : 'Access Node'; ?></a></li>
             </ul>
         </div>
     </header>
@@ -378,7 +379,11 @@ if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
                 <h1>High-Tech <span>Digital Bills</span> Automation</h1>
                 <p>Welcome to the next-generation digital transaction node. Execute instant Airtime, dynamic data pipelines, high-voltage electricity token generators, and gaming wallets at cyberpunk speed.</p>
                 <div class="btn-group">
-                    <a href="/web/Register.php" class="btn btn-primary">Initialize Node <i class="fas fa-terminal"></i></a>
+                    <?php if ($t3_dash !== ''): ?>
+                        <a href="<?php echo htmlspecialchars($t3_dash); ?>" class="btn btn-primary">Dashboard <i class="fas fa-terminal"></i></a>
+                    <?php else: ?>
+                        <a href="/web/Register.php" class="btn btn-primary">Initialize Node <i class="fas fa-terminal"></i></a>
+                    <?php endif; ?>
                     <?php if(!empty($apk_download_url)): ?>
                     <a href="<?php echo htmlspecialchars($apk_download_url); ?>" class="btn btn-secondary"><i class="fab fa-android"></i> Get Android Client</a>
                     <?php endif; ?>
@@ -430,8 +435,12 @@ if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
             <div class="footer-col">
                 <h4>System Links</h4>
                 <ul>
-                    <li><a href="/web/Register.php">Register Node</a></li>
-                    <li><a href="/web/Login.php">Auth Terminal</a></li>
+                    <?php if (!empty($t3_dash)): ?>
+                        <li><a href="<?php echo htmlspecialchars($t3_dash); ?>">Dashboard</a></li>
+                    <?php else: ?>
+                        <li><a href="/web/Register.php">Register Node</a></li>
+                        <li><a href="/web/Login.php">Auth Terminal</a></li>
+                    <?php endif; ?>
                     <li><a href="/web/Pricing.php">Exchange Pricing</a></li>
                 </ul>
             </div>

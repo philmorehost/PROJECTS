@@ -461,9 +461,14 @@ if (!function_exists('bc_plate_stat')) {
             <a href="#cards">Cards</a>
             <a href="#bills">Bills</a>
         </nav>
+        <?php $plate_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
         <div class="pc-nav">
-            <a class="pc-cta pc-cta--ghost" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Login.php">Sign in</a>
-            <a class="pc-cta" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Get started</a>
+            <?php if ($plate_dash !== ''): ?>
+                <a class="pc-cta" href="<?php echo htmlspecialchars(($web_http_host ?? '') . $plate_dash); ?>">Dashboard</a>
+            <?php else: ?>
+                <a class="pc-cta pc-cta--ghost" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Login.php">Sign in</a>
+                <a class="pc-cta" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Get started</a>
+            <?php endif; ?>
         </div>
     </div>
 </header>
@@ -478,7 +483,11 @@ if (!function_exists('bc_plate_stat')) {
             before you confirm — not after the money has left.
         </p>
         <div class="pc-hero__actions">
-            <a class="pc-cta" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Open an account</a>
+            <?php if ($plate_dash !== ''): ?>
+                <a class="pc-cta" href="<?php echo htmlspecialchars(($web_http_host ?? '') . $plate_dash); ?>">Dashboard</a>
+            <?php else: ?>
+                <a class="pc-cta" href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Open an account</a>
+            <?php endif; ?>
             <a class="pc-cta pc-cta--ghost" href="<?php echo $app_link; ?>"><?php echo bc_plate_icon('sim', 16); ?> Download app</a>
         </div>
 
@@ -804,8 +813,12 @@ if (!function_exists('bc_plate_stat')) {
             </div>
             <div>
                 <h4>Account</h4>
-                <a href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Login.php">Sign in</a>
-                <a href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Open an account</a>
+                <?php if (!empty($plate_dash)): ?>
+                    <a href="<?php echo htmlspecialchars(($web_http_host ?? '') . $plate_dash); ?>">Dashboard</a>
+                <?php else: ?>
+                    <a href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Login.php">Sign in</a>
+                    <a href="<?php echo htmlspecialchars($web_http_host ?? ''); ?>/web/Register.php">Open an account</a>
+                <?php endif; ?>
                 <a href="#tuition">Tuition</a>
             </div>
         </div>

@@ -29,14 +29,34 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
         status.textContent = 'Captured (' + Math.ceil(blob.size / 1024) + ' KB). Review, retake if needed, then submit for review.';
     };
     const fail = error => { clear(); status.textContent = (error && error.message ? error.message + ' ' : '') + 'Use a supported camera-enabled browser over HTTPS. Gallery uploads are not accepted here.'; };
+    const openStream = async () => {
+        const attempts = [
+            {video:{facingMode:{ideal:'user'},width:{ideal:640,max:960},height:{ideal:480,max:960},frameRate:{ideal:15,max:20}},audio:moving},
+            {video:{facingMode:{ideal:'user'}},audio:moving},
+            {video:true,audio:moving}
+        ];
+        let lastErr;
+        for (let i = 0; i < attempts.length; i++) {
+            try {
+                return await navigator.mediaDevices.getUserMedia(attempts[i]);
+            } catch (err) {
+                lastErr = err;
+                const msg = (err && err.message) ? String(err.message) : '';
+                if ((err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) || /permission|denied/i.test(msg)) {
+                    throw err;
+                }
+            }
+        }
+        throw lastErr;
+    };
     start.addEventListener('click', async () => {
         clear(); const epoch = generation; busy = true; start.hidden = true;
         try {
             if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('Live camera is unavailable.');
             if (moving && !window.MediaRecorder) throw new Error('Live recording is unsupported.');
-            const s = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640,max:960},height:{ideal:480,max:960},frameRate:{ideal:15,max:20}},audio:moving});
+            const s = await openStream();
             if (epoch !== generation) { s.getTracks().forEach(t => t.stop()); return; }
-            stream = s; preview.autoplay = true; preview.muted = true; preview.srcObject = s; preview.hidden = false; await preview.play();
+            stream = s; preview.autoplay = true; preview.muted = true; preview.playsInline = true; preview.setAttribute('playsinline', ''); preview.srcObject = s; preview.hidden = false; await preview.play();
             if (epoch !== generation) return;
             reset.hidden = false;
             if (!moving) { shot.hidden = false; status.textContent = 'Look at the camera and take your photo.'; return; }
@@ -75,6 +95,19 @@ document.querySelectorAll('[data-live-capture]').forEach(box => {
     box.closest('form')?.addEventListener('submit', e => {
         if (busy) { e.preventDefault(); status.textContent = 'Finish or cancel the camera capture before submitting.'; return; }
         const form = box.closest('form');
+        const requiredInputs = form ? Array.from(form.querySelectorAll('input[type="file"][data-kyc-required="1"]')) : [];
+        if (requiredInputs.length) {
+            const missing = requiredInputs.filter(inp => !inp.files || !inp.files.length);
+            if (missing.length) {
+                e.preventDefault();
+                if (missing.includes(input)) {
+                    status.textContent = moving ? 'Record your live video before submitting. All activated checks are compulsory.' : 'Take your live photo before submitting. All activated checks are compulsory.';
+                } else {
+                    status.textContent = 'Please complete all required checks (documents, live selfie, and live video where activated) before submitting.';
+                }
+                return;
+            }
+        }
         const inputs = form ? Array.from(form.querySelectorAll('input[type="file"]')) : [];
         if (inputs.length && inputs.every(inp => !inp.files || !inp.files.length)) {
             e.preventDefault();

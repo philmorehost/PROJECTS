@@ -435,7 +435,7 @@ if (!function_exists('bc_fintech_marketing_live')) {
      * Everything fails closed: an unknown service, a missing matrix row, a zero tenant or a null
      * tier all come back false. That matters because the card copy invites a purchase.
      */
-    function bc_fintech_marketing_live($vendor_id, $tier, $service, array $catalogue = null) {
+    function bc_fintech_marketing_live($vendor_id, $tier, $service, ?array $catalogue = null) {
         $vendor_id = (int)$vendor_id;
         if ($vendor_id <= 0) return false;
 

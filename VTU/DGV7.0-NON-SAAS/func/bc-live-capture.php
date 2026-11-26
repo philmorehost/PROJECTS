@@ -2,10 +2,13 @@
 require_once __DIR__.'/bc-video-evidence.php';
 /** Camera UI is not biometric attestation. All evidence still requires independent review. */
 function bc_live_capture_widget($name, $video = false) {
-    $name = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    $raw_name = (string)$name;
+    $required = !empty($GLOBALS['bc_live_capture_required']) || !empty($GLOBALS['bc_live_capture_required_fields'][$raw_name]);
+    $name = htmlspecialchars($raw_name, ENT_QUOTES, 'UTF-8');
     $kind = $video ? 'video' : 'photo';
+    $reqAttr = $required ? ' data-kyc-required="1"' : '';
     echo '<div data-live-capture="'.$kind.'" class="border rounded p-2">'
-        .'<input type="file" hidden tabindex="-1" aria-hidden="true" name="'.$name.'" accept="'.($video?'video/webm,video/mp4':'image/jpeg').'">'
+        .'<input type="file" hidden tabindex="-1" aria-hidden="true" name="'.$name.'"'.$reqAttr.' accept="'.($video?'video/webm,video/mp4':'image/jpeg').'">'
         .'<video autoplay playsinline muted style="width:100%;max-width:480px" hidden></video>'
         .'<img alt="Captured photo preview" style="width:100%;max-width:480px" hidden>'
         .'<button type="button" data-camera-start class="btn btn-outline-primary btn-sm">Start camera'.($video?' & record':'').'</button> '
