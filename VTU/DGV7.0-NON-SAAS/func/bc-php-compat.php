@@ -49,6 +49,15 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline) {
 set_exception_handler(function ($e) {
     $short_file = str_replace(dirname(__DIR__), '', $e->getFile());
     $log_msg = '[DGV-EXCEPTION] ' . $e->getMessage() . ' in ' . $short_file . ':' . $e->getLine();
+    if (stripos($e->getMessage(), 'bc_ai_') !== false) {
+        $ai_file = dirname(__DIR__) . '/func/bc-ai-engine.php';
+        $ai_real = @realpath($ai_file) ?: $ai_file;
+        $ai_size = @is_file($ai_file) ? (int)@filesize($ai_file) : -1;
+        $ai_mtime = @is_file($ai_file) ? gmdate('Y-m-d H:i:s', (int)@filemtime($ai_file)) : 'missing';
+        $op_inv = function_exists('opcache_invalidate') ? (@opcache_invalidate($ai_real, true) ? '1' : '0') : 'na';
+        if (function_exists('opcache_reset')) { @opcache_reset(); }
+        $log_msg .= " [diag ai_file=$ai_real size=$ai_size mtime=$ai_mtime opcache_inv=$op_inv]";
+    }
     error_log($log_msg);
     @file_put_contents(dirname(__DIR__) . '/logs/php_errors.log', '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . $log_msg . "\n", FILE_APPEND | LOCK_EX);
 
