@@ -18,7 +18,6 @@ $trans_count = $stats['count'] ?? 0;
 $potential_savings = $total_spent * 0.15; // Assume 15% savings possible by switching to SME
 
 ?>
-?>
 <?php
 // Plate app shell: one shared chrome for the signed-in console.
 include_once(__DIR__ . "/../func/bc-plate-app.php");

@@ -1419,9 +1419,12 @@ if (!function_exists('bc_kyc_ai_ensure_schema')) {
     /**
      * Lazily ensure KYC/KYB AI columns & audit table exist on live installations.
      */
-    function bc_kyc_ai_ensure_schema($connection_server)
+    function bc_kyc_ai_ensure_schema($connection_server = null)
     {
         static $done = false;
+        if ($connection_server === null && isset($GLOBALS['connection_server'])) {
+            $connection_server = $GLOBALS['connection_server'];
+        }
         if ($done || !$connection_server) return;
         $done = true;
 

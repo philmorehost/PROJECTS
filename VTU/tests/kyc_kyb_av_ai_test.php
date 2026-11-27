@@ -216,9 +216,16 @@ foreach (['SAAS', 'NON-SAAS'] as $ed) {
 
     $chat = file_get_contents($base . '/func/bc-support-chat.php');
     kchk(strpos($chat, 'bc_ai_platform_status') !== false && strpos($chat, 'support_reply') !== false, "$ed support chat connects to central AI engine & billing");
+
+    kchk(strpos($aiSet, 'bc_kyc_ai_ensure_schema($connection_server)') !== false, "$ed AISettings passes connection_server to bc_kyc_ai_ensure_schema()");
+    $secSrc = file_get_contents($base . '/func/bc-security.php');
+    kchk(strpos($secSrc, 'function bc_kyc_ai_ensure_schema($connection_server = null)') !== false, "$ed bc-security.php makes bc_kyc_ai_ensure_schema connection optional");
+    $analyzerSrc = file_get_contents($base . '/func/bc-kyc-ai-analyzer.php');
+    kchk(strpos($analyzerSrc, 'bc_ai_platform_status($connection_server)') === false && strpos($analyzerSrc, '->isAvailable()') === false, "$ed bc-kyc-ai-analyzer.php passes vendor_id to bc_ai_platform_status and avoids undefined isAvailable()");
 }
 $spAi = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/AIManagement.php');
 kchk(strpos($spAi, 'av_scan_cost') !== false && strpos($spAi, 'kyc_report_cost') !== false && strpos($spAi, 'support_reply_cost') !== false && strpos($spAi, 'sas_kyc_av_logs') !== false, 'SAAS spadmin AIManagement configures AV/KYC/Support rates and views AV reports');
+kchk(strpos($spAi, 'bc_kyc_ai_ensure_schema($connection_server)') !== false, 'SAAS spadmin AIManagement passes connection_server to bc_kyc_ai_ensure_schema()');
 
 // Cleanup
 foreach (glob($tmpDir . '/*') ?: [] as $f) @unlink($f);
