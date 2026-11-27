@@ -16,8 +16,10 @@
  * never moves money, and never executes transactions.
  */
 
-if (class_exists('AIEngine')) return; // Guard against double-include
+if (defined('BC_AI_ENGINE_LOADED')) return; // Guard against double-include
+define('BC_AI_ENGINE_LOADED', true);
 
+if (!class_exists('AIEngine', false)) {
 class AIEngine
 {
     // ─── Configuration ────────────────────────────────────────
@@ -728,15 +730,18 @@ PROMPT;
         ];
     }
 }
+}
 
 // Global singleton accessor
-function ai_engine(): AIEngine
-{
-    static $instance = null;
-    if ($instance === null) {
-        $instance = new AIEngine();
+if (!function_exists('ai_engine')) {
+    function ai_engine(): AIEngine
+    {
+        static $instance = null;
+        if ($instance === null) {
+            $instance = new AIEngine();
+        }
+        return $instance;
     }
-    return $instance;
 }
 
 if (!function_exists('bc_ai_is_saas')) {

@@ -231,7 +231,9 @@ foreach (['SAAS', 'NON-SAAS'] as $ed) {
     }
     $aiEngineSrc = file_get_contents($base . '/func/bc-ai-engine.php');
     kchk(strpos($aiEngineSrc, ': string|false') === false, "$ed func/bc-ai-engine.php avoids PHP 8.0-only union return type syntax");
+    kchk(strpos($aiEngineSrc, "if (class_exists('AIEngine')) return;") === false && strpos($aiEngineSrc, 'BC_AI_ENGINE_LOADED') !== false, "$ed func/bc-ai-engine.php guards via BC_AI_ENGINE_LOADED instead of early-bound class_exists()");
 }
+kchk(function_exists('bc_ai_is_saas') && function_exists('bc_ai_get_action_cost') && function_exists('bc_ai_platform_status') && function_exists('bc_ai_charge_vendor_tokens') && function_exists('bc_ai_sentinel_settings'), 'bc-ai-engine.php defines all bc_ai_* procedural helpers on load');
 $spAi = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/AIManagement.php');
 kchk(strpos($spAi, 'av_scan_cost') !== false && strpos($spAi, 'kyc_report_cost') !== false && strpos($spAi, 'support_reply_cost') !== false && strpos($spAi, 'sas_kyc_av_logs') !== false, 'SAAS spadmin AIManagement configures AV/KYC/Support rates and views AV reports');
 kchk(strpos($spAi, 'bc_kyc_ai_ensure_schema($connection_server)') !== false, 'SAAS spadmin AIManagement passes connection_server to bc_kyc_ai_ensure_schema()');
