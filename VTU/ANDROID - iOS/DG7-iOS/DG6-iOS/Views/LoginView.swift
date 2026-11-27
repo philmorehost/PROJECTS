@@ -66,10 +66,12 @@ struct LoginView: View {
                     if passwordResetEnabled {
                         HStack {
                             Spacer()
-                            Button("Forgot Password?") { showForgotPassword = true }
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(brandTheme.ink)
+                            Button(action: { showForgotPassword = true }) {
+                                Text("Forgot Password?")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(brandTheme.ink)
                         }
                     }
                 }
@@ -106,7 +108,7 @@ struct LoginView: View {
     }
 
     func loadSiteFlags() {
-        AppNetworkService.shared.requestObject("site-info.php", params: [:], method: "GET") { result in
+        AppNetworkService.shared.requestObject("site-info.php", params: [:]) { result in
             if case .success(let body) = result,
                let data = body["data"] as? [String: Any],
                let services = data["services"] as? [String: Any] {
