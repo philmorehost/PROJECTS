@@ -22,7 +22,8 @@ $site_data = mysqli_fetch_assoc($site_q);
 $biz_name = $get_logged_admin_details['company_name'] ?? ($site_data['site_title'] ?? 'Our VTU Platform');
 
 $current_bg = $get_logged_admin_details['ai_marketing_bg'] ?? 'midnight';
-$copilot_cost_display = (int)getSuperAdminOption('ai_marketing_copilot_cost', 3);
+$is_saas_mode = bc_ai_is_saas();
+$copilot_cost_display = $is_saas_mode ? bc_ai_get_action_cost('marketing_copilot') : 0;
 
 // ─── AJAX: AI "Help me write" / "Refine content" ─────────────────────────────
 if (isset($_GET['action']) && in_array($_GET['action'], ['ai_write', 'ai_refine'], true)) {
@@ -34,11 +35,10 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['ai_write', 'ai_refine'
     }
 
     $token_bal = (int)($get_logged_admin_details['ai_token_balance'] ?? 0);
-    // Flat platform-wide rate set by the super admin (AI Management > Economics), separate
-    // from ai_per_tx_cost (the general per-vendor chat fee used elsewhere, e.g. AI Assistant).
     $per_tx_cost = $copilot_cost_display;
-    if ($token_bal < $per_tx_cost) {
-        echo json_encode(['status' => 'error', 'message' => "Insufficient AI tokens. The Marketing Copilot costs $per_tx_cost token(s) per use — please top up in AI Suite.", 'copilot_cost' => $per_tx_cost, 'tokens_remaining' => $token_bal]);
+    $plat = bc_ai_platform_status($connection_server, (int)$vendor_id, 'marketing_copilot');
+    if (empty($plat['available'])) {
+        echo json_encode(['status' => 'error', 'message' => (string)$plat['reason'], 'copilot_cost' => $per_tx_cost, 'tokens_remaining' => $token_bal]);
         exit;
     }
 
@@ -83,21 +83,23 @@ $safe_input";
 
     if ($result['status'] === 'success') {
         $generated = trim($result['response']);
-        $tokens = strlen($prompt . $generated) / 4;
-        $esc_res = mysqli_real_escape_string($connection_server, $generated);
-        $esc_label = mysqli_real_escape_string($connection_server, ($action === 'ai_write' ? 'Marketing Write' : 'Marketing Refine') . ': ' . substr($safe_input, 0, 150));
-        mysqli_query($connection_server, "INSERT INTO sas_ai_transactions (vendor_id, username, prompt, response, tokens_burned, status, duration_ms) VALUES ('$vendor_id', 'admin_{$get_logged_admin_details['email']}', '$esc_label', '$esc_res', '$tokens', 'success', '$duration')");
-
-        // Atomic debit: subtract only if balance is sufficient to prevent race-condition double-spend
-        $deduct_result = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $per_tx_cost WHERE id='$vendor_id' AND ai_token_balance >= $per_tx_cost");
-        if (!$deduct_result || mysqli_affected_rows($connection_server) === 0) {
-            // Insufficient balance - refund the transaction log
-            mysqli_query($connection_server, "UPDATE sas_ai_transactions SET status='failed' WHERE vendor_id='$vendor_id' AND prompt='$esc_label' ORDER BY id DESC LIMIT 1");
-            $get_logged_admin_details['ai_token_balance'] = 0;
-            echo json_encode(['status' => 'error', 'message' => 'Insufficient AI token balance. Please top up your account.']);
+        $billing = bc_ai_charge_vendor_tokens(
+            $connection_server,
+            (int)$vendor_id,
+            'marketing_copilot',
+            'admin_' . ($get_logged_admin_details['email'] ?? 'admin'),
+            ($action === 'ai_write' ? 'Marketing Write' : 'Marketing Refine') . ': ' . substr($safe_input, 0, 150),
+            substr($generated, 0, 500),
+            (string)$assigned_model,
+            (int)$duration,
+            $per_tx_cost
+        );
+        if (!$billing['ok']) {
+            $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
+            echo json_encode(['status' => 'error', 'message' => $billing['error'] ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
             exit;
         }
-        $get_logged_admin_details['ai_token_balance'] = $token_bal - $per_tx_cost;
+        $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
 
         // Split off a leading "SUBJECT:" line if the model produced one, so the client can
         // route it straight into the subject field instead of leaving it in the body.
@@ -260,7 +262,13 @@ bc_adm_head(($title), array("area" => "admin"));
                         <textarea id="briefInput" class="form-control rounded-4 p-3 bg-light border-0" rows="4" placeholder="e.g. Promote our new 1GB data plan at a discounted weekend rate"></textarea>
                     </div>
                     <button type="button" id="btnGenerate" class="btn btn-primary w-100 rounded-pill py-3 fw-bold">Generate Magic 🪄</button>
-                    <div class="text-center text-muted small mt-2"><i class="bi bi-coin me-1"></i>Copilot costs <strong><?php echo $copilot_cost_display; ?> token<?php echo $copilot_cost_display == 1 ? '' : 's'; ?></strong> per generate or refine</div>
+                    <div class="text-center text-muted small mt-2">
+                        <?php if ($is_saas_mode): ?>
+                            <i class="bi bi-coin me-1"></i>Copilot costs <strong><?php echo $copilot_cost_display; ?> token<?php echo $copilot_cost_display == 1 ? '' : 's'; ?></strong> per generate or refine
+                        <?php else: ?>
+                            <i class="bi bi-key me-1"></i>Connected directly via your configured AI API key
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 

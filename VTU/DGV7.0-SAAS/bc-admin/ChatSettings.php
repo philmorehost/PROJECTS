@@ -86,6 +86,10 @@ bc_adm_head("Chat Settings | " . ($get_all_super_admin_site_details["site_title"
 <?php bc_adm_topbar(array("area" => "admin", "title" => "CHAT SETTINGS", "crumb" => "Home / Chat Settings")); ?>
 
 <section class="section dashboard">
+    <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2 rounded-3 py-2 small">
+        <span><i class="bi bi-cpu-fill me-1"></i><strong>AI Support Settings</strong> have been unified inside the <strong>AI Business Suite</strong> (connected directly to the central AI Engine).</span>
+        <a href="AISettings.php?tab=support" class="btn btn-sm btn-primary rounded-pill px-3">Open in AI Business Suite</a>
+    </div>
     <?php if ($flash): ?>
         <div class="alert alert-<?php echo htmlspecialchars($flash['type']); ?> py-2 small" role="alert">
             <?php echo htmlspecialchars($flash['message']); ?>

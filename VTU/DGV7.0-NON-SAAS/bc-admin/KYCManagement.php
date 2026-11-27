@@ -4,9 +4,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 include("../func/bc-admin-config.php");
 require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'kyc_decision');
-// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner + Notifications
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 $vid = (int)$get_logged_admin_details['id'];
 
@@ -83,6 +84,15 @@ if (isset($_POST['run_kyc_ai_report'])) {
         $analysis = bc_kyc_ai_analyze_all($target_user, $vendor_kyc_checks);
         $analysis['username'] = $target_user['username'] ?? '';
         $store_result = bc_kyc_ai_store_result($connection_server, $uid, $vid, $analysis, false);
+        bc_compliance_notify_event($connection_server, 'user_kyc_ai_screened', [
+            'vendor_id'          => (int)$vid,
+            'user'               => $target_user,
+            'ai_status'          => $store_result['decision']['status'] ?? 'review',
+            'overall_rating'     => (int)($store_result['decision']['overall_rating'] ?? 0),
+            'overall_grade'      => (string)($store_result['decision']['overall_grade'] ?? 'C'),
+            'reason'             => (string)($store_result['decision']['reason'] ?? ''),
+            'notify_admin_email' => false,
+        ]);
         $_SESSION['product_purchase_response'] = 'AI Compliance Report generated. Overall Rating: '
             . (int)($store_result['decision']['overall_rating'] ?? 0) . '/100 ('
             . ($store_result['decision']['overall_grade'] ?? 'C') . ') — '
@@ -149,6 +159,14 @@ if (isset($_POST['kyc_decision'])) {
                 ? ' The user has been emailed.'
                 : ' The email to the user could not be sent.';
         }
+        bc_compliance_notify_event($connection_server, 'user_kyc_decision', [
+            'vendor_id' => (int)$vid,
+            'user_id'   => (int)$uid,
+            'user'      => $owned,
+            'status'    => (int)$decision['status'],
+            'label'     => (string)$decision['label'],
+            'reason'    => (string)$decision['reason'],
+        ]);
         $_SESSION['product_purchase_response'] = $flash;
     }
     header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1)

@@ -61,6 +61,23 @@ if (mysqli_num_rows($check_user) == 1) {
     $is_kyc_compliant = ($user['kyc_status'] == 2);
     $pin_set = !empty($user['security_pin']);
     $kyc_names = [0 => "Unverified", 1 => "Under Review", 2 => "Verified", 3 => "Rejected"];
+    $kyc_enforced = false;
+    $kyc_gate_locked = false;
+    $pending_checks = [];
+    try {
+        if (function_exists('isKYCEnforced')) {
+            $kyc_enforced = (bool)isKYCEnforced((int)$vendor_id);
+        }
+        if (function_exists('bc_kyc_app_confinement_required')) {
+            $kyc_gate_locked = (bool)bc_kyc_app_confinement_required($user);
+        }
+        if (function_exists('bc_kyc_enabled_checks') && function_exists('bc_kyc_checks_pending')) {
+            $enabled_chk = bc_kyc_enabled_checks($connection_server, (int)$vendor_id);
+            $pending_checks = array_values(bc_kyc_checks_pending($user, $enabled_chk));
+        }
+    } catch (Throwable $e) {
+        $kyc_gate_locked = !$is_kyc_compliant && $kyc_enforced;
+    }
 
     echo json_encode([
         "status" => "success",
@@ -82,6 +99,10 @@ if (mysqli_num_rows($check_user) == 1) {
             "kyc_verified" => $is_kyc_compliant ? "Yes" : "No",
             "kyc_status" => (int)$user['kyc_status'],
             "kyc_status_name" => $kyc_names[$user['kyc_status']] ?? "Unknown",
+            "kyc_enforced" => $kyc_enforced,
+            "kyc_gate_locked" => $kyc_gate_locked,
+            "kyc_reject_reason" => (string)($user['kyc_reject_reason'] ?? ''),
+            "pending_checks" => $pending_checks,
             "security_pin_set" => $pin_set,
             "pin_required" => ((int)($get_vendor['force_security_pin'] ?? 0) === 1),
             "ai_status" => (int)$get_vendor['ai_status'],

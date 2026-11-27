@@ -94,25 +94,50 @@ class AiSupportSentinel {
 function ai_sentinel_evaluate($username, $vendor_id, $api_type, $amount) {
     global $connection_server;
 
-    // 1. Check spending anomaly
     require_once(__DIR__ . "/bc-security.php");
+    require_once(__DIR__ . "/bc-ai-engine.php");
+    $sentinel_cfg = function_exists('bc_ai_sentinel_settings')
+        ? bc_ai_sentinel_settings($connection_server, (int)$vendor_id)
+        : ['sentinel_auto_block' => '0', 'sentinel_block_threshold' => '20', 'sentinel_anomaly_alert' => '1'];
+    $auto_block = (($sentinel_cfg['sentinel_auto_block'] ?? '0') === '1');
+    $threshold  = max(5, min(60, (int)($sentinel_cfg['sentinel_block_threshold'] ?? 20)));
+
+    // 1. Check spending anomaly
     if (bc_check_spending_anomaly($username, $amount)) {
+        if (function_exists('bc_log_security_event')) {
+            bc_log_security_event('SENTINEL_FLAGGED', 'spending_anomaly_' . $api_type, ((int)$vendor_id) . ':' . $username, 'Anomalous amount NGN ' . number_format((float)$amount, 2));
+        }
+        if ($auto_block && function_exists('bc_ai_sentinel_auto_block')) {
+            bc_ai_sentinel_auto_block($connection_server, (int)$vendor_id, (string)$username, 'Spending anomaly on ' . $api_type . ' (NGN ' . number_format((float)$amount, 2) . ')', 0);
+        }
         return 'BLOCK';
     }
 
     // 2. Check bulk-submission velocity — many numbers queued in a short window
     // is a stronger fraud signal than a single purchase of the same size.
     if (bc_check_bulk_velocity_anomaly($username, $vendor_id)) {
+        if (function_exists('bc_log_security_event')) {
+            bc_log_security_event('SENTINEL_FLAGGED', 'bulk_velocity_' . $api_type, ((int)$vendor_id) . ':' . $username, 'High-velocity bulk queue >100 items in 15m');
+        }
         return 'FLAG_FOR_APPROVAL';
     }
 
     // 3. Check Trust Score
     $score = bc_calculate_user_trust_score($username);
-    if ($score < 20) {
+    if ($score < $threshold) {
+        if (function_exists('bc_log_security_event')) {
+            bc_log_security_event('SENTINEL_FLAGGED', 'low_trust_score_' . $api_type, ((int)$vendor_id) . ':' . $username, 'Trust score ' . $score . ' < threshold ' . $threshold);
+        }
+        if ($auto_block && function_exists('bc_ai_sentinel_auto_block')) {
+            bc_ai_sentinel_auto_block($connection_server, (int)$vendor_id, (string)$username, 'Trust score ' . $score . ' fell below threshold ' . $threshold, $score);
+        }
         return 'BLOCK';
     }
 
-    if ($score < 40) {
+    if ($score < ($threshold + 20)) {
+        if (function_exists('bc_log_security_event')) {
+            bc_log_security_event('SENTINEL_FLAGGED', 'review_trust_score_' . $api_type, ((int)$vendor_id) . ':' . $username, 'Trust score ' . $score . ' flagged for review');
+        }
         return 'FLAG_FOR_APPROVAL';
     }
 

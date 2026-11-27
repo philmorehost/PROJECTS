@@ -638,14 +638,33 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
         // Replacement evidence must be reviewed again; never retain an old approval.
         mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_status=0,kyc_reject_reason=NULL WHERE id='$vid'");
         $new_status = function_exists('bc_vendor_kyc_refresh_status') ? bc_vendor_kyc_refresh_status($vid) : 0;
+        include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+        include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
+        $v_ai_report = function_exists('bc_vendor_kyc_ai_analyze_and_store') ? bc_vendor_kyc_ai_analyze_and_store($connection_server, (int)$vid) : [];
+        $v_ai_txt = (!empty($v_ai_report['overall_rating']))
+            ? ('AI Screening: ' . (int)$v_ai_report['overall_rating'] . '/100 (Grade ' . ($v_ai_report['overall_grade'] ?? 'C') . ').')
+            : '';
+
         if ($new_status === 1) {
             $_SESSION["product_purchase_response"] = "KYC documents submitted. Every required item is provided — your compliance file is now waiting for super-admin review.";
+            bc_compliance_notify_event($connection_server, 'vendor_kyc_submitted', [
+                'vendor_id'       => (int)$vid,
+                'complete'        => true,
+                'ai_summary_text' => $v_ai_txt,
+            ]);
         } else {
             $fresh = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vid' LIMIT 1")) ?: [];
             $pending = function_exists('bc_vendor_kyc_pending') ? bc_vendor_kyc_pending($fresh) : [];
             $labels = ['bvn' => 'BVN', 'nin' => 'NIN', 'govt_id' => 'Government ID', 'liveliness_picture' => 'Live photo', 'liveliness_video' => 'Liveliness video', 'proof_of_address' => 'Proof of address'];
             $names = array_map(function ($c) use ($labels) { return $labels[$c] ?? $c; }, $pending);
-            $_SESSION["product_purchase_response"] = "Documents saved. Still needed before review: " . implode(', ', $names) . ".";
+            $pending_txt = implode(', ', $names);
+            $_SESSION["product_purchase_response"] = "Documents saved. Still needed before review: " . $pending_txt . ".";
+            bc_compliance_notify_event($connection_server, 'vendor_kyc_submitted', [
+                'vendor_id'       => (int)$vid,
+                'complete'        => false,
+                'pending_text'    => $pending_txt,
+                'ai_summary_text' => $v_ai_txt,
+            ]);
         }
         if (!empty($upload_errors)) {
             $_SESSION["product_purchase_response"] .= " Note: " . implode(' ', $upload_errors);
@@ -1490,6 +1509,30 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
     <?php endif; ?>
 
 
+    <?php $bc_kyc_gate = !empty($GLOBALS['bc_vendor_kyc_locked']); $bc_vkyc_st = (int)($get_logged_admin_details['kyc_status'] ?? 0); ?>
+    <?php if ($bc_kyc_gate): ?>
+    <div class="px-3 pt-3">
+      <div class="card border-0 rounded-4 shadow-sm mb-3" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);color:#fff;">
+        <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;background:rgba(255,255,255,.15);">
+              <i class="bi <?php echo $bc_vkyc_st === 1 ? 'bi-hourglass-split' : 'bi-shield-lock-fill'; ?> fs-3"></i>
+            </div>
+            <div>
+              <div class="text-uppercase fw-bold" style="font-size:.7rem;letter-spacing:.08em;opacity:.8;">Platform Compliance Lock</div>
+              <h5 class="fw-bold mb-1 text-white"><?php echo $bc_vkyc_st === 1 ? 'Vendor Compliance Under Super Admin Review' : 'Complete Vendor KYC / KYB to Unlock Admin Console'; ?></h5>
+              <p class="mb-0 small" style="opacity:.88;"><?php echo $bc_vkyc_st === 1 ? 'All admin modules remain locked until Super Admin approves your compliance file.' : 'Submit your required identity and business documents below. Full dashboard access unlocks automatically upon approval.'; ?></p>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <a href="AccountSettings.php#tab-kyc" class="btn btn-light btn-sm rounded-pill fw-bold px-3"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Status</a>
+            <a href="/admin-logout.php" class="btn btn-outline-light btn-sm rounded-pill fw-bold px-3"><i class="bi bi-box-arrow-right me-1"></i>Sign Out</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <section class="section dashboard pk-settings">
       <div class="row g-4">
         <!-- Sidebar Navigation for Settings -->
@@ -1497,9 +1540,9 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
             <div class="card shadow-sm border-0 rounded-4 sticky-top" style="top: 100px; z-index: 10;">
                 <div class="card-body p-3">
                     <div class="nav nav-pills pk-settings-nav" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-                        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding & Assets</button>
+                        <button class="nav-link <?php echo $bc_kyc_gate ? '' : 'active'; ?>" data-bs-toggle="pill" data-bs-target="#tab-branding"><i class="bi bi-palette me-2"></i> Branding & Assets</button>
                         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-profile"><i class="bi bi-person-badge me-2"></i> Profile Info</button>
-                        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-kyc"><i class="bi bi-shield-check me-2"></i> Vendor KYC</button>
+                        <button class="nav-link <?php echo $bc_kyc_gate ? 'active' : ''; ?>" data-bs-toggle="pill" data-bs-target="#tab-kyc"><i class="bi bi-shield-check me-2"></i> Vendor KYC</button>
                         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-license"><i class="bi bi-award me-2"></i> License Info</button>
                         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-finance"><i class="bi bi-bank me-2"></i> Financial Settings</button>
                         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-security"><i class="bi bi-lock me-2"></i> Security & Keys</button>
@@ -1525,7 +1568,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
             <div class="tab-content" id="v-pills-tabContent">
 
                 <!-- Branding Tab -->
-                <div class="tab-pane fade show active" id="tab-branding">
+                <div class="tab-pane fade <?php echo $bc_kyc_gate ? '' : 'show active'; ?>" id="tab-branding">
                     <div class="card shadow-sm border-0 rounded-4 mb-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Branding & Theme</h5></div>
                         <div class="card-body p-4">
@@ -1758,7 +1801,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                 </div>
 
                 <!-- KYC Tab -->
-                <div class="tab-pane fade" id="tab-kyc">
+                <div class="tab-pane fade <?php echo !empty($bc_kyc_gate) ? 'show active' : ''; ?>" id="tab-kyc">
                     <div class="card shadow-sm border-0 rounded-4">
                         <div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0">Monnify KYC</h5></div>
                         <div class="card-body p-4">
@@ -1849,7 +1892,7 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                 <?php endforeach; ?>
                             </ul>
                             <?php endif; ?>
-                            <form method="post" enctype="multipart/form-data"><?php echo bc_csrf_field(); ?>
+                            <form method="post" enctype="multipart/form-data" data-kyc-wizard="vendor-kyc"><?php echo bc_csrf_field(); ?>
                                 <?php
                                     $v_req_govt_id = in_array('govt_id', $vkyc_pending, true);
                                     $v_req_selfie  = in_array('liveliness_picture', $vkyc_pending, true);
@@ -1860,29 +1903,28 @@ bc_adm_head("Account Settings | " . ($get_all_super_admin_site_details["site_tit
                                         'liveliness_video' => $v_req_video,
                                     ];
                                 ?>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $v_req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                        <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Live Photo / Selfie (camera only, max 512 KB)<?php echo $v_req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                        <?php bc_live_capture_widget('selfie'); ?>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)<?php echo $v_req_poa ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                        <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_poa ? ' required data-kyc-required="1"' : ''; ?>>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label small fw-bold">Live Video (camera only, max 3 MB)<?php echo $v_req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                        <?php bc_live_capture_widget('liveliness_video', true); ?>
-                                    </div>
+                                <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="govt_id" data-step-label="Government ID">
+                                    <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $v_req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
+                                </div>
+                                <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="selfie" data-step-label="Live Selfie (Auto)">
+                                    <label class="form-label small fw-bold">Live Photo / Selfie (auto-captures when face is clear, max 512 KB)<?php echo $v_req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <?php bc_live_capture_widget('selfie'); ?>
+                                </div>
+                                <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="proof_of_address" data-step-label="Proof of Address">
+                                    <label class="form-label small fw-bold">Proof of Address (photo or PDF, max 8 MB)<?php echo $v_req_poa ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3"<?php echo $v_req_poa ? ' required data-kyc-required="1"' : ''; ?>>
+                                </div>
+                                <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="liveliness_video" data-step-label="Live Video (Say HI)">
+                                    <label class="form-label small fw-bold">Live Video — look at camera and say &ldquo;HI&rdquo; (max 3 MB)<?php echo $v_req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <?php bc_live_capture_widget('liveliness_video', true); ?>
                                 </div>
                                 <div class="mt-3"><label class="form-label">KYB: Business registration / CAC (image or PDF, max 8 MB)</label><input type="file" name="business_registration" accept="image/*,application/pdf" class="form-control"></div>
                                 <div class="mt-3"><label class="form-label">KYB: Beneficial ownership document (image or PDF, max 8 MB)</label><input type="file" name="beneficial_ownership" accept="image/*,application/pdf" class="form-control"></div>
                                 <p class="small text-muted">Business evidence is reviewed by platform compliance. Uploading does not prove registration or grant financial product eligibility.</p>
                                 <button name="upload-vendor-kyc-doc" class="btn btn-outline-primary px-5 rounded-pill fw-bold mt-3">Upload Documents</button>
                             </form>
+                            <script src="../asset/bc-kyc-wizard.js" defer></script>
                             <?php if ($vkyc_docs): ?>
                             <div class="table-responsive mt-4">
                                 <table class="table table-sm align-middle">

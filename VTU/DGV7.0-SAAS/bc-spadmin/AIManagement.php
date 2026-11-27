@@ -3,6 +3,11 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-spadmin-config.php");
 include_once("../func/bc-ai-engine.php");
+include_once("../func/bc-kyc-av-scanner.php");
+include_once("../func/bc-security.php");
+
+if (function_exists('bc_kyc_av_ensure_schema')) bc_kyc_av_ensure_schema($connection_server);
+if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema();
 
 // Force clear cache on load to ensure we see latest settings
 if (isset($_SESSION)) {
@@ -123,31 +128,33 @@ if (isset($_POST['ai_request_action']) && isset($_POST['vendor_id'])) {
 
 // ── Handle: Update AI Pricing ──────────────────────────────
 if (isset($_POST["update-ai-pricing"])) {
-    $price_1k  = bc_sanitize_number($_POST["price_per_1k"] ?? 100);
-    $per_tx    = (int)($_POST["per_tx_cost"] ?? 2);
-    $exec_fee  = (int)($_POST["execution_fee"] ?? 0);
-    $voice_thr = (int)($_POST["voice_threshold"] ?? 100);
-    $token_bonus = (int)($_POST["token_bonus"] ?? 1000);
+    $price_1k     = bc_sanitize_number($_POST["price_per_1k"] ?? 100);
+    $av_cost      = max(0, (int)($_POST["av_scan_cost"] ?? 1));
+    $kyc_rep_cost = max(0, (int)($_POST["kyc_report_cost"] ?? 3));
+    $support_cost = max(0, (int)($_POST["support_reply_cost"] ?? 1));
     $copilot_cost = max(0, (int)($_POST["marketing_copilot_cost"] ?? 3));
+    $token_bonus  = max(0, (int)($_POST["token_bonus"] ?? 1000));
 
     $opts = [
-        'ai_price_per_request' => $per_tx,
-        'ai_execution_fee_tokens' => $exec_fee,
-        'ai_voice_unlock_threshold' => $voice_thr,
-        'ai_default_token_bonus' => $token_bonus
+        'ai_price_per_1k_tokens'    => $price_1k,
+        'ai_av_scan_cost'           => $av_cost,
+        'ai_kyc_report_cost'        => $kyc_rep_cost,
+        'ai_support_reply_cost'     => $support_cost,
+        'ai_price_per_request'      => $support_cost,
+        'ai_default_token_bonus'    => $token_bonus,
+        'ai_marketing_copilot_cost' => $copilot_cost,
     ];
     foreach ($opts as $k => $v) {
-        $esc_k = mysqli_real_escape_string($connection_server, $k);
-        $esc_v = mysqli_real_escape_string($connection_server, $v);
-        mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('$esc_k','$esc_v')");
+        if (function_exists('setSuperAdminOption')) {
+            setSuperAdminOption($k, (string)$v);
+        } else {
+            $esc_k = mysqli_real_escape_string($connection_server, $k);
+            $esc_v = mysqli_real_escape_string($connection_server, (string)$v);
+            mysqli_query($connection_server, "REPLACE INTO sas_super_admin_options (option_name, option_value) VALUES ('$esc_k','$esc_v')");
+        }
     }
-    // Marketing Copilot fee is a flat platform-wide rate read directly via getSuperAdminOption()
-    // by AIMarketing.php/SendMail.php (not copied into every sas_vendors row like the others
-    // above) — setSuperAdminOption() upserts correctly regardless of which sas_super_admin_options
-    // schema variant is live (see its doc comment in bc-func.php).
-    setSuperAdminOption('ai_marketing_copilot_cost', $copilot_cost);
-    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_price_per_1k_tokens='$price_1k', ai_per_tx_cost='$per_tx', ai_voice_fee_tokens='$exec_fee', voice_tx_threshold='$voice_thr'");
-    $_SESSION["response"] = "✅ AI pricing updated for all vendors.";
+    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_price_per_1k_tokens='$price_1k', ai_per_tx_cost='$support_cost'");
+    $_SESSION["response"] = "✅ AI billing rates updated for all SAAS vendors.";
     unset($_SESSION['super_admin_options_cache']);
     header("Location: AIManagement.php"); exit();
 }
@@ -293,8 +300,16 @@ $health_q = mysqli_query($connection_server, "SELECT AVG(duration_ms) as avg_lat
 $health = ($health_q) ? mysqli_fetch_assoc($health_q) : ['avg_lat' => 0, 'total_calls' => 0];
 $avg_latency = ($health && $health['avg_lat'] > 0) ? round($health['avg_lat']) : 450;
 
-$blocked_q = mysqli_query($connection_server, "SELECT COUNT(*) as blocked FROM sas_ai_transactions WHERE status='blocked' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
-$blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? $row_b['blocked'] : 0;
+$blocked_q = @mysqli_query($connection_server, "SELECT COUNT(*) as blocked FROM sas_ai_audit_log WHERE event_type IN ('SENTINEL_FLAGGED','SENTINEL_AUTO_BLOCKED','AV_BLOCKED','PROMPT_BLOCKED') AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$blocked_count = ($blocked_q && $row_b = mysqli_fetch_assoc($blocked_q)) ? (int)$row_b['blocked'] : 0;
+
+$ai_breakdown_q = @mysqli_query($connection_server, "SELECT action_type, COUNT(*) as calls, SUM(tokens_burned) as tokens, SUM(cost_naira) as revenue FROM sas_ai_transactions WHERE MONTH(created_at)=MONTH(NOW()) AND status='success' GROUP BY action_type ORDER BY tokens DESC");
+$av_filter = trim((string)($_GET['av_verdict'] ?? 'all'));
+$av_where = ($av_filter === 'blocked') ? "WHERE l.verdict='blocked'" : (($av_filter === 'clean') ? "WHERE l.verdict='clean'" : "");
+$av_reports_q = @mysqli_query($connection_server, "SELECT l.*, COALESCE(NULLIF(v.company_name,''), v.website_url, CONCAT('Vendor #', l.vendor_id)) as vendor_name FROM sas_kyc_av_logs l LEFT JOIN sas_vendors v ON v.id=l.vendor_id $av_where ORDER BY l.id DESC LIMIT 30");
+$av_stats_q = @mysqli_query($connection_server, "SELECT COUNT(*) as total, SUM(CASE WHEN verdict='blocked' THEN 1 ELSE 0 END) as blocked, SUM(tokens_charged) as tokens FROM sas_kyc_av_logs");
+$av_stats = ($av_stats_q && ($asr = mysqli_fetch_assoc($av_stats_q))) ? $asr : ['total' => 0, 'blocked' => 0, 'tokens' => 0];
+$kyc_reports_q = @mysqli_query($connection_server, "SELECT r.*, COALESCE(NULLIF(v.company_name,''), v.website_url, CONCAT('Vendor #', r.vendor_id)) as vendor_name, u.username FROM sas_kyc_ai_results r LEFT JOIN sas_vendors v ON v.id=r.vendor_id LEFT JOIN sas_users u ON u.id=r.user_id ORDER BY r.id DESC LIMIT 20");
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
@@ -403,28 +418,42 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                     </div>
                     <button type="submit" name="update-vision-config" class="btn btn-info btn-sm w-100 rounded-pill">Update Vision Configuration</button>
                 </form>
-                </form>
             </div>
         </div>
         
         <div class="card border-0 rounded-4 shadow-sm">
-            <div class="card-header bg-white border-0 py-3"><h5 class="fw-bold mb-0"><i class="bi bi-currency-exchange me-2 text-warning"></i>Economics</h5></div>
+            <div class="card-header bg-white border-0 py-3"><h5 class="fw-bold mb-0"><i class="bi bi-currency-exchange me-2 text-warning"></i>SAAS Vendor Billing Rates</h5></div>
             <div class="card-body p-4">
                 <form method="post">
-                    <div class="mb-3"><label class="form-label small fw-bold text-muted">Price per 1k Tokens (₦)</label><input type="number" name="price_per_1k" class="form-control rounded-3" value="<?php echo getSuperAdminOption('ai_price_per_1k_tokens', '100'); ?>" step="0.01"></div>
-                    <div class="mb-3"><label class="form-label small fw-bold text-muted">General Chat Fee (Tokens)</label><input type="number" name="per_tx_cost" class="form-control rounded-3" value="<?php echo getSuperAdminOption('ai_price_per_request', '2'); ?>"></div>
-                    <div class="mb-3"><label class="form-label small fw-bold text-muted">Successful Execution Fee (Tokens)</label><input type="number" name="execution_fee" class="form-control rounded-3" value="<?php echo getSuperAdminOption('ai_execution_fee_tokens', '0'); ?>"></div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Price per 1k Tokens (₦)</label>
+                        <input type="number" name="price_per_1k" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_price_per_1k_tokens', '100')); ?>" step="0.01" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Antivirus AI Scan Fee (Tokens / File)</label>
+                        <input type="number" name="av_scan_cost" min="0" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_av_scan_cost', '1')); ?>">
+                        <div class="form-text x-small">Billed per AI-inspected KYC/KYB upload. Stage-1 local AV always runs free.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">KYC / KYB AI Compliance Report Fee (Tokens)</label>
+                        <input type="number" name="kyc_report_cost" min="0" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_kyc_report_cost', '3')); ?>">
+                        <div class="form-text x-small">Billed when generating a full AI verification report &amp; document ratings.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">AI Support Reply Fee (Tokens / Reply)</label>
+                        <input type="number" name="support_reply_cost" min="0" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_support_reply_cost', getSuperAdminOption('ai_price_per_request', '1'))); ?>">
+                        <div class="form-text x-small">Billed per automatic AI Support Chat response on vendor websites.</div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">Marketing AI Copilot Fee (Tokens)</label>
-                        <input type="number" name="marketing_copilot_cost" min="0" class="form-control rounded-3" value="<?php echo getSuperAdminOption('ai_marketing_copilot_cost', '3'); ?>">
-                        <div class="form-text x-small">Charged per "Help me write" / "Refine content" use on AI Marketing Studio and the Mail Sender composer — a flat platform-wide rate, separate from the General Chat Fee above.</div>
+                        <input type="number" name="marketing_copilot_cost" min="0" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_marketing_copilot_cost', '3')); ?>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold text-muted">Approval Bonus Tokens</label>
-                        <input type="number" name="token_bonus" class="form-control rounded-3" value="<?php echo getSuperAdminOption('ai_default_token_bonus', '1000'); ?>">
+                        <input type="number" name="token_bonus" min="0" class="form-control rounded-3" value="<?php echo htmlspecialchars((string)getSuperAdminOption('ai_default_token_bonus', '1000')); ?>">
                         <div class="form-text x-small">Bonus tokens granted when a vendor AI request is approved.</div>
                     </div>
-                    <button type="submit" name="update-ai-pricing" class="btn btn-primary w-100 rounded-pill fw-bold">Save Economics</button>
+                    <button type="submit" name="update-ai-pricing" class="btn btn-primary w-100 rounded-pill fw-bold">Save Billing Rates</button>
                 </form>
             </div>
         </div>
@@ -505,6 +534,21 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                                 </div>
                             </div>
                         </div>
+                        <h6 class="small fw-bold text-muted text-uppercase mb-2">Monthly Usage &amp; Revenue by AI Feature</h6>
+                        <div class="row g-2 mb-3">
+                            <?php if ($ai_breakdown_q && mysqli_num_rows($ai_breakdown_q) > 0): while($bd = mysqli_fetch_assoc($ai_breakdown_q)): ?>
+                            <div class="col-6 col-md-3">
+                                <div class="p-2 rounded-3 bg-light border">
+                                    <div class="x-small text-uppercase fw-bold text-muted"><?php echo htmlspecialchars(str_replace('_', ' ', (string)$bd['action_type'])); ?></div>
+                                    <div class="fw-bold small"><?php echo number_format((int)$bd['calls']); ?> calls · <?php echo number_format((int)$bd['tokens']); ?> tkns</div>
+                                    <div class="x-small text-success fw-bold">₦<?php echo number_format((float)$bd['revenue'], 2); ?></div>
+                                </div>
+                            </div>
+                            <?php endwhile; else: ?>
+                            <div class="col-12 small text-muted">No feature billing logs recorded yet this month.</div>
+                            <?php endif; ?>
+                        </div>
+
                         <h6 class="small fw-bold text-muted text-uppercase mb-2">Recent Intelligence Logs</h6>
                         <div class="border rounded-3 overflow-hidden">
                             <?php if ($recent_logs_q && mysqli_num_rows($recent_logs_q) > 0): while($log = mysqli_fetch_assoc($recent_logs_q)): ?>
@@ -520,6 +564,84 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                             <?php endwhile; else: ?>
                             <div class="p-3 text-center text-muted small">Awaiting first transactions...</div>
                             <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scanned Antivirus & KYC/KYB Compliance Reports (In-Dashboard View) -->
+            <div class="col-12">
+                <div class="card border-0 rounded-4 shadow-sm">
+                    <div class="card-header bg-white border-0 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0"><i class="bi bi-shield-check me-2 text-success"></i>Antivirus Scan &amp; AI Compliance Reports</h5>
+                            <div class="x-small text-muted">
+                                Total Scans: <strong><?php echo number_format((int)($av_stats['total'] ?? 0)); ?></strong> &middot;
+                                Blocked Threats/Blank: <strong class="text-danger"><?php echo number_format((int)($av_stats['blocked'] ?? 0)); ?></strong> &middot;
+                                AV Tokens Billed: <strong><?php echo number_format((int)($av_stats['tokens'] ?? 0)); ?></strong>
+                            </div>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <a href="AIManagement.php?av_verdict=all" class="btn btn-<?php echo $av_filter==='all'?'dark':'outline-secondary'; ?>">All</a>
+                            <a href="AIManagement.php?av_verdict=blocked" class="btn btn-<?php echo $av_filter==='blocked'?'danger':'outline-danger'; ?>">Blocked</a>
+                            <a href="AIManagement.php?av_verdict=clean" class="btn btn-<?php echo $av_filter==='clean'?'success':'outline-success'; ?>">Clean</a>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        <h6 class="small fw-bold text-muted text-uppercase mb-2">Pre-Upload Antivirus &amp; Blank-File Scan Logs</h6>
+                        <div class="table-responsive mb-4" style="max-height:280px;">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light x-small text-muted text-uppercase">
+                                    <tr><th>Vendor</th><th>Doc / File</th><th>Mode</th><th>Verdict</th><th>Details</th><th class="text-end">Tokens</th></tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($av_reports_q && mysqli_num_rows($av_reports_q) > 0): while($av = mysqli_fetch_assoc($av_reports_q)): ?>
+                                    <tr>
+                                        <td class="small fw-bold"><?php echo htmlspecialchars((string)$av['vendor_name']); ?></td>
+                                        <td class="small">
+                                            <span class="badge bg-light text-dark border"><?php echo htmlspecialchars((string)$av['subject_type'] . ':' . $av['doc_key']); ?></span>
+                                            <div class="x-small text-muted"><?php echo htmlspecialchars((string)$av['filename']); ?></div>
+                                        </td>
+                                        <td><span class="badge bg-info-subtle text-info small"><?php echo htmlspecialchars((string)$av['scan_mode']); ?></span></td>
+                                        <td>
+                                            <span class="badge bg-<?php echo $av['verdict']==='blocked'?'danger':'success'; ?> rounded-pill">
+                                                <?php echo strtoupper((string)$av['verdict']); ?>
+                                            </span>
+                                        </td>
+                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr((string)$av['reason'], 0, 95)); ?></td>
+                                        <td class="text-end small fw-bold"><?php echo (int)$av['tokens_charged']; ?></td>
+                                    </tr>
+                                    <?php endwhile; else: ?>
+                                    <tr><td colspan="6" class="text-center py-3 text-muted small">No pre-upload antivirus scan logs recorded yet.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="small fw-bold text-muted text-uppercase mb-2">Recent KYC &amp; KYB AI Compliance Reports</h6>
+                        <div class="table-responsive" style="max-height:260px;">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light x-small text-muted text-uppercase">
+                                    <tr><th>Vendor</th><th>User / Subject</th><th>AI Decision</th><th>Confidence</th><th>Summary</th><th class="text-end">Date</th></tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($kyc_reports_q && mysqli_num_rows($kyc_reports_q) > 0): while($kr = mysqli_fetch_assoc($kyc_reports_q)):
+                                        $dec = (string)($kr['decision'] ?? '');
+                                        $dbadge = (strpos($dec, 'approve') !== false) ? 'success' : ((strpos($dec, 'reject') !== false) ? 'danger' : 'warning');
+                                    ?>
+                                    <tr>
+                                        <td class="small fw-bold"><?php echo htmlspecialchars((string)$kr['vendor_name']); ?></td>
+                                        <td class="small">@<?php echo htmlspecialchars((string)($kr['username'] ?: ('user#' . (int)$kr['user_id']))); ?></td>
+                                        <td><span class="badge bg-<?php echo $dbadge; ?> rounded-pill"><?php echo htmlspecialchars($dec ?: 'analyzed'); ?></span></td>
+                                        <td class="small fw-bold"><?php echo (int)($kr['confidence'] ?? 0); ?>%</td>
+                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr((string)($kr['reason'] ?? ''), 0, 100)); ?></td>
+                                        <td class="text-end x-small text-muted"><?php echo !empty($kr['analyzed_at']) ? date('M j H:i', strtotime((string)$kr['analyzed_at'])) : ''; ?></td>
+                                    </tr>
+                                    <?php endwhile; else: ?>
+                                    <tr><td colspan="6" class="text-center py-3 text-muted small">No KYC/KYB AI compliance reports generated yet.</td></tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

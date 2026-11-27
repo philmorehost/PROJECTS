@@ -4,6 +4,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 include("../func/bc-spadmin-config.php");
 require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'kyc_decision');
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 // KYC status model - identical to web/api/kyc.php, the app and the vendor console:
 //   0 = Unverified, 1 = Under review (pending), 2 = Verified, 3 = Rejected.
@@ -92,6 +93,14 @@ if (isset($_POST['kyc_decision'])) {
             }
             $flash .= $mail_sent ? ' The user has been emailed.' : ' The email to the user could not be sent.';
         }
+        bc_compliance_notify_event($connection_server, 'user_kyc_decision', [
+            'vendor_id' => (int)$target['vendor_id'],
+            'user_id'   => (int)$uid,
+            'user'      => $target,
+            'status'    => (int)$decision['status'],
+            'label'     => (string)$decision['label'],
+            'reason'    => (string)$decision['reason'],
+        ]);
         $_SESSION['product_purchase_response'] = $flash;
     }
     header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1));

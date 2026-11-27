@@ -27,7 +27,8 @@
 if (!function_exists('bc_kyc_is_ai_enabled')) {
     /**
      * Determine whether AI compliance/security scanning is enabled for a vendor.
-     * Respects BOTH bc-spadmin global AI toggle AND bc-admin vendor toggles.
+     * - SAAS: Respects BOTH bc-spadmin global AI toggle + bc-admin toggles + SAAS token balance + Vision key.
+     * - NON-SAAS: Direct API connection (respects bc-admin toggle + Vision key, no SAAS token wall).
      *
      * @param mysqli|null $connection_server
      * @param int         $vendor_id
@@ -35,8 +36,15 @@ if (!function_exists('bc_kyc_is_ai_enabled')) {
      */
     function bc_kyc_is_ai_enabled($connection_server, int $vendor_id): array
     {
+        if (!function_exists('bc_ai_is_saas') && is_file(__DIR__ . '/bc-edition.php')) {
+            include_once(__DIR__ . '/bc-edition.php');
+        }
+        $is_saas = function_exists('bc_ai_is_saas')
+            ? bc_ai_is_saas()
+            : (function_exists('bc_is_saas_edition') ? (bool)bc_is_saas_edition() : true);
+
         $global_enabled = true;
-        if (function_exists('getSuperAdminOption')) {
+        if ($is_saas && function_exists('getSuperAdminOption')) {
             $global_val = getSuperAdminOption('ai_global_enabled', '0');
             $global_enabled = ((string)$global_val === '1');
         }
@@ -50,15 +58,16 @@ if (!function_exists('bc_kyc_is_ai_enabled')) {
             ];
         }
 
-        $vendor_enabled = false;
+        $vendor_enabled = !$is_saas;
+        $token_balance = 0;
         if ($connection_server && $vendor_id > 0) {
             $q = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='" . (int)$vendor_id . "' LIMIT 1");
             $row = $q ? mysqli_fetch_assoc($q) : null;
             if ($row) {
+                $token_balance = (int)($row['ai_token_balance'] ?? 0);
                 if (array_key_exists('kyc_ai_enabled', $row)) {
                     $vendor_enabled = ((int)$row['kyc_ai_enabled'] === 1);
-                }
-                if (!$vendor_enabled && array_key_exists('ai_status', $row) && !array_key_exists('kyc_ai_enabled', $row)) {
+                } elseif (array_key_exists('ai_status', $row)) {
                     $vendor_enabled = ((int)$row['ai_status'] === 1);
                 }
             }
@@ -72,6 +81,19 @@ if (!function_exists('bc_kyc_is_ai_enabled')) {
                 'vision_ready'   => false,
                 'reason'         => 'KYC/KYB AI is disabled by Admin (bc-admin). Using standard antivirus scanner.',
             ];
+        }
+
+        if ($is_saas && function_exists('bc_ai_get_action_cost') && $connection_server && $vendor_id > 0) {
+            $av_cost = bc_ai_get_action_cost('av_scan');
+            if ($av_cost > 0 && $token_balance < $av_cost) {
+                return [
+                    'enabled'        => false,
+                    'global_enabled' => true,
+                    'vendor_enabled' => true,
+                    'vision_ready'   => false,
+                    'reason'         => 'Insufficient AI tokens for AI AV scan (' . $token_balance . ' available, ' . $av_cost . ' required). Using standard antivirus scanner.',
+                ];
+            }
         }
 
         $vision_ready = false;
@@ -101,6 +123,69 @@ if (!function_exists('bc_kyc_is_ai_enabled')) {
             'vision_ready'   => true,
             'reason'         => 'AI security & compliance scanning active.',
         ];
+    }
+}
+
+if (!function_exists('bc_kyc_av_ensure_schema')) {
+    function bc_kyc_av_ensure_schema($connection_server): bool
+    {
+        static $done = false;
+        if ($done || !($connection_server instanceof mysqli)) return $done;
+        $ok = @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_kyc_av_logs (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            vendor_id INT UNSIGNED NOT NULL DEFAULT 0,
+            user_id INT UNSIGNED NOT NULL DEFAULT 0,
+            username VARCHAR(191) NOT NULL DEFAULT '',
+            subject_type VARCHAR(32) NOT NULL DEFAULT 'kyc',
+            doc_key VARCHAR(64) NOT NULL DEFAULT '',
+            filename VARCHAR(255) NOT NULL DEFAULT '',
+            file_size INT UNSIGNED NOT NULL DEFAULT 0,
+            mime_type VARCHAR(128) NOT NULL DEFAULT '',
+            scan_mode VARCHAR(48) NOT NULL DEFAULT 'standard_antivirus',
+            verdict VARCHAR(24) NOT NULL DEFAULT 'clean',
+            threat_code VARCHAR(64) NOT NULL DEFAULT '',
+            reason VARCHAR(500) NOT NULL DEFAULT '',
+            ai_checked TINYINT(1) NOT NULL DEFAULT 0,
+            tokens_charged INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_av_vendor_date (vendor_id, created_at),
+            INDEX idx_av_verdict (verdict, created_at)
+        )");
+        $done = (bool)$ok;
+        return $done;
+    }
+}
+
+if (!function_exists('bc_kyc_av_log_scan')) {
+    function bc_kyc_av_log_scan($connection_server, array $entry): void
+    {
+        if (!($connection_server instanceof mysqli)) return;
+        bc_kyc_av_ensure_schema($connection_server);
+
+        $vid = (int)($entry['vendor_id'] ?? 0);
+        $uid = (int)($entry['user_id'] ?? 0);
+        $uname = trim((string)($entry['username'] ?? ''));
+        if ($uname === '' && $uid > 0) {
+            $uq = @mysqli_query($connection_server, "SELECT username FROM sas_users WHERE id='$uid' LIMIT 1");
+            if ($uq && ($ur = mysqli_fetch_assoc($uq))) $uname = (string)$ur['username'];
+        }
+        $esc_user   = mysqli_real_escape_string($connection_server, substr($uname, 0, 190));
+        $esc_subj   = mysqli_real_escape_string($connection_server, substr((string)($entry['subject_type'] ?? 'kyc'), 0, 32));
+        $esc_doc    = mysqli_real_escape_string($connection_server, substr((string)($entry['doc_key'] ?? ''), 0, 64));
+        $esc_file   = mysqli_real_escape_string($connection_server, substr(basename((string)($entry['filename'] ?? '')), 0, 250));
+        $file_size  = max(0, (int)($entry['file_size'] ?? 0));
+        $esc_mime   = mysqli_real_escape_string($connection_server, substr((string)($entry['mime_type'] ?? ''), 0, 120));
+        $esc_mode   = mysqli_real_escape_string($connection_server, substr((string)($entry['scan_mode'] ?? 'standard_antivirus'), 0, 48));
+        $esc_verd   = mysqli_real_escape_string($connection_server, substr((string)($entry['verdict'] ?? 'clean'), 0, 24));
+        $esc_threat = mysqli_real_escape_string($connection_server, substr((string)($entry['threat_code'] ?? ''), 0, 64));
+        $esc_reason = mysqli_real_escape_string($connection_server, substr((string)($entry['reason'] ?? ''), 0, 490));
+        $ai_chk     = !empty($entry['ai_checked']) ? 1 : 0;
+        $tokens     = max(0, (int)($entry['tokens_charged'] ?? 0));
+
+        @mysqli_query($connection_server,
+            "INSERT INTO sas_kyc_av_logs (vendor_id, user_id, username, subject_type, doc_key, filename, file_size, mime_type, scan_mode, verdict, threat_code, reason, ai_checked, tokens_charged)
+             VALUES ('$vid', '$uid', '$esc_user', '$esc_subj', '$esc_doc', '$esc_file', '$file_size', '$esc_mime', '$esc_mode', '$esc_verd', '$esc_threat', '$esc_reason', '$ai_chk', '$tokens')"
+        );
     }
 }
 
@@ -568,14 +653,47 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
         $conn = $options['connection'] ?? null;
         $vendor_id = (int)($options['vendor_id'] ?? 0);
         $user_id = (int)($options['user_id'] ?? 0);
+        $subject_type = (string)($options['subject_type'] ?? (strpos($doc_kind, 'kyb') !== false ? 'kyb' : 'kyc'));
+        $file_size_stat = ($tmp_path !== '' && is_file($tmp_path)) ? (int)@filesize($tmp_path) : 0;
+        $detected_mime = '';
+        $ai_tokens_charged = 0;
         $checks = [];
 
-        $reject = function (string $reason, bool $threat_found, bool $is_blank, string $mode, array $checks) use ($tmp_path, $conn, $vendor_id, $user_id, $doc_kind, $original_name) {
+        $reject = function (string $reason, bool $threat_found, bool $is_blank, string $mode, array $checks, string $threat_code = '') use ($tmp_path, $conn, $vendor_id, $user_id, $doc_kind, $original_name, $subject_type, &$file_size_stat, &$detected_mime, &$ai_tokens_charged) {
             if ($tmp_path !== '' && is_file($tmp_path)) {
                 @unlink($tmp_path);
             }
             if (function_exists('bc_sec_audit')) {
                 bc_sec_audit($vendor_id, 'user', 'user#' . $user_id, 'upload_blocked_av', $doc_kind . ':' . basename($original_name), '[' . $mode . '] ' . $reason);
+            }
+            if ($conn instanceof mysqli && $vendor_id > 0) {
+                $tcode = $threat_code !== '' ? $threat_code : ($is_blank ? 'blank_file' : ($threat_found ? 'malware_or_spoof' : 'rejected'));
+                bc_kyc_av_log_scan($conn, [
+                    'vendor_id'      => $vendor_id,
+                    'user_id'        => $user_id,
+                    'subject_type'   => $subject_type,
+                    'doc_key'        => $doc_kind,
+                    'filename'       => $original_name,
+                    'file_size'      => $file_size_stat,
+                    'mime_type'      => $detected_mime,
+                    'scan_mode'      => $mode,
+                    'verdict'        => 'blocked',
+                    'threat_code'    => $tcode,
+                    'reason'         => $reason,
+                    'ai_checked'     => ($mode === 'ai+antivirus'),
+                    'tokens_charged' => $ai_tokens_charged,
+                ]);
+                if ($threat_found && function_exists('bc_log_security_event')) {
+                    $uq = @mysqli_query($conn, "SELECT username FROM sas_users WHERE id='$user_id' LIMIT 1");
+                    $uname = ($uq && ($ur = mysqli_fetch_assoc($uq))) ? (string)$ur['username'] : ('user#' . $user_id);
+                    bc_log_security_event('AV_BLOCKED', 'upload_av_threat_' . $tcode, $vendor_id . ':' . $uname, $doc_kind . ': ' . $reason);
+                    if (function_exists('bc_ai_sentinel_settings') && function_exists('bc_ai_sentinel_auto_block') && $uname !== '' && strpos($uname, 'user#') !== 0) {
+                        $ss = bc_ai_sentinel_settings($conn, $vendor_id);
+                        if (($ss['sentinel_auto_block'] ?? '0') === '1' && ($ss['sentinel_av_auto_flag'] ?? '1') === '1') {
+                            bc_ai_sentinel_auto_block($conn, $vendor_id, $uname, 'Malicious upload blocked by Antivirus (' . $tcode . ')', 10);
+                        }
+                    }
+                }
             }
             return [
                 'allowed'        => false,
@@ -586,6 +704,7 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
                 'security_score' => 0,
                 'reason'         => $reason,
                 'checks'         => $checks,
+                'tokens_charged' => $ai_tokens_charged,
             ];
         };
 
@@ -594,28 +713,30 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
             || preg_match('/\.(?:php\d*|phtml|phar|exe|dll|bat|cmd|sh|js|vbs|ps1|scr|com|msi|jar|html?)\./i', $original_name))
         ) {
             $checks['filename'] = 'failed';
-            return $reject('Suspicious filename pattern detected (double executable/script extension). Upload blocked.', true, false, 'standard_antivirus', $checks);
+            return $reject('Suspicious filename pattern detected (double executable/script extension). Upload blocked.', true, false, 'standard_antivirus', $checks, 'double_extension');
         }
         $checks['filename'] = 'passed';
 
         // 1. Existence & non-empty minimum byte size
         if ($tmp_path === '' || !is_file($tmp_path)) {
             $checks['size'] = 'failed';
-            return $reject('Uploaded temporary file is missing or unreadable.', false, true, 'standard_antivirus', $checks);
+            return $reject('Uploaded temporary file is missing or unreadable.', false, true, 'standard_antivirus', $checks, 'missing_file');
         }
         $size = (int)@filesize($tmp_path);
+        $file_size_stat = $size;
         $min_bytes = in_array($ext, ['mp4', 'webm', 'mov', 'mkv'], true) ? 1024 : 256;
         if ($size === 0 || $size < $min_bytes) {
             $checks['size'] = 'failed';
-            return $reject('Blank or empty file rejected (' . $size . ' bytes). Please upload a valid non-empty file.', false, true, 'standard_antivirus', $checks);
+            return $reject('Blank or empty file rejected (' . $size . ' bytes). Please upload a valid non-empty file.', false, true, 'standard_antivirus', $checks, 'blank_size');
         }
         $checks['size'] = 'passed';
 
         // 2. Magic-byte header & MIME verification
         $magic = bc_kyc_av_check_magic_bytes($tmp_path, $ext);
+        $detected_mime = (string)($magic['mime'] ?? '');
         if (!$magic['ok']) {
             $checks['magic_bytes'] = 'failed';
-            return $reject($magic['reason'], true, false, 'standard_antivirus', $checks);
+            return $reject($magic['reason'], true, false, 'standard_antivirus', $checks, 'mime_spoof');
         }
         $checks['magic_bytes'] = 'passed';
 
@@ -623,7 +744,7 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
         $sig = bc_kyc_av_scan_signatures($tmp_path, $ext);
         if (!$sig['clean']) {
             $checks['signatures'] = 'failed:' . ($sig['threat'] ?? 'unknown');
-            return $reject($sig['reason'], empty($sig['is_blank']), !empty($sig['is_blank']), 'standard_antivirus', $checks);
+            return $reject($sig['reason'], empty($sig['is_blank']), !empty($sig['is_blank']), 'standard_antivirus', $checks, (string)($sig['threat'] ?? 'signature'));
         }
         $checks['signatures'] = 'passed';
 
@@ -632,7 +753,7 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
             $img_check = bc_kyc_av_check_blank_image($tmp_path, $min_dim);
             if (!$img_check['ok']) {
                 $checks['blank_image'] = 'failed';
-                return $reject($img_check['reason'], false, true, 'standard_antivirus', $checks);
+                return $reject($img_check['reason'], false, true, 'standard_antivirus', $checks, 'blank_image');
             }
             $checks['blank_image'] = 'passed';
         }
@@ -642,7 +763,7 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
         if (!empty($clam['ran'])) {
             $checks['clamav'] = $clam['clean'] ? 'passed (' . ($clam['engine'] ?? 'clamav') . ')' : 'failed';
             if (!$clam['clean']) {
-                return $reject($clam['reason'], true, false, 'standard_antivirus', $checks);
+                return $reject($clam['reason'], true, false, 'standard_antivirus', $checks, 'clamav_hit');
             }
         } else {
             $checks['clamav'] = 'not_installed';
@@ -657,9 +778,13 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
             $ai_res = bc_kyc_av_ai_inspect($tmp_path, $ext, $doc_kind);
             if (!empty($ai_res['ran'])) {
                 $scan_mode = 'ai+antivirus';
+                if ($conn instanceof mysqli && $vendor_id > 0 && function_exists('bc_ai_charge_vendor_tokens')) {
+                    $bill = bc_ai_charge_vendor_tokens($conn, $vendor_id, 'av_scan', 'user#' . $user_id, 'Pre-upload AI AV Scan (' . $doc_kind . ': ' . basename($original_name) . ')', (string)($ai_res['model'] ?? ''), 0);
+                    $ai_tokens_charged = (int)($bill['tokens_charged'] ?? 0);
+                }
                 $checks['ai_security'] = $ai_res['clean'] ? 'passed' : 'failed:' . ($ai_res['threat'] ?? 'flagged');
                 if (!$ai_res['clean']) {
-                    return $reject($ai_res['reason'], empty($ai_res['is_blank']), !empty($ai_res['is_blank']), 'ai+antivirus', $checks);
+                    return $reject($ai_res['reason'], empty($ai_res['is_blank']), !empty($ai_res['is_blank']), 'ai+antivirus', $checks, (string)($ai_res['threat'] ?? 'ai_flagged'));
                 }
                 $security_score = (int)($ai_res['security_score'] ?? 96);
             } else {
@@ -668,6 +793,24 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
             }
         } else {
             $checks['ai_security'] = 'disabled: ' . $ai_gate['reason'];
+        }
+
+        if ($conn instanceof mysqli && $vendor_id > 0) {
+            bc_kyc_av_log_scan($conn, [
+                'vendor_id'      => $vendor_id,
+                'user_id'        => $user_id,
+                'subject_type'   => $subject_type,
+                'doc_key'        => $doc_kind,
+                'filename'       => $original_name,
+                'file_size'      => $file_size_stat,
+                'mime_type'      => $detected_mime,
+                'scan_mode'      => $scan_mode,
+                'verdict'        => 'clean',
+                'threat_code'    => '',
+                'reason'         => $scan_mode === 'ai+antivirus' ? 'Passed AI + Antivirus & blank-file security scan.' : 'Passed standard Antivirus & blank-file security scan.',
+                'ai_checked'     => ($scan_mode === 'ai+antivirus'),
+                'tokens_charged' => $ai_tokens_charged,
+            ]);
         }
 
         return [
@@ -681,6 +824,7 @@ if (!function_exists('bc_kyc_av_scan_upload')) {
                 ? 'Passed AI + Antivirus & blank-file security scan.'
                 : 'Passed standard Antivirus & blank-file security scan.',
             'checks'         => $checks,
+            'tokens_charged' => $ai_tokens_charged,
         ];
     }
 }

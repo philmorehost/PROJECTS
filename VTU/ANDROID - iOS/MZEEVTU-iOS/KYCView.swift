@@ -7,65 +7,172 @@
 
 import SwiftUI
 import UIKit
+import CoreImage
 import AVFoundation
 import UniformTypeIdentifiers
-@MainActor
+import Vision
 
+@MainActor
 struct KYCView: View {
+    var isOverlayLocked: Bool = false
     @ObservedObject private var brandTheme = BrandTheme.shared
+    @ObservedObject private var complianceGate = ComplianceGateState.shared
+    @EnvironmentObject var session: SessionManager
     @StateObject private var viewModel = KYCViewModel()
     @Environment(\.dismiss) var dismiss
-    
+    @State private var showFormsWhilePending = false
+    @State private var showNotifications = false
+
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                    // Status Card
-                    KYCStatusCard(viewModel: viewModel)
+            VStack(spacing: 20) {
+                if isOverlayLocked {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Verification Required to Unlock App")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Text(viewModel.kycStatus == 1
+                             ? "Your submission passed automated checks and is awaiting compliance review."
+                             : "Wallet, transfers, and purchases stay locked until your identity verification is approved.")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.85))
+                        HStack(spacing: 10) {
+                            Button("Refresh Status") {
+                                viewModel.loadKYCStatus()
+                                ComplianceGateState.shared.refresh()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button("Alerts") { showNotifications = true }
+                                .buttonStyle(.bordered)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Button("Sign Out") { session.logout() }
+                                .buttonStyle(.bordered)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding()
+                    .background(Color(red: 0.06, green: 0.09, blue: 0.16))
+                    .cornerRadius(16)
+                }
 
+                // Status Card
+                KYCStatusCard(viewModel: viewModel)
+
+                // Rejection Reason Card
+                if viewModel.kycStatus == 3 && !viewModel.rejectReason.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Submission Rejected — Action Required")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.red)
+                        Text(viewModel.rejectReason)
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(14)
+                }
+
+                // AI Advisory Badge
+                if viewModel.aiRating > 0 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Automated AI Screening: \(viewModel.aiRating)/100 (Grade \(viewModel.aiGrade))")
+                            .font(.caption.bold())
+                            .foregroundColor(.blue)
+                        if !viewModel.aiReason.isEmpty {
+                            Text(viewModel.aiReason)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(12)
+                }
+
+                // Pending Human Review Lock Card
+                let showPendingLock = (viewModel.kycStatus == 1 && viewModel.stillNeeded.isEmpty)
+                if showPendingLock {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Verification Under Compliance Review")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                        Text("Your required checks are complete and awaiting compliance review. You will be notified as soon as your account is approved.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 10) {
+                            Button("Check Approval Status") {
+                                viewModel.loadKYCStatus()
+                                ComplianceGateState.shared.refresh()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button(showFormsWhilePending ? "Hide Forms" : "Update Files") {
+                                showFormsWhilePending.toggle()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color.orange.opacity(0.12))
+                    .cornerRadius(16)
+                }
+
+                if !showPendingLock || showFormsWhilePending {
                     // Traditional KYC Methods
                     TraditionalKYCSection(viewModel: viewModel)
-                    
+
+                    // Guided ID + Proof of Address + Auto Face Selfie
+                    KYCDocumentUploadSection(onAccepted: { viewModel.loadKYCStatus() })
+
+                    // Camera Capture (Photo + Live Audio/Video)
                     KYCLiveCaptureSection(onAccepted: { viewModel.loadKYCStatus() })
 
                     // AI Interview Section
                     AIInterviewSection(viewModel: viewModel)
                 }
-                .padding()
             }
-            .navigationTitle("Identity Verification (KYC)")
-            .navigationBarTitleDisplayMode(.inline)
-
-            .onAppear {
-                viewModel.loadKYCStatus()
-            }
-            .alert("Verification Result", isPresented: $viewModel.showResult) {
-                Button("OK") { viewModel.showResult = false }
-            } message: {
-                Text(viewModel.resultMessage)
-            }
+            .padding()
+        }
+        .navigationTitle("Identity Verification (KYC)")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showNotifications) {
+            ComplianceNotificationsSheet()
+        }
+        .onAppear {
+            viewModel.loadKYCStatus()
+        }
+        .alert("Verification Result", isPresented: $viewModel.showResult) {
+            Button("OK") { viewModel.showResult = false }
+        } message: {
+            Text(viewModel.resultMessage)
+        }
     }
 }
-@MainActor
 
+@MainActor
 struct KYCStatusCard: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
-    
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: statusIcon)
                 .font(.system(size: 60))
                 .foregroundColor(statusColor)
-            
+
             Text(statusTitle)
                 .font(.title2)
                 .fontWeight(.bold)
-            
+
             Text(statusMessage)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             if viewModel.kycStatus == 2 {
                 Label("Fully Verified", systemImage: "checkmark.seal.fill")
                     .font(.caption)
@@ -74,6 +181,10 @@ struct KYCStatusCard: View {
                 Label("Under Review", systemImage: "clock.fill")
                     .font(.caption)
                     .foregroundColor(.orange)
+            } else if viewModel.kycStatus == 3 {
+                Label("Rejected — Resubmit Required", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
         }
         .frame(maxWidth: .infinity)
@@ -81,50 +192,54 @@ struct KYCStatusCard: View {
         .background(Color(.systemGray6))
         .cornerRadius(20)
     }
-    
+
     var statusIcon: String {
         switch viewModel.kycStatus {
         case 2: return "checkmark.seal.fill"
         case 1: return "clock.fill"
+        case 3: return "exclamationmark.triangle.fill"
         default: return "shield.lefthalf.filled"
         }
     }
-    
+
     var statusColor: Color {
         switch viewModel.kycStatus {
         case 2: return .green
         case 1: return .orange
+        case 3: return .red
         default: return .blue
         }
     }
-    
+
     var statusTitle: String {
         switch viewModel.kycStatus {
         case 2: return "Fully Verified"
         case 1: return "Under Review"
+        case 3: return "Verification Rejected"
         default: return "Unverified"
         }
     }
-    
+
     var statusMessage: String {
         switch viewModel.kycStatus {
         case 2: return "Your identity has been confirmed. You have unrestricted access to all services."
         case 1: return "Your documents are being processed by our compliance team."
+        case 3: return "Please review the feedback below and upload corrected documents."
         default: return "Please complete the required steps below to secure your account."
         }
     }
 }
-@MainActor
 
+@MainActor
 struct TraditionalKYCSection: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Basic Verification")
                 .font(.headline)
-            
+
             VStack(spacing: 12) {
                 if viewModel.bvnEnabled {
                     KYCInputField(
@@ -140,7 +255,7 @@ struct TraditionalKYCSection: View {
                         viewModel.submitIdentity(type: "bvn", value: viewModel.bvnValue)
                     }
                 }
-                
+
                 if viewModel.ninEnabled {
                     KYCInputField(
                         title: "National Identity Number (NIN)",
@@ -177,14 +292,291 @@ struct TraditionalKYCSection: View {
         .cornerRadius(16)
     }
 }
-@MainActor
 
+@MainActor
+struct KYCDocumentUploadSection: View {
+    let onAccepted: () -> Void
+    @ObservedObject private var brandTheme = BrandTheme.shared
+    @State private var selectedDocType = "National ID"
+    private let docTypes = ["National ID", "NIN", "Passport", "Driver's Licence", "Voter's Card", "BVN"]
+    @State private var govtIdFile: (data: Data, filename: String, mime: String)?
+    @State private var poaFile: (data: Data, filename: String, mime: String)?
+    @State private var autoSelfieData: Data?
+    @State private var pickingKind: Int = 0 // 1 = govt_id, 2 = poa
+    @State private var showFileImporter = false
+    @State private var showAutoSelfie = false
+    @State private var busy = false
+    @State private var statusMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Identity Documents & Auto Face Selfie")
+                .font(.headline)
+
+            Picker("Document Type", selection: $selectedDocType) {
+                ForEach(docTypes, id: \.self) { Text($0) }
+            }
+            .pickerStyle(.menu)
+
+            HStack {
+                Button("Select Government ID") {
+                    pickingKind = 1
+                    showFileImporter = true
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Text(govtIdFile?.filename ?? "None")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack {
+                Button("Select Proof of Address") {
+                    pickingKind = 2
+                    showFileImporter = true
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Text(poaFile?.filename ?? "Utility bill / PDF")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack {
+                Button("Auto Face-Framed Selfie") {
+                    showAutoSelfie = true
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Text(autoSelfieData != nil ? "Ready (\(autoSelfieData!.count / 1024) KB)" : "Optional here")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Button(busy ? "Submitting..." : "Upload Documents") {
+                submitDocuments()
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background((govtIdFile != nil || poaFile != nil || autoSelfieData != nil) && !busy ? brandTheme.primary : Color.gray.opacity(0.35))
+            .foregroundColor((govtIdFile != nil || poaFile != nil || autoSelfieData != nil) && !busy ? brandTheme.onPrimary : brandTheme.onSurface)
+            .cornerRadius(10)
+            .disabled(busy || (govtIdFile == nil && poaFile == nil && autoSelfieData == nil))
+
+            if !statusMessage.isEmpty {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.pdf, .image],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url), data.count >= 256, data.count <= 5 * 1024 * 1024 else {
+                statusMessage = "Selected file must be between 256 bytes and 5 MB."
+                return
+            }
+            let ext = url.pathExtension.lowercased()
+            let mime = ext == "pdf" ? "application/pdf" : "image/jpeg"
+            let payload = (data, url.lastPathComponent, mime)
+            if pickingKind == 1 { govtIdFile = payload } else { poaFile = payload }
+            statusMessage = "\(url.lastPathComponent) ready to upload."
+        }
+        .sheet(isPresented: $showAutoSelfie) {
+            KYCAutoFaceSelfieSheet { jpegData in
+                showAutoSelfie = false
+                if let jpegData = jpegData {
+                    autoSelfieData = jpegData
+                    statusMessage = "Auto-captured selfie ready (\(jpegData.count / 1024) KB)."
+                }
+            }
+        }
+    }
+
+    private func submitDocuments() {
+        busy = true
+        statusMessage = "Scanning & uploading..."
+        AppNetworkService.shared.uploadKYCDocuments(
+            docType: selectedDocType,
+            govtId: govtIdFile,
+            proofOfAddress: poaFile,
+            photo: autoSelfieData,
+            video: nil
+        ) { result in
+            busy = false
+            switch result {
+            case .success(let desc):
+                govtIdFile = nil
+                poaFile = nil
+                autoSelfieData = nil
+                statusMessage = desc
+                onAccepted()
+            case .failure(let err):
+                statusMessage = err.localizedDescription
+            }
+        }
+    }
+}
+
+private struct KYCAutoFaceSelfieSheet: View {
+    let onFinish: (Data?) -> Void
+    @State private var statusText = "Center your face inside the oval — auto-capturing..."
+    @State private var triggerManual = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                KYCAutoFaceCameraRepresentable(statusText: $statusText, triggerManual: $triggerManual, onFinish: onFinish)
+                    .ignoresSafeArea()
+                Ellipse()
+                    .stroke(Color.cyan, lineWidth: 3)
+                    .frame(width: 240, height: 310)
+                VStack {
+                    Text(statusText)
+                        .font(.caption.bold())
+                        .padding(10)
+                        .background(Color.black.opacity(0.65))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        .padding(.top, 16)
+                    Spacer()
+                    Button("Capture Now") {
+                        triggerManual = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.bottom, 30)
+                }
+            }
+            .navigationTitle("Auto Face Selfie")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { onFinish(nil) }
+                }
+            }
+        }
+    }
+}
+
+private struct KYCAutoFaceCameraRepresentable: UIViewControllerRepresentable {
+    @Binding var statusText: String
+    @Binding var triggerManual: Bool
+    let onFinish: (Data?) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        context.coordinator.setupCamera(in: vc.view)
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        if triggerManual {
+            context.coordinator.captureLatestFrame()
+        }
+    }
+
+    final class Coordinator: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+        let parent: KYCAutoFaceCameraRepresentable
+        private let session = AVCaptureSession()
+        private let queue = DispatchQueue(label: "kyc.autofaceselfie")
+        private var stableCount = 0
+        private var finished = false
+        private var latestPixelBuffer: CVPixelBuffer?
+
+        init(_ parent: KYCAutoFaceCameraRepresentable) {
+            self.parent = parent
+        }
+
+        func setupCamera(in view: UIView) {
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+                  let input = try? AVCaptureDeviceInput(device: device),
+                  session.canAddInput(input) else {
+                DispatchQueue.main.async { self.parent.statusText = "Front camera unavailable." }
+                return
+            }
+            session.beginConfiguration()
+            session.sessionPreset = .vga640x480
+            session.addInput(input)
+            let output = AVCaptureVideoDataOutput()
+            output.alwaysDiscardsLateVideoFrames = true
+            output.setSampleBufferDelegate(self, queue: queue)
+            if session.canAddOutput(output) { session.addOutput(output) }
+            session.commitConfiguration()
+
+            let preview = AVCaptureVideoPreviewLayer(session: session)
+            preview.videoGravity = .resizeAspectFill
+            preview.frame = UIScreen.main.bounds
+            view.layer.addSublayer(preview)
+            queue.async { self.session.startRunning() }
+        }
+
+        func captureLatestFrame() {
+            guard !finished, let pb = latestPixelBuffer else { return }
+            exportPixelBuffer(pb)
+        }
+
+        func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+            guard !finished, let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+            latestPixelBuffer = pb
+            let req = VNDetectFaceRectanglesRequest()
+            let handler = VNImageRequestHandler(cvPixelBuffer: pb, orientation: .leftMirrored, options: [:])
+            try? handler.perform([req])
+            if let faces = req.results, !faces.isEmpty {
+                stableCount += 1
+                DispatchQueue.main.async {
+                    self.parent.statusText = "Face aligned — hold still (\(self.stableCount)/3)..."
+                }
+                if stableCount >= 3 {
+                    exportPixelBuffer(pb)
+                }
+            } else {
+                stableCount = 0
+                DispatchQueue.main.async {
+                    self.parent.statusText = "Center your face inside the oval..."
+                }
+            }
+        }
+
+        private func exportPixelBuffer(_ pb: CVPixelBuffer) {
+            guard !finished else { return }
+            finished = true
+            session.stopRunning()
+            let ci = CIImage(cvPixelBuffer: pb).oriented(.right)
+            let ctx = CIContext()
+            guard let cg = ctx.createCGImage(ci, from: ci.extent) else {
+                DispatchQueue.main.async { self.parent.onFinish(nil) }
+                return
+            }
+            let img = UIImage(cgImage: cg)
+            let jpeg = img.jpegData(compressionQuality: 0.78)
+            DispatchQueue.main.async { self.parent.onFinish(jpeg) }
+        }
+
+        deinit {
+            if session.isRunning { session.stopRunning() }
+        }
+    }
+}
+
+@MainActor
 struct KYCSubmitButton: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     let title: String
     let isEnabled: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             Text(title)
@@ -198,15 +590,15 @@ struct KYCSubmitButton: View {
         .disabled(!isEnabled)
     }
 }
-@MainActor
 
+@MainActor
 struct KYCInputField: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     let title: String
     let placeholder: String
     @Binding var value: String
     let isSaved: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -220,7 +612,7 @@ struct KYCInputField: View {
                         .foregroundColor(.green)
                 }
             }
-            
+
             TextField(placeholder, text: $value)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.numberPad)
@@ -231,17 +623,17 @@ struct KYCInputField: View {
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
     }
 }
-@MainActor
 
+@MainActor
 struct AIInterviewSection: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject var viewModel: KYCViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("AI Compliance Interview")
                 .font(.headline)
-            
+
             Button(action: {
                 viewModel.showAIInterview = true
             }) {
@@ -289,11 +681,15 @@ final class KYCViewModel: ObservableObject {
     @Published var bvnSaved: Bool = false
     @Published var ninSaved: Bool = false
     @Published var stillNeeded: [String] = []
+    @Published var rejectReason: String = ""
+    @Published var aiRating: Int = 0
+    @Published var aiGrade: String = ""
+    @Published var aiReason: String = ""
     @Published var isLoading: Bool = false
     @Published var showResult: Bool = false
     @Published var resultMessage: String = ""
     @Published var showAIInterview: Bool = false
-    
+
     func loadKYCStatus() {
         AppNetworkService.shared.requestObject("kyc.php", params: ["action": "status"]) { result in
             guard case .success(let json) = result else { return }
@@ -303,6 +699,15 @@ final class KYCViewModel: ObservableObject {
             self.bvnSaved = bcBool(json["bvn_set"])
             self.ninSaved = bcBool(json["nin_set"])
             self.stillNeeded = (json["still_needed"] as? [String]) ?? []
+            self.rejectReason = bcString(json["kyc_reject_reason"])
+            self.aiRating = bcInt(json["ai_rating"])
+            self.aiGrade = bcString(json["ai_grade"])
+            self.aiReason = bcString(json["ai_reason"])
+            DispatchQueue.main.async {
+                let enforced = (json["kyc_enforced"] as? Bool) ?? false
+                let gateLocked = (json["kyc_gate_locked"] as? Bool) ?? (enforced && self.kycStatus != 2)
+                ComplianceGateState.shared.locked = gateLocked
+            }
         }
     }
 
@@ -351,7 +756,7 @@ private struct KYCLiveCaptureSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Live photo and video").font(.headline)
-            Text("Use your camera. For video, say your full name and today’s date, then turn your head slowly. Record 1–8 seconds. No gallery uploads.").font(.caption)
+            Text("Use your camera. For video, look at the camera, say \"HI\" clearly, then turn your head slowly. Record 1–8 seconds. No gallery uploads.").font(.caption)
             Button(photo == nil ? "Take live photo" : "Retake live photo") { open(.photo) }.disabled(busy)
             if let data = photo, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 180)

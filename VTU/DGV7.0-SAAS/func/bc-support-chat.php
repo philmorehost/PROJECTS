@@ -76,7 +76,19 @@ if (!function_exists('bc_chat_open_thread')) {
         if ($existing) return $existing;
 
         $settings = bc_chat_settings($vendor_id);
-        $ai = ($settings['chat_ai_enabled'] === '1' && $settings['chat_ai_key'] !== '') ? 1 : 0;
+        $ai = 0;
+        if ($settings['chat_ai_enabled'] === '1') {
+            if (trim((string)$settings['chat_ai_key']) !== '') {
+                $ai = 1;
+            } elseif (function_exists('getSuperAdminOption')) {
+                $engine_file = __DIR__ . '/bc-ai-engine.php';
+                if (file_exists($engine_file)) require_once($engine_file);
+                if (function_exists('bc_ai_platform_status')) {
+                    $plat = bc_ai_platform_status($connection_server, $vendor_id, 'support_reply');
+                    if (!empty($plat['available'])) $ai = 1;
+                }
+            }
+        }
 
         $user_esc = mysqli_real_escape_string($connection_server, (string)$username);
         $subj_esc = mysqli_real_escape_string($connection_server, substr(trim((string)$subject), 0, 255));
@@ -321,21 +333,24 @@ if (!function_exists('bc_chat_ai_system_prompt')) {
     /**
      * The assistant's instructions.
      *
-     * The prohibitions matter more than the permissions: an assistant that invents a balance or
-     * promises a refund creates a support obligation the business never agreed to. It is a
-     * first-line helper, not a source of account truth.
+     * Uses verified server-side account, transaction, and website context supplied by the
+     * web layer so customers get real answers immediately instead of unnecessary escalation,
+     * while strictly blocking unverified guesses, refund approvals, or credential requests.
      */
     function bc_chat_ai_system_prompt() {
-        return "You are the first-line support assistant for a fintech platform.\n"
-            . "Answer briefly and plainly, in the customer's language, about how the product works: "
-            . "wallets, transfers, fees, verification and how to find things in the app.\n"
+        return "You are the intelligent customer support assistant for this fintech/VTU platform.\n"
+            . "Answer clearly, politely, and accurately in the customer's language.\n"
+            . "When a [Customer account context] block is supplied below, USE IT to answer questions "
+            . "directly about the customer's verified profile, KYC status, wallet balance, recent "
+            . "transactions (reference, service, amount, status, date), deposit orders, and website services/navigation.\n"
             . "Never do any of these:\n"
-            . "- state, estimate or confirm an account balance, transaction amount or exchange rate;\n"
+            . "- invent data or state, estimate or confirm an account balance, transaction amount or exchange rate outside the verified [Customer account context] provided below;\n"
             . "- promise, approve or estimate a refund, reversal or credit;\n"
             . "- ask for a password, PIN, OTP, API key, card number or any credential;\n"
-            . "- claim an action was performed on the account.\n"
-            . "If the question needs account data, a financial decision, or you are unsure, say you "
-            . "will bring in a human and reply with exactly: ESCALATE";
+            . "- claim an action or manual adjustment was performed on the account.\n"
+            . "Only reply with exactly ESCALATE if the customer explicitly asks to speak to a human, "
+            . "requests a manual refund/credit/account unlock, or the question cannot be answered from "
+            . "the verified [Customer account context] and platform knowledge.";
     }
 }
 
@@ -414,10 +429,9 @@ if (!function_exists('bc_chat_ai_extract_text')) {
 
 if (!function_exists('bc_chat_ai_call')) {
     /**
-     * Ask the configured provider one question and return its text, or null on any failure.
-     *
-     * Tries AIEngine first (so the admin's existing provider configuration is honoured when it is
-     * present), then the direct path. Null is a normal outcome, not an error: the caller escalates.
+     * Ask the platform AI engine (Super Admin in SAAS with token billing, or direct owner API
+     * key in NON-SAAS) to answer the customer's question, falling back to any legacy per-tenant
+     * chat_ai_key if present. Returns reply string or null on failure.
      */
     function bc_chat_ai_call($vendor_id, $prompt) {
         global $connection_server;
@@ -428,25 +442,46 @@ if (!function_exists('bc_chat_ai_call')) {
         if (!in_array($provider, ['gemini', 'deepseek'], true)) $provider = 'gemini';
         $model = trim((string)$settings['chat_ai_model']);
         $key   = trim((string)$settings['chat_ai_key']);
-        if ($key === '') return null;
 
         $system = bc_chat_ai_system_prompt();
 
-        // Preferred path: the platform's own engine, when this build ships it.
+        // Preferred path: central AIEngine (connected to bc-spadmin + token billing in SAAS,
+        // or direct owner API key in NON-SAAS).
         $engine_file = __DIR__ . '/bc-ai-engine.php';
         if (file_exists($engine_file)) {
             require_once($engine_file);
-            if (class_exists('AIEngine')) {
+            if (class_exists('AIEngine') && function_exists('getSuperAdminOption')) {
                 try {
-                    $engine = new AIEngine();
-                    $text = $engine->chat($model !== '' ? $model : null, $system . "\n\nCustomer: " . $prompt);
-                    if (is_string($text) && trim($text) !== '') return trim($text);
+                    $plat = function_exists('bc_ai_platform_status')
+                        ? bc_ai_platform_status($connection_server, $vendor_id, 'support_reply')
+                        : ['available' => false];
+                    if (!empty($plat['available'])) {
+                        $engine = new AIEngine();
+                        $use_model = $model !== '' ? $model : (string)($plat['model'] ?? $engine->getDefaultModel());
+                        $res = $engine->chat($use_model, $system . "\n\n" . $prompt, ['temperature' => 0.3, 'num_predict' => 700]);
+                        if (is_array($res) && ($res['status'] ?? '') === 'success' && trim((string)($res['response'] ?? '')) !== '') {
+                            $reply_text = trim((string)$res['response']);
+                            if (function_exists('bc_ai_charge_vendor_tokens') && !preg_match('/^\s*ESCALATE\b/i', $reply_text)) {
+                                bc_ai_charge_vendor_tokens(
+                                    $connection_server,
+                                    $vendor_id,
+                                    'support_reply',
+                                    'support_chat',
+                                    'AI Support Reply',
+                                    (string)($res['model'] ?? $use_model),
+                                    (int)($res['duration_ms'] ?? 0)
+                                );
+                            }
+                            return $reply_text;
+                        }
+                    }
                 } catch (Throwable $e) {
-                    // Fall through to the direct call; a broken engine must not kill the chat.
+                    // Fall through to legacy direct key if configured.
                 }
             }
         }
 
+        if ($key === '') return null;
         return bc_chat_ai_direct($provider, $model, $key, $prompt, $system);
     }
 }
@@ -457,12 +492,10 @@ if (!function_exists('bc_chat_ai_reply')) {
     /**
      * Generate and post the assistant's reply to a thread.
      *
-     * Returns the message id, or 0 when the assistant should stay silent. Silence is correct in
-     * every one of these cases: AI disabled for the thread, thread not open, tenant turned AI off,
-     * no key configured. The caller only escalates on an actual provider failure, so a tenant who
-     * simply switched AI off keeps a working human queue.
+     * Returns the message id, or 0 when the assistant should stay silent.
      */
     function bc_chat_ai_reply($vendor_id, $thread) {
+        global $connection_server;
         $vendor_id = (int)$vendor_id;
         if (!is_array($thread) || empty($thread['id'])) return 0;
 
@@ -470,27 +503,40 @@ if (!function_exists('bc_chat_ai_reply')) {
         if ((int)$thread['ai_enabled'] !== 1 || $thread['status'] !== 'open') return 0;
 
         $settings = bc_chat_settings($vendor_id);
-        if ($settings['chat_ai_enabled'] !== '1' || trim($settings['chat_ai_key']) === '') return 0;
+        if ($settings['chat_ai_enabled'] !== '1') return 0;
+
+        $has_legacy_key = trim((string)$settings['chat_ai_key']) !== '';
+        $has_platform_ai = false;
+        if (!$has_legacy_key && function_exists('getSuperAdminOption')) {
+            $engine_file = __DIR__ . '/bc-ai-engine.php';
+            if (file_exists($engine_file)) require_once($engine_file);
+            if (function_exists('bc_ai_platform_status')) {
+                $plat = bc_ai_platform_status($connection_server, $vendor_id, 'support_reply');
+                $has_platform_ai = !empty($plat['available']);
+            }
+        }
+        if (!$has_legacy_key && !$has_platform_ai) return 0;
 
         // Build a short context from the recent transcript so follow-ups make sense.
         $history = bc_chat_messages($vendor_id, (int)$thread['id'], 0, 20);
         $lines = [];
+        $last_user_msg = '';
         foreach ($history as $m) {
             if ($m['author_type'] === 'system') continue;
             $who = $m['author_type'] === 'user' ? 'Customer' : 'Assistant';
             $lines[] = $who . ': ' . $m['body'];
+            if ($m['author_type'] === 'user') $last_user_msg = (string)$m['body'];
         }
         $prompt = implode("\n", array_slice($lines, -12));
         if ($prompt === '') return 0;
 
         // §25: the web layer may register a context provider so the assistant can
-        // reference the customer's own recent activity. The engine itself stays
-        // money-blind: it never queries accounts or transactions directly.
+        // reference the customer's own account, transactions, and website details.
         $ctx_provider = $GLOBALS['bc_chat_context_provider'] ?? null;
-        if (is_callable($ctx_provider)) {
-            $ctx = (string)$ctx_provider($vendor_id, (int)($thread['user_id'] ?? 0));
+        if (($settings['chat_ai_context_enabled'] ?? '1') === '1' && is_callable($ctx_provider)) {
+            $ctx = (string)$ctx_provider($vendor_id, (int)($thread['user_id'] ?? 0), $last_user_msg);
             if ($ctx !== '') {
-                $prompt .= "\n\n[Customer account context — recent activity]\n" . $ctx;
+                $prompt .= "\n\n[Customer account context]\n" . $ctx;
             }
         }
 
@@ -504,7 +550,7 @@ if (!function_exists('bc_chat_ai_reply')) {
             return 0;
         }
 
-        if (stripos(trim($reply), 'ESCALATE') === 0) {
+        if (preg_match('/^\s*ESCALATE\b/i', trim($reply)) || trim(strtoupper($reply)) === 'ESCALATE') {
             bc_chat_escalate($vendor_id, (int)$thread['id'], 'ai_deferred');
             bc_chat_post_message($vendor_id, (int)$thread['id'], 'system', 'Support',
                 'That one needs a person. A member of our team will pick this up shortly.');

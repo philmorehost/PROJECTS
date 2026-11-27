@@ -195,12 +195,30 @@ foreach (['SAAS', 'NON-SAAS'] as $ed) {
     kchk(strpos($sec, 'bc_kyb_ai_store_report') !== false && strpos($sec, 'bc_kyc_ai_ensure_schema') !== false, "$ed/func/bc-security.php has KYB report & schema helpers");
 }
 
-foreach (['func/bc-ai-engine.php', 'func/bc-kyc-av-scanner.php', 'func/bc-kyc-ai-analyzer.php', 'web/BusinessUpgrade.php', 'bc-admin/BusinessKYB.php'] as $shared) {
+foreach (['func/bc-ai-engine.php', 'func/bc-kyc-av-scanner.php', 'func/bc-kyc-ai-analyzer.php', 'web/BusinessUpgrade.php', 'bc-admin/BusinessKYB.php', 'bc-admin/AISettings.php', 'bc-admin/AIMarketing.php', 'bc-admin/SendMail.php', 'func/bc-support-chat.php', 'func/bc-support-chat-schema.php', 'web/ajax-support-chat.php'] as $shared) {
     kchk(
         file_get_contents($root . '/DGV7.0-SAAS/' . $shared) === file_get_contents($root . '/DGV7.0-NON-SAAS/' . $shared),
         "edition parity for $shared"
     );
 }
+
+// 15. AI Business Suite consolidation, SAAS vs NON-SAAS split & in-dashboard AV reports
+foreach (['SAAS', 'NON-SAAS'] as $ed) {
+    $base = $root . '/DGV7.0-' . $ed;
+    $aiSet = file_get_contents($base . '/bc-admin/AISettings.php');
+    kchk(strpos($aiSet, 'ai_user_token_price') === false && strpos($aiSet, 'ai_paid_usage') === false, "$ed AISettings removes retired user token monetization");
+    kchk(strpos($aiSet, 'Intelligence Hub') === false && strpos($aiSet, 'Voice Control') === false, "$ed AISettings removes Intelligence Hub and Voice Control");
+    kchk(strpos($aiSet, 'id="tab-billing"') !== false && strpos($aiSet, 'id="tab-support"') !== false && strpos($aiSet, 'id="tab-sentinel"') !== false && strpos($aiSet, 'id="tab-reports"') !== false, "$ed AISettings has unified 4-tab AI Business Suite");
+    kchk(strpos($aiSet, 'sentinel_auto_block') !== false && strpos($aiSet, 'sas_kyc_av_logs') !== false, "$ed AISettings exposes Security Sentinel auto-block and AV reports");
+
+    $av = file_get_contents($base . '/func/bc-kyc-av-scanner.php');
+    kchk(strpos($av, 'sas_kyc_av_logs') !== false && strpos($av, 'bc_ai_charge_vendor_tokens') !== false, "$ed AV scanner persists logs and charges SAAS tokens");
+
+    $chat = file_get_contents($base . '/func/bc-support-chat.php');
+    kchk(strpos($chat, 'bc_ai_platform_status') !== false && strpos($chat, 'support_reply') !== false, "$ed support chat connects to central AI engine & billing");
+}
+$spAi = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/AIManagement.php');
+kchk(strpos($spAi, 'av_scan_cost') !== false && strpos($spAi, 'kyc_report_cost') !== false && strpos($spAi, 'support_reply_cost') !== false && strpos($spAi, 'sas_kyc_av_logs') !== false, 'SAAS spadmin AIManagement configures AV/KYC/Support rates and views AV reports');
 
 // Cleanup
 foreach (glob($tmpDir . '/*') ?: [] as $f) @unlink($f);

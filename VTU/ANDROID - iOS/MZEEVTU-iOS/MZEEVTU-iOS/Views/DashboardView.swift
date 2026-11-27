@@ -15,6 +15,7 @@ struct MobileWallet: Identifiable {
 @MainActor
 struct DashboardView: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
+    @ObservedObject private var complianceGate = ComplianceGateState.shared
     @EnvironmentObject var session: SessionManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var name = ""
@@ -26,6 +27,7 @@ struct DashboardView: View {
     @State private var error = ""
     @State private var portal: MobileService?
     @State private var receipt: MobileReceipt?
+    @State private var showNotifications = false
     @State private var locked = UserDefaults.standard.bool(forKey: "mobile_biometric_lock")
     private var orange: Color { brandTheme.ink }
 
@@ -75,7 +77,8 @@ struct DashboardView: View {
         }
         .sheet(item: $portal, onDismiss: { reload() }) { service in MobilePortalView(service: service) }
         .sheet(item: $receipt) { item in MobileReceiptView(receipt: item) }
-        .onAppear { reload(); if locked { authenticate(enable: false) } }
+        .sheet(isPresented: $showNotifications) { ComplianceNotificationsSheet() }
+        .onAppear { reload(); ComplianceGateState.shared.refresh(); if locked { authenticate(enable: false) } }
         .onChange(of: scenePhase) { phase in
             if phase == .background && UserDefaults.standard.bool(forKey: "mobile_biometric_lock") { locked = true }
             if phase == .active && locked { authenticate(enable: false) }
@@ -87,7 +90,14 @@ struct DashboardView: View {
                 Image(systemName: "person.crop.circle.fill").font(.title)
                 Text(name.isEmpty ? "Welcome back" : "Hello, \(name)").font(.headline)
                 Spacer()
-                Button { open("settings") } label: { Image(systemName: "bell").padding(12).background(brandTheme.primary).clipShape(Circle()) }.accessibilityLabel("Account and notifications")
+                Button { showNotifications = true } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell").padding(12).background(brandTheme.primary).clipShape(Circle())
+                        if complianceGate.unreadNotifications > 0 {
+                            Circle().fill(Color.red).frame(width: 10, height: 10).offset(x: -2, y: 2)
+                        }
+                    }
+                }.accessibilityLabel("Account and notifications")
             }
             HStack {
                 Button { balanceVisible.toggle() } label: { Label("Wallet balance", systemImage: balanceVisible ? "eye" : "eye.slash").font(.caption) }
@@ -266,6 +276,60 @@ struct MobilePortalBrowser: UIViewRepresentable {
             if url.scheme=="https" && url.host==base.host && url.port==base.port { decisionHandler(.allow); return }
             if url.scheme=="https" || url.scheme=="mailto" { UIApplication.shared.open(url) }
             decisionHandler(.cancel)
+        }
+    }
+}
+
+struct ComplianceNotificationsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var items: [[String: Any]] = []
+    @State private var loading = true
+
+    var body: some View {
+        NavigationView {
+            List {
+                if loading {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else if items.isEmpty {
+                    Text("No compliance or account alerts yet.")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item["title"] as? String ?? "Notification")
+                                .font(.headline)
+                            Text(item["message"] as? String ?? "")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            if let ts = item["created_at"] as? String, !ts.isEmpty {
+                                Text(ts).font(.caption2).foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .navigationTitle("Notifications")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink("KYC") { KYCView() }
+                }
+            }
+            .onAppear { loadNotifications() }
+        }
+    }
+
+    private func loadNotifications() {
+        loading = true
+        AppNetworkService.shared.requestObject("kyc.php", params: ["action": "notifications", "mark_read": "1"]) { result in
+            loading = false
+            if case .success(let json) = result, let list = json["items"] as? [[String: Any]] {
+                items = list
+                ComplianceGateState.shared.unreadNotifications = 0
+            }
         }
     }
 }

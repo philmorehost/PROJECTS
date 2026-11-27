@@ -34,9 +34,10 @@ $kyc_still_needed = $enabled_checks ? bc_kyc_checks_pending($kyc_self, $enabled_
 
 $is_kyc_enabled = isKYCEnforced($vid);
 
-// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner + Notifications
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 // Handle Submissions
 if (isset($_POST['submit_bvn_nin'])) {
@@ -59,12 +60,31 @@ if (isset($_POST['submit_bvn_nin'])) {
 
     if ($outcome['status'] === 'verified') {
         $_SESSION['product_purchase_response'] = "Success: " . $outcome['message'];
+        $q_u2 = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$uid' LIMIT 1");
+        $u2 = $q_u2 ? (mysqli_fetch_assoc($q_u2) ?: $get_logged_user_details) : $get_logged_user_details;
+        $still_labels = array_map('bc_kyc_check_label', (array)($outcome['still_needed'] ?? []));
+        if ((int)$outcome['kyc_status'] === 2) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_decision', [
+                'vendor_id' => (int)$vid, 'user' => $u2, 'status' => 2, 'label' => 'Approved (Verified)',
+            ]);
+        } elseif ((int)$outcome['kyc_status'] === 1) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_submitted', [
+                'vendor_id' => (int)$vid, 'user' => $u2,
+            ]);
+        } else {
+            bc_compliance_notify_event($connection_server, 'user_kyc_partial_saved', [
+                'vendor_id' => (int)$vid, 'user' => $u2, 'still_needed' => $still_labels,
+            ]);
+        }
     } else {
         // Not verified. The number is still kept (so the reviewer sees what the user typed) but it is
         // explicitly marked as UNVERIFIED - it must never look like a checked identity, and a person
         // decides what to do with it.
         mysqli_query($connection_server, "UPDATE sas_users SET $type='$value_esc', kyc_api_verified='0', kyc_provider=NULL, kyc_provider_ref=NULL, kyc_api_verified_at=NULL WHERE id='$uid'");
         $_SESSION['product_purchase_response'] = "Notice: " . strtoupper($type) . " saved, but it could not be verified with the identity provider (" . $outcome['message'] . "). Your submission will be reviewed manually.";
+        bc_compliance_notify_event($connection_server, 'user_kyc_partial_saved', [
+            'vendor_id' => (int)$vid, 'user' => $get_logged_user_details, 'still_needed' => array_map('bc_kyc_check_label', $kyc_still_needed),
+        ]);
     }
     header("Location: KYCVerification.php");
     exit();
@@ -195,7 +215,13 @@ if (isset($_POST['submit_media'])) {
             'doc_kind'   => $input_name,
         ]);
         if (empty($av_scan['allowed'])) {
-            $upload_errors[] = "$label blocked by security scanner: " . ($av_scan['reason'] ?? 'Invalid or suspicious file.');
+            $av_reason = (string)($av_scan['reason'] ?? 'Invalid or suspicious file.');
+            $upload_errors[] = "$label blocked by security scanner: " . $av_reason;
+            bc_compliance_notify_event($connection_server, 'user_kyc_av_blocked', [
+                'vendor_id' => (int)$vid,
+                'user'      => $get_logged_user_details,
+                'reason'    => "$label: $av_reason",
+            ]);
             continue;
         }
 
@@ -244,8 +270,11 @@ if (isset($_POST['submit_media'])) {
         $q_after = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
         $after = $q_after ? (mysqli_fetch_assoc($q_after) ?: []) : [];
         $still = $enabled_checks ? bc_kyc_checks_pending($after, $enabled_checks) : [];
+        $in_review_now = false;
         if (empty($still) && (int)($after['kyc_status'] ?? 0) !== 2) {
             mysqli_query($connection_server, "UPDATE sas_users SET kyc_status = 1, kyc_submitted_at = NOW() WHERE id='$user_id' AND vendor_id='$vid'");
+            $after['kyc_status'] = 1;
+            $in_review_now = true;
             $msg = "Documents submitted and waiting for admin review. Every required item is now provided.";
         } elseif ((int)($after['kyc_status'] ?? 0) === 2) {
             $msg = "Documents updated. Your account remains verified.";
@@ -259,8 +288,10 @@ if (isset($_POST['submit_media'])) {
         $_SESSION['product_purchase_response'] = $msg;
 
         // ─── Auto-trigger AI KYC analysis after document submission ────────────────────────────
+        $ai_summary_txt = '';
         $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
         if (!empty($updates) && !empty($ai_gate['enabled'])) {
+            // Re-read the user row to get the latest document paths
             $q_reread = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
             $user_reread = $q_reread ? (mysqli_fetch_assoc($q_reread) ?: []) : [];
             if ($user_reread) {
@@ -271,6 +302,20 @@ if (isset($_POST['submit_media'])) {
                 }
                 $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
                 $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
+                $ai_rating = (int)($store_result['decision']['overall_rating'] ?? 0);
+                $ai_grade = (string)($store_result['decision']['overall_grade'] ?? 'C');
+                $ai_summary_txt = "AI Rating: {$ai_rating}/100 (Grade {$ai_grade}).";
+
+                bc_compliance_notify_event($connection_server, 'user_kyc_ai_screened', [
+                    'vendor_id'          => (int)$vid,
+                    'user'               => $user_reread,
+                    'ai_status'          => $store_result['decision']['status'] ?? 'review',
+                    'overall_rating'     => $ai_rating,
+                    'overall_grade'      => $ai_grade,
+                    'reason'             => $store_result['decision']['reason'] ?? '',
+                    'notify_admin_email' => !$in_review_now,
+                ]);
+
                 if ($store_result['applied']) {
                     $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC automatically! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
                 } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
@@ -279,6 +324,19 @@ if (isset($_POST['submit_media'])) {
                     $_SESSION['product_purchase_response'] = "Your documents passed antivirus screening and were analyzed by our AI Compliance Engine. An admin will review the AI report shortly.";
                 }
             }
+        }
+        if ($in_review_now) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_submitted', [
+                'vendor_id'       => (int)$vid,
+                'user'            => $after ?: $get_logged_user_details,
+                'ai_summary_text' => $ai_summary_txt,
+            ]);
+        } else {
+            bc_compliance_notify_event($connection_server, 'user_kyc_partial_saved', [
+                'vendor_id'    => (int)$vid,
+                'user'         => $after ?: $get_logged_user_details,
+                'still_needed' => array_map('bc_kyc_check_label', $still),
+            ]);
         }
     } else {
         if (!empty($upload_errors)) {
@@ -321,12 +379,22 @@ if (isset($_POST['ai_analyze'])) {
     $analysis['username'] = $user_row['username'];
     $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
     $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
+    bc_compliance_notify_event($connection_server, 'user_kyc_ai_screened', [
+        'vendor_id'          => (int)$vid,
+        'user'               => $user_row,
+        'ai_status'          => $store_result['decision']['status'] ?? 'review',
+        'overall_rating'     => (int)($store_result['decision']['overall_rating'] ?? 0),
+        'overall_grade'      => (string)($store_result['decision']['overall_grade'] ?? 'C'),
+        'reason'             => (string)($store_result['decision']['reason'] ?? ''),
+        'notify_admin_email' => true,
+    ]);
+
     if ($store_result['applied']) {
-        $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
+        $_SESSION['product_purchase_response'] = "🎉 AI has verified your documents and approved your KYC! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%. You now have full access to all services.";
     } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
-        $_SESSION['product_purchase_response'] = "AI rejected your documents: " . ($store_result['decision']['reason'] ?? 'Please fix the issues and resubmit.');
+        $_SESSION['product_purchase_response'] = "❌ AI rejected your documents: " . ($store_result['decision']['reason'] ?? 'Please fix the issues and resubmit.');
     } else {
-        $_SESSION['product_purchase_response'] = "AI analysis complete. Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%. " . ($store_result['decision']['reason'] ?? 'Manual review recommended.');
+        $_SESSION['product_purchase_response'] = "📋 AI analysis complete. Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%. " . ($store_result['decision']['reason'] ?? 'Manual review recommended.');
     }
     header("Location: KYCVerification.php");
     exit();
@@ -394,6 +462,37 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
 <?php bc_app_topbar(array("title" => "IDENTITY VERIFICATION (KYC)", "crumb" => "Home / KYC")); ?>
 
     <section class="section">
+        <?php if ($is_kyc_enabled && $kyc_status != 2): ?>
+        <div class="card border-0 rounded-4 shadow-sm mb-4 overflow-hidden" style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);color:#fff;">
+            <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:52px;height:52px;background:rgba(255,255,255,0.14);">
+                        <i class="bi <?php echo $kyc_status == 1 ? 'bi-hourglass-split' : ($kyc_status == 3 ? 'bi-exclamation-octagon-fill' : 'bi-shield-lock-fill'); ?> fs-3"></i>
+                    </div>
+                    <div>
+                        <div class="text-uppercase fw-bold" style="font-size:.7rem;letter-spacing:.08em;opacity:.8;">Mandatory Compliance Gate</div>
+                        <h5 class="fw-bold mb-1 text-white">
+                            <?php echo $kyc_status == 1 ? 'Verification Pending Human Review — Platform Locked' : ($kyc_status == 3 ? 'Action Required: KYC Rejected — Resubmit to Unlock' : 'Complete Identity Verification to Unlock Services'); ?>
+                        </h5>
+                        <p class="mb-0 small" style="opacity:.88;">
+                            <?php echo $kyc_status == 1
+                                ? 'Your submission has passed automated security checks and is awaiting compliance team approval. Wallet, transfers, and purchases unlock automatically once approved.'
+                                : 'All platform features (wallet funding, transfers, bills, and mobile app actions) remain locked until your identity verification is approved.'; ?>
+                        </p>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="KYCVerification.php" class="btn btn-light btn-sm rounded-pill fw-bold px-3">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh Status
+                    </a>
+                    <a href="/logout.php" class="btn btn-outline-light btn-sm rounded-pill fw-bold px-3">
+                        <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+                    </a>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="row g-4">
             <div class="col-lg-4">
                 <div class="card kyc-card p-4 text-center">
@@ -473,6 +572,24 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
             </div>
 
             <div class="col-lg-8">
+                <?php if ($kyc_status == 1 && empty($kyc_still_needed)): ?>
+                <div class="card kyc-card border-0 p-4 mb-4" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-left:4px solid #f59e0b !important;">
+                    <div class="d-flex align-items-start gap-3">
+                        <i class="bi bi-clock-history text-warning fs-1"></i>
+                        <div class="flex-grow-1">
+                            <h5 class="fw-bold mb-1">Your KYC Submission is Under Compliance Review</h5>
+                            <p class="small text-muted mb-3">Automated antivirus &amp; AI compliance screening completed. A human compliance officer is reviewing your file. You will receive an email, dashboard notification, and mobile push alert as soon as a decision is made.</p>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="KYCVerification.php" class="btn btn-warning btn-sm rounded-pill fw-bold px-3"><i class="bi bi-arrow-clockwise me-1"></i>Check Approval Status</a>
+                                <button type="button" class="btn btn-outline-dark btn-sm rounded-pill px-3" onclick="var el=document.getElementById('bcPendingUpdateWrap');if(el){el.style.display=el.style.display==='none'?'block':'none';}">
+                                    <i class="bi bi-pencil-square me-1"></i>Update / Replace Documents
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                <div id="bcPendingUpdateWrap" <?php echo ($kyc_status == 1 && empty($kyc_still_needed)) ? 'style="display:none;"' : ''; ?>>
                 <?php if(!$is_kyc_enabled): ?>
                     <div class="alert alert-info border-0 rounded-4 shadow-sm p-4">
                         <h6 class="fw-bold"><i class="bi bi-info-circle me-2"></i>KYC is Optional</h6>
@@ -519,7 +636,7 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                     These are checked by a person, not an algorithm. Take the photo now where you can - screenshots or
                                     photos of an old photo are rejected.
                                 </p>
-                                <form method="post" enctype="multipart/form-data">
+                                <form method="post" enctype="multipart/form-data" data-kyc-wizard="kyc">
                                     <?php
                                         $req_govt_id  = in_array('govt_id', $kyc_still_needed, true);
                                         $req_selfie   = in_array('liveliness_picture', $kyc_still_needed, true);
@@ -531,40 +648,42 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                         ];
                                     ?>
                                     <?php if (in_array('govt_id', $manual_checks, true)): ?>
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <label class="form-label small fw-bold">Document type<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                            <select name="doc_type" class="form-select rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required' : ''; ?>>
-                                                <option value="">Select...</option>
-                                                <?php foreach (['BVN', 'NIN', 'Passport', "Driver's Licence", "Voter's Card", 'National ID'] as $dt): ?>
-                                                    <option value="<?php echo htmlspecialchars($dt); ?>" <?php echo (($kyc_self['kyc_id_type'] ?? '') === $dt) ? 'selected' : ''; ?>><?php echo htmlspecialchars($dt); ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-8">
-                                            <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
-                                            <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
+                                    <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="govt_id" data-step-label="Government ID">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">Document type<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                                <select name="doc_type" class="form-select rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required' : ''; ?>>
+                                                    <option value="">Select...</option>
+                                                    <?php foreach (['BVN', 'NIN', 'Passport', "Driver's Licence", "Voter's Card", 'National ID'] as $dt): ?>
+                                                        <option value="<?php echo htmlspecialchars($dt); ?>" <?php echo (($kyc_self['kyc_id_type'] ?? '') === $dt) ? 'selected' : ''; ?>><?php echo htmlspecialchars($dt); ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-8">
+                                                <label class="form-label small fw-bold">Government ID (photo or PDF, max 8 MB)<?php echo $req_govt_id ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                                <input type="file" name="govt_id" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm"<?php echo $req_govt_id ? ' required data-kyc-required="1"' : ''; ?>>
+                                            </div>
                                         </div>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('liveliness_picture', $manual_checks, true)): ?>
-                                    <div class="mt-3">
-                                        <label class="form-label small fw-bold">Take a live photo of yourself now (camera only, max 512 KB)<?php echo $req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="selfie" data-step-label="Live Selfie (Auto)">
+                                        <label class="form-label small fw-bold">Take a live photo of yourself now (auto-captures when face is clear, max 512 KB)<?php echo $req_selfie ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('selfie'); ?>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('proof_of_address', $manual_checks, true)): ?>
-                                    <div class="mt-3">
+                                    <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="proof_of_address" data-step-label="Proof of Address">
                                         <label class="form-label small fw-bold">Proof of address (utility bill, bank statement, last 3 months)<?php echo $req_poa ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <input type="file" name="proof_of_address" accept="image/*,application/pdf" class="form-control rounded-3 shadow-sm"<?php echo $req_poa ? ' required data-kyc-required="1"' : ''; ?>>
                                     </div>
                                     <?php endif; ?>
 
                                     <?php if (in_array('liveliness_video', $manual_checks, true)): ?>
-                                    <div class="mt-3">
-                                        <label class="form-label small fw-bold">Short video - say your full name and today's date<?php echo $req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
+                                    <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="liveliness_video" data-step-label="Live Video (Say HI)">
+                                        <label class="form-label small fw-bold">Short live video — look at the camera and say the word &ldquo;HI&rdquo;<?php echo $req_video ? ' <span class="text-danger">*</span>' : ''; ?></label>
                                         <?php bc_live_capture_widget('liveliness_video', true); ?>
                                     </div>
                                     <?php endif; ?>
@@ -573,6 +692,7 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                                         Submit for review
                                     </button>
                                 </form>
+                                <script src="../asset/bc-kyc-wizard.js" defer></script>
                             </div>
                         </div>
                     </div>
@@ -649,6 +769,7 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>

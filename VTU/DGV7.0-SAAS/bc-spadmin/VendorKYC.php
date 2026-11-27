@@ -7,6 +7,8 @@ bc_admin_inline_otp_dispatch($get_logged_spadmin_details,true,'vendor_kyc_decisi
 include_once(__DIR__ . "/../func/bc-plate-admin.php"); // §42: bc_adm_head/sidebar/topbar/foot live here - this page used them without ever loading the plate (fatal on open)
 
 require_once __DIR__.'/../func/bc-vendor-compliance-review.php';
+include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 // §33: vendor compliance review. Vendors submit BVN/NIN + documents from
 // bc-admin (Account Settings → Vendor KYC); nothing self-approves. A decision
@@ -132,6 +134,19 @@ if (isset($_POST['sec33_send_code'])) {
     exit();
 }
 
+if (isset($_POST['run_vendor_kyc_ai_report'])) {
+    if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+    $vid = (int)($_POST['vendor_id'] ?? 0);
+    $rep = bc_vendor_kyc_ai_analyze_and_store($connection_server, $vid);
+    if (($rep['status'] ?? '') === 'success') {
+        $_SESSION['product_purchase_response'] = 'AI Compliance Report ready for Vendor #' . $vid . ': ' . (int)($rep['overall_rating'] ?? 0) . '/100 (Grade ' . ($rep['overall_grade'] ?? 'C') . ').';
+    } else {
+        $_SESSION['product_purchase_response'] = 'AI Screening skipped: ' . ($rep['reason'] ?? 'Unavailable');
+    }
+    header('Location: VendorKYC.php?status=' . (int)($_POST['return_status'] ?? 1));
+    exit();
+}
+
 if (isset($_POST['vendor_kyc_decision'])) {
     if (function_exists('bc_validate_csrf')) bc_validate_csrf();
     $vid      = (int)($_POST['vendor_id'] ?? 0);
@@ -179,6 +194,12 @@ if (isset($_POST['vendor_kyc_decision'])) {
                 if ($prev === null) unset($GLOBALS['vendor_id']); else $GLOBALS['vendor_id'] = $prev;
                 $flash .= $mail_sent ? ' The vendor has been emailed.' : ' The email to the vendor could not be sent.';
             }
+            bc_compliance_notify_event($connection_server, 'vendor_kyc_decision', [
+                'vendor_id' => (int)$vid,
+                'vendor'    => $target,
+                'decision'  => $decision,
+                'reason'    => $reason,
+            ]);
             $_SESSION['product_purchase_response'] = $flash;
         }
     }
@@ -250,6 +271,36 @@ if (!empty($_SESSION['product_purchase_response'])) {
                   <div class="col-md-3">BVN: <strong><?php echo !empty($vendor['bvn']) ? '••••••' . substr((string)$vendor['bvn'], -4) : '<span class="text-danger">missing</span>'; ?></strong></div>
                   <div class="col-md-3">NIN: <strong><?php echo !empty($vendor['nin']) ? '••••••' . substr((string)$vendor['nin'], -4) : '<span class="text-danger">missing</span>'; ?></strong></div>
                   <div class="col-md-6">Still needed: <strong><?php echo $pending ? implode(', ', array_map(function ($c) use ($vkyc_check_labels) { return $vkyc_check_labels[$c] ?? $c; }, $pending)) : 'nothing — file complete'; ?></strong></div>
+                </div>
+                <?php
+                  $v_ai = function_exists('bc_vendor_kyc_ai_get_report') ? bc_vendor_kyc_ai_get_report($connection_server, $vid) : null;
+                  $v_ai_status = (string)($v_ai['ai_status'] ?? '');
+                  $v_ai_badge = $v_ai_status === 'vkyc_approve' ? 'success' : ($v_ai_status === 'vkyc_reject' ? 'danger' : 'warning');
+                  $v_ai_label = $v_ai_status === 'vkyc_approve' ? 'AI Recommends Approval' : ($v_ai_status === 'vkyc_reject' ? 'AI Flagged Issues' : 'Manual Review Advised');
+                ?>
+                <div class="mt-2 p-2 rounded-3 bg-light border d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div class="small">
+                    <i class="bi bi-cpu text-primary me-1"></i><strong>AI Compliance Screening:</strong>
+                    <?php if ($v_ai): ?>
+                      <span class="badge bg-<?php echo $v_ai_badge; ?> ms-1"><?php echo $v_ai_label; ?></span>
+                      <span class="fw-bold ms-1"><?php echo (int)($v_ai['overall_rating'] ?? 0); ?>/100 (Grade <?php echo htmlspecialchars((string)($v_ai['overall_grade'] ?? 'C'), ENT_QUOTES, 'UTF-8'); ?>)</span>
+                      <?php if (!empty($v_ai['reason'])): ?>
+                        <span class="text-muted ms-1">— <?php echo htmlspecialchars((string)$v_ai['reason'], ENT_QUOTES, 'UTF-8'); ?></span>
+                      <?php endif; ?>
+                    <?php else: ?>
+                      <span class="text-muted">Not run yet</span>
+                    <?php endif; ?>
+                  </div>
+                  <?php if ($docs): ?>
+                  <form method="post" class="m-0">
+                    <?php echo function_exists('bc_csrf_field') ? bc_csrf_field() : ''; ?>
+                    <input type="hidden" name="vendor_id" value="<?php echo $vid; ?>">
+                    <input type="hidden" name="return_status" value="<?php echo $status_filter; ?>">
+                    <button type="submit" name="run_vendor_kyc_ai_report" value="1" class="btn btn-sm btn-outline-primary rounded-pill">
+                      <i class="bi bi-arrow-repeat me-1"></i><?php echo $v_ai ? 'Refresh AI Check' : 'Run AI Check'; ?>
+                    </button>
+                  </form>
+                  <?php endif; ?>
                 </div>
                 <?php if ($docs): ?>
                 <div class="mt-3">
