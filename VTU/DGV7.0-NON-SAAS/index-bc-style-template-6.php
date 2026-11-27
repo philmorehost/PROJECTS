@@ -39,19 +39,24 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $site_title       = $cachedStyle['site_title'] ?? $site_title;
             $header_image_url = $cachedStyle['header_image'] ?? $header_image_url;
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
-            mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
-            mysqli_stmt_execute($stmt_site);
-            $result_site = mysqli_stmt_get_result($stmt_site);
-            if ($site_row = mysqli_fetch_assoc($result_site)) {
-                $site_details     = $site_row;
-                $site_title       = $site_row['site_title'] ?: $site_title;
-                $header_image_url = $site_row['header_image'] ?: $header_image_url;
-                if (function_exists('bc_cache_set')) {
-                    bc_cache_set($cacheKey, $site_row);
-                }
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.date DESC LIMIT 1");
+            if (!$stmt_site) {
+                $stmt_site = mysqli_prepare($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id = ? LIMIT 1");
             }
-            mysqli_stmt_close($stmt_site);
+            if ($stmt_site) {
+                mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
+                mysqli_stmt_execute($stmt_site);
+                $result_site = mysqli_stmt_get_result($stmt_site);
+                if ($result_site && ($site_row = mysqli_fetch_assoc($result_site))) {
+                    $site_details     = $site_row;
+                    $site_title       = !empty($site_row['site_title']) ? $site_row['site_title'] : $site_title;
+                    $header_image_url = !empty($site_row['header_image']) ? $site_row['header_image'] : $header_image_url;
+                    if (function_exists('bc_cache_set')) {
+                        bc_cache_set($cacheKey, $site_row);
+                    }
+                }
+                mysqli_stmt_close($stmt_site);
+            }
         }
     }
 }
