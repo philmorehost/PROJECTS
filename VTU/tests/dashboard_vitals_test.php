@@ -66,6 +66,17 @@ foreach ($editions as $ed) {
     dv_check("$ed .pk-app__action is pill-shaped", strpos($plate, 'border-radius: 999px') !== false);
     dv_check("$ed .pk-app__action never underlines", strpos($plate, 'text-decoration: none !important') !== false);
     dv_check("$ed .pk-app__action uses the brand fill", strpos($plate, 'background: var(--brand)') !== false);
+
+    // Auto-Funding card horizontal frame & plate-app scroll/border utilities
+    $app_plate = dv_src($root, $ed, 'func/bc-plate-app.php');
+    dv_check("$ed .pk-app__main bounds width with min-width: 0", strpos($app_plate, '.pk-app__main {') !== false && strpos($app_plate, 'min-width: 0; max-width: 100%;') !== false);
+    dv_check("$ed plate-app defines .overflow-auto", strpos($app_plate, '.pk-app__wrap .overflow-auto {') !== false);
+    dv_check("$ed plate-app defines .border-top", strpos($app_plate, '.pk-app__wrap .border-top {') !== false);
+    dv_check("$ed plate-app defines .text-truncate", strpos($app_plate, '.pk-app__wrap .text-truncate {') !== false);
+    dv_check("$ed dashboard Auto-Funding uses bounded .ad2-bank-frame and .ad2-bank-track",
+        strpos($dash, 'class="ad2-bank-frame"') !== false && strpos($dash, 'class="ad2-bank-track"') !== false);
+    dv_check("$ed dashboard .ad2-bank-track scrolls horizontally inside frame",
+        strpos($dash, 'overflow-x: auto; overflow-y: hidden;') !== false && strpos($dash, 'flex: 0 0 min(290px, 84%)') !== false);
 }
 
 echo "$count dashboard vitals checks passed\n";

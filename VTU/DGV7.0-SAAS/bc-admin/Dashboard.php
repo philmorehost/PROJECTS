@@ -339,11 +339,12 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     .ad2-card {
         background: var(--surface); border: 1px solid var(--line); border-radius: 22px;
         box-shadow: 0 1px 2px rgba(11,18,32,.05), 0 16px 34px -20px rgba(11,18,32,.28);
-        padding: 1.45rem; height: 100%; display: flex; flex-direction: column;
+        padding: 1.45rem; height: 100%; min-width: 0; max-width: 100%; overflow: hidden;
+        display: flex; flex-direction: column;
         transition: transform .18s ease, box-shadow .18s ease;
     }
     .ad2-card:hover { transform: translateY(-2px); box-shadow: 0 2px 3px rgba(11,18,32,.05), 0 22px 40px -20px rgba(11,18,32,.32); }
-    .ad2-card__head { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.1rem; }
+    .ad2-card__head { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin-bottom: 1.1rem; }
     .ad2-card__title { font-size: 1rem; font-weight: 800; letter-spacing: -.01em; color: var(--ink); margin: 0; }
     .ad2-card__sub { font-size: .78rem; color: var(--muted); }
     .ad2-ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.25rem; flex: 0 0 auto; box-shadow: inset 0 0 0 1px rgba(11,18,32,.05); }
@@ -377,15 +378,41 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
     .growth-tile { transition: transform .18s ease, box-shadow .18s ease; }
     .growth-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
     @keyframes pulse-new { 0% { box-shadow: 0 0 0 0 rgba(220,53,69,.5); } 70% { box-shadow: 0 0 0 6px rgba(220,53,69,0); } 100% { box-shadow: 0 0 0 0 rgba(220,53,69,0); } }
+    .ad2-bank-frame {
+        position: relative; width: 100%; max-width: 100%; min-width: 0; overflow: hidden;
+    }
+    .ad2-bank-track {
+        display: flex; flex-wrap: nowrap; gap: 14px; width: 100%; max-width: 100%; min-width: 0;
+        overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity; overscroll-behavior-x: contain; touch-action: pan-x pan-y;
+        padding: 2px 2px 10px; scrollbar-width: thin;
+        scrollbar-color: color-mix(in srgb, var(--brand) 40%, #cbd5e1) transparent;
+    }
+    .ad2-bank-track::-webkit-scrollbar { height: 6px; }
+    .ad2-bank-track::-webkit-scrollbar-track { background: var(--wash); border-radius: 999px; }
+    .ad2-bank-track::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--brand) 42%, #cbd5e1); border-radius: 999px; }
     .ad2-bank {
-        min-width: 300px; flex: 0 0 auto; border-radius: 18px; padding: 1.1rem 1.2rem; color: var(--ink);
+        flex: 0 0 min(290px, 84%); min-width: 0; max-width: 100%; scroll-snap-align: start;
+        border-radius: 18px; padding: 1.05rem 1.15rem; color: var(--ink);
         background: linear-gradient(145deg, var(--surface), var(--wash));
         border: 1px solid var(--line); border-left: 4px solid var(--brand);
     }
+    .ad2-bank__acctrow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+    .ad2-bank__num { font-size: clamp(1.05rem, 4.2vw, 1.25rem); font-weight: 800; color: var(--ink); letter-spacing: -.01em; overflow-wrap: anywhere; }
+    .ad2-bank-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 4px; }
+    .ad2-bank-nav[hidden] { display: none; }
+    .ad2-bank-nav__hint { font-size: .74rem; color: var(--muted); font-weight: 600; }
+    .ad2-bank-nav__btns { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .ad2-bank-nav__btn {
+        width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--line);
+        background: var(--surface); color: var(--ink); display: inline-flex; align-items: center; justify-content: center;
+        cursor: pointer; font-size: .85rem; transition: background .15s ease, border-color .15s ease;
+    }
+    .ad2-bank-nav__btn:hover { background: var(--wash); border-color: var(--brand); color: var(--brand-ink); }
     .ad2-addon { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 0; border-bottom: 1px solid var(--line); }
     .ad2-addon:last-child { border-bottom: 0; }
-    .ad2-hero .btn:focus-visible, .ad2-action:focus-visible, .ad2-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-    @media (max-width: 767px) { .ad2-balance { font-size: 1.95rem; } .ad2-hero { padding: 1.35rem; border-radius: 22px; } }
+    .ad2-hero .btn:focus-visible, .ad2-action:focus-visible, .ad2-tile:focus-visible, .ad2-bank-nav__btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    @media (max-width: 767px) { .ad2-balance { font-size: 1.95rem; } .ad2-hero { padding: 1.35rem; border-radius: 22px; } .ad2-card { padding: 1.15rem; border-radius: 18px; } }
     @media (prefers-reduced-motion: reduce) { .ad2-live { animation: none; } .ad2-card, .ad2-metric, .ad2-action, .ad2-tile { transition: none; } }
   </style>
     <?php bc_adm_sidebar(); ?>
@@ -764,22 +791,26 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                         <i class="bi bi-arrow-repeat me-1"></i> RE-SYNC
                     </button>
                 </div>
-                <div class="d-flex gap-3 overflow-auto pb-2">
+                <?php $v_banks = getVendorVirtualBank(); ?>
+                <div class="ad2-bank-frame">
+                    <div class="ad2-bank-track" id="adminBankTrack" role="region" aria-label="Auto-funding virtual bank accounts">
                         <?php
-                          $v_banks = getVendorVirtualBank();
                           if($v_banks){
                             foreach ($v_banks as $bank_accounts_json) {
                                 $bank_accounts_json = json_decode($bank_accounts_json, true);
+                                $b_name = htmlspecialchars((string)($bank_accounts_json["bank_name"] ?? ''), ENT_QUOTES, 'UTF-8');
+                                $b_num = htmlspecialchars((string)($bank_accounts_json["account_number"] ?? ''), ENT_QUOTES, 'UTF-8');
+                                $b_acct = htmlspecialchars(strtoupper((string)($bank_accounts_json["account_name"] ?? '')), ENT_QUOTES, 'UTF-8');
                                 ?>
                                 <div class="ad2-bank">
-                                    <div class="small text-muted fw-bold text-uppercase mb-2"><?php echo $bank_accounts_json["bank_name"]; ?></div>
-                                    <div class="h4 fw-bold text-dark mb-2 d-flex justify-content-between align-items-center">
-                                        <?php echo $bank_accounts_json["account_number"]; ?>
-                                        <button class="btn btn-sm btn-primary py-1 px-2 rounded-3" onclick="copyText('Account number copied', '<?php echo $bank_accounts_json['account_number']; ?>')">
+                                    <div class="small text-muted fw-bold text-uppercase mb-2"><?php echo $b_name; ?></div>
+                                    <div class="ad2-bank__acctrow mb-2">
+                                        <span class="ad2-bank__num"><?php echo $b_num; ?></span>
+                                        <button type="button" class="btn btn-sm btn-primary py-1 px-2 rounded-3" onclick="copyText('Account number copied', '<?php echo $b_num; ?>')">
                                             <i class="bi bi-clipboard me-1"></i>Copy
                                         </button>
                                     </div>
-                                    <div class="small fw-bold text-primary text-truncate mb-3"><?php echo strtoupper($bank_accounts_json["account_name"]); ?></div>
+                                    <div class="small fw-bold text-primary text-truncate mb-3" title="<?php echo $b_acct; ?>"><?php echo $b_acct; ?></div>
                                     <div class="pt-2 border-top d-flex justify-content-between">
                                         <span class="small text-muted">Service Fee</span>
                                         <span class="small fw-bold text-danger">₦50.00</span>
@@ -788,9 +819,19 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                                 <?php
                             }
                           } else {
-                              echo '<div class="alert alert-info w-100">Ensure your API context is correctly set to generate auto-funding accounts.</div>';
+                              echo '<div class="alert alert-info w-100 mb-0">Ensure your API context is correctly set to generate auto-funding accounts.</div>';
                           }
                         ?>
+                    </div>
+                    <?php if (is_array($v_banks) && count($v_banks) > 1): ?>
+                    <div class="ad2-bank-nav" id="adminBankNav">
+                        <span class="ad2-bank-nav__hint">Swipe or scroll to view all <?php echo count($v_banks); ?> accounts</span>
+                        <div class="ad2-bank-nav__btns">
+                            <button type="button" class="ad2-bank-nav__btn" aria-label="Scroll accounts left" onclick="scrollAdminBankTrack(-1)"><i class="bi bi-chevron-left"></i></button>
+                            <button type="button" class="ad2-bank-nav__btn" aria-label="Scroll accounts right" onclick="scrollAdminBankTrack(1)"><i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -852,6 +893,23 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         <?php include("../func/admin-short-trans.php"); ?>
     
     <script>
+        function scrollAdminBankTrack(dir) {
+            var track = document.getElementById('adminBankTrack');
+            if (!track) return;
+            var firstCard = track.querySelector('.ad2-bank');
+            var step = firstCard ? (firstCard.getBoundingClientRect().width + 14) : 260;
+            track.scrollBy({ left: dir * step, behavior: 'smooth' });
+        }
+
+        function updateAdminBankNav() {
+            var track = document.getElementById('adminBankTrack');
+            var nav = document.getElementById('adminBankNav');
+            if (!track || !nav) return;
+            nav.hidden = track.scrollWidth <= track.clientWidth + 2;
+        }
+        window.addEventListener('resize', updateAdminBankNav);
+        document.addEventListener('DOMContentLoaded', updateAdminBankNav);
+
         function triggerAdminManualSync() {
             const btn = document.getElementById('syncBtnAdmin');
             const originalText = btn.innerHTML;
