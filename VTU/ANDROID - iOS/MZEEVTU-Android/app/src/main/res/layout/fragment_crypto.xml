@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background" android:tag="brand:bg=background">
+    android:background="@color/background"
+    android:tag="brand:bg=background">
 
     <!-- Header -->
     <LinearLayout
@@ -13,7 +14,8 @@
         android:background="@color/primary"
         android:gravity="center_vertical"
         android:paddingStart="8dp"
-        android:paddingEnd="16dp" android:tag="brand:bg=primary">
+        android:paddingEnd="16dp"
+        android:tag="brand:bg=primary">
         <ImageButton
             android:id="@+id/btn_back"
             android:layout_width="40dp"
@@ -21,7 +23,8 @@
             android:src="@drawable/ic_crypto"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:tint="#FFFFFF"
-            android:contentDescription="Back"  android:tag="brand:icon=primary_text" />
+            android:contentDescription="Back"
+            android:tag="brand:icon=on_primary" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -30,10 +33,10 @@
             android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:layout_marginStart="4dp" />
+            android:layout_marginStart="4dp"
+            android:tag="brand:text=on_primary" />
     </LinearLayout>
 
-    <!-- Horizontal progress bar (loading indicator) -->
     <ProgressBar
         android:id="@+id/progress_bar"
         style="@style/Widget.AppCompat.ProgressBar.Horizontal"
@@ -42,7 +45,6 @@
         android:indeterminate="true"
         android:visibility="gone" />
 
-    <!-- Swipe-to-refresh + scrollable content -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipe_refresh"
         android:layout_width="match_parent"
@@ -59,20 +61,22 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- ââ Balance Hero Card âââââââââââââââââââââââââââââââ -->
+                <!-- Hero Card -->
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:cardCornerRadius="20dp"
                     app:cardElevation="6dp"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="14dp"
+                    android:tag="brand:bg=primary">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:padding="20dp"
-                        android:background="@color/primary" android:tag="brand:bg=primary">
+                        android:padding="18dp"
+                        android:background="@color/primary"
+                        android:tag="brand:bg=primary">
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -81,7 +85,8 @@
                             android:textColor="#CCFFFFFF"
                             android:textSize="11sp"
                             android:letterSpacing="0.08"
-                            android:textAllCaps="true" />
+                            android:textAllCaps="true"
+                            android:tag="brand:text=on_primary" />
 
                         <TextView
                             android:id="@+id/tv_ngn_balance"
@@ -89,128 +94,644 @@
                             android:layout_height="wrap_content"
                             android:text="₦0.00"
                             android:textColor="#FFFFFF"
-                            android:textSize="30sp"
+                            android:textSize="28sp"
                             android:textStyle="bold"
                             android:layout_marginTop="4dp"
-                            android:layout_marginBottom="20dp" />
+                            android:tag="brand:text=on_primary" />
 
-                        <!-- Coin row (decorative tickers) -->
+                        <TextView
+                            android:id="@+id/tv_portfolio_ngn"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Crypto Portfolio: ₦0.00"
+                            android:textColor="#E6FFFFFF"
+                            android:textSize="12sp"
+                            android:layout_marginTop="4dp"
+                            android:tag="brand:text=on_primary" />
+
+                        <TextView
+                            android:id="@+id/tv_desk_rate_chip"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Loading desk rates..."
+                            android:textColor="#E6FFFFFF"
+                            android:textSize="11sp"
+                            android:layout_marginTop="6dp"
+                            android:layout_marginBottom="14dp"
+                            android:tag="brand:text=on_primary" />
+
+                        <!-- Buy / Sell / Swap Tabs -->
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:orientation="horizontal"
-                            android:layout_marginBottom="16dp">
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="₦" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" android:layout_marginEnd="6dp" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="₿" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" android:layout_marginEnd="6dp" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="Ξ" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" android:layout_marginEnd="6dp" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="Ł" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" android:layout_marginEnd="6dp" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="₮" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" android:layout_marginEnd="6dp" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="24dp"
-                                android:text="Ð" android:textColor="#CCFFFFFF" android:textSize="11sp"
-                                android:gravity="center" />
-                        </LinearLayout>
+                            android:weightSum="3">
 
-                        <!-- Quick action buttons -->
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:weightSum="4">
-
-                            <LinearLayout
-                                android:id="@+id/btn_action_deposit"
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_tab_buy"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
                                 android:layout_width="0dp"
-                                android:layout_height="64dp"
+                                android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:layout_marginEnd="4dp"
-                                android:background="#33FFFFFF"
-                                android:clickable="true"
-                                android:focusable="true">
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="＋" android:textColor="#FFFFFF" android:textSize="18sp" />
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="Deposit" android:textColor="#FFFFFF" android:textSize="10sp"
-                                    android:layout_marginTop="2dp" />
-                            </LinearLayout>
+                                android:layout_marginEnd="6dp"
+                                android:text="Buy"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="#FFFFFF"
+                                app:strokeColor="#80FFFFFF"
+                                app:cornerRadius="12dp" />
 
-                            <LinearLayout
-                                android:id="@+id/btn_action_send"
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_tab_sell"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
                                 android:layout_width="0dp"
-                                android:layout_height="64dp"
+                                android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:layout_marginEnd="4dp"
-                                android:background="#33FFFFFF"
-                                android:clickable="true"
-                                android:focusable="true">
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="✉" android:textColor="#FFFFFF" android:textSize="18sp" />
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="Send" android:textColor="#FFFFFF" android:textSize="10sp"
-                                    android:layout_marginTop="2dp" />
-                            </LinearLayout>
+                                android:layout_marginEnd="6dp"
+                                android:text="Sell"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="#FFFFFF"
+                                app:strokeColor="#80FFFFFF"
+                                app:cornerRadius="12dp" />
 
-                            <LinearLayout
-                                android:id="@+id/btn_action_swap"
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_tab_swap"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
                                 android:layout_width="0dp"
-                                android:layout_height="64dp"
+                                android:layout_height="44dp"
                                 android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:layout_marginEnd="4dp"
-                                android:background="#33FFFFFF"
-                                android:clickable="true"
-                                android:focusable="true">
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="⇄" android:textColor="#FFFFFF" android:textSize="18sp" />
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="Swap" android:textColor="#FFFFFF" android:textSize="10sp"
-                                    android:layout_marginTop="2dp" />
-                            </LinearLayout>
-
-                            <LinearLayout
-                                android:id="@+id/btn_action_to_ngn"
-                                android:layout_width="0dp"
-                                android:layout_height="64dp"
-                                android:layout_weight="1"
-                                android:orientation="vertical"
-                                android:gravity="center"
-                                android:background="#33FFFFFF"
-                                android:clickable="true"
-                                android:focusable="true">
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="₦" android:textColor="#FFFFFF" android:textSize="18sp" />
-                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                                    android:text="To NGN" android:textColor="#FFFFFF" android:textSize="10sp"
-                                    android:layout_marginTop="2dp" />
-                            </LinearLayout>
-
+                                android:text="Swap"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="#FFFFFF"
+                                app:strokeColor="#80FFFFFF"
+                                app:cornerRadius="12dp" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- ââ My Wallets Section ââââââââââââââââââââââââââââ -->
+                <!-- KYC Verification Banner -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_kyc_notice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="14dp"
+                    app:cardElevation="1dp"
+                    app:strokeColor="@color/warning"
+                    app:strokeWidth="1dp"
+                    android:layout_marginBottom="14dp"
+                    android:visibility="gone"
+                    android:tag="brand:bg=surface">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:id="@+id/tv_kyc_message"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="KYC verification is required before placing CryptoHub Buy, Sell, or Swap orders."
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:tag="brand:text=on_surface" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_complete_kyc"
+                            android:layout_width="wrap_content"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
+                            android:text="Complete KYC"
+                            android:textSize="12sp"
+                            android:tag="brand:button=fill" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- A2P / P2A Desk Card (Buy / Sell / Swap) -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="2dp"
+                    app:strokeColor="@color/card_border"
+                    app:strokeWidth="1dp"
+                    android:layout_marginBottom="14dp"
+                    android:tag="brand:bg=surface">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <!-- ── BUY PANEL ── -->
+                        <LinearLayout
+                            android:id="@+id/panel_buy"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Buy Crypto (A2P)"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/text_primary"
+                                android:tag="brand:text=on_surface" />
+
+                            <TextView
+                                android:id="@+id/tv_buy_rate_info"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Pay from your NGN Wallet; receive crypto to an external address or your CryptoHub wallet."
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary"
+                                android:layout_marginTop="4dp"
+                                android:layout_marginBottom="12dp"
+                                android:tag="brand:text=on_surface" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Select Cryptocurrency &amp; Network"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_buy_asset"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Amount Unit"
+                                android:layout_marginTop="10dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_buy_unit"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Amount"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_buy_amount"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberDecimal" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Delivery Destination"
+                                android:layout_marginTop="10dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_buy_delivery"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/til_buy_address"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Your Receiving Wallet Address"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_buy_address"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="text"
+                                    android:fontFamily="monospace" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <TextView
+                                android:id="@+id/tv_buy_address_hint"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textSize="11sp"
+                                android:textColor="@color/text_secondary"
+                                android:layout_marginTop="4dp"
+                                android:tag="brand:text=on_surface" />
+
+                            <LinearLayout
+                                android:id="@+id/layout_buy_preview"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:background="@color/surface_variant"
+                                android:padding="12dp"
+                                android:layout_marginTop="10dp"
+                                android:visibility="gone"
+                                android:tag="brand:bg=background">
+
+                                <TextView
+                                    android:id="@+id/tv_buy_preview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textSize="13sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_primary"
+                                    android:tag="brand:text=on_surface" />
+                            </LinearLayout>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_submit_buy"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="14dp"
+                                android:text="Place Buy Order"
+                                android:textStyle="bold"
+                                app:cornerRadius="12dp"
+                                android:tag="brand:button=fill" />
+                        </LinearLayout>
+
+                        <!-- ── SELL PANEL ── -->
+                        <LinearLayout
+                            android:id="@+id/panel_sell"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Sell Crypto to Admin (P2A)"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/text_primary"
+                                android:tag="brand:text=on_surface" />
+
+                            <TextView
+                                android:id="@+id/tv_sell_rate_info"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Transfer crypto to the admin wallet or sell from your CryptoHub balance to receive NGN."
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary"
+                                android:layout_marginTop="4dp"
+                                android:layout_marginBottom="12dp"
+                                android:tag="brand:text=on_surface" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Select Cryptocurrency &amp; Network"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_sell_asset"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Crypto Source"
+                                android:layout_marginTop="10dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_sell_source"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <LinearLayout
+                                android:id="@+id/card_admin_deposit"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:background="@color/surface_variant"
+                                android:padding="12dp"
+                                android:layout_marginTop="10dp"
+                                android:tag="brand:bg=background">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="Admin Receiving Wallet Address"
+                                    android:textSize="11sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/text_secondary"
+                                    android:tag="brand:text=on_surface" />
+
+                                <TextView
+                                    android:id="@+id/tv_admin_deposit_address"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:text="Not configured"
+                                    android:textSize="12sp"
+                                    android:fontFamily="monospace"
+                                    android:textColor="@color/text_primary"
+                                    android:layout_marginTop="4dp"
+                                    android:tag="brand:text=on_surface" />
+
+                                <TextView
+                                    android:id="@+id/tv_admin_network_note"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textSize="11sp"
+                                    android:textColor="@color/text_secondary"
+                                    android:layout_marginTop="4dp"
+                                    android:visibility="gone"
+                                    android:tag="brand:text=on_surface" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btn_copy_admin_address"
+                                    style="@style/Widget.Material3.Button.OutlinedButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="38dp"
+                                    android:layout_marginTop="8dp"
+                                    android:text="Copy Address"
+                                    android:textSize="12sp"
+                                    android:tag="brand:button=outline" />
+                            </LinearLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Crypto Quantity to Sell"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_sell_amount"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberDecimal" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/til_sell_tx_hash"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Blockchain TX Hash / Reference"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_sell_tx_hash"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="text"
+                                    android:fontFamily="monospace" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/til_sell_note"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Sender Note (Optional)"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_sell_note"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="text" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <LinearLayout
+                                android:id="@+id/layout_sell_preview"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:background="@color/surface_variant"
+                                android:padding="12dp"
+                                android:layout_marginTop="10dp"
+                                android:visibility="gone"
+                                android:tag="brand:bg=background">
+
+                                <TextView
+                                    android:id="@+id/tv_sell_preview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textSize="13sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/success" />
+                            </LinearLayout>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_submit_sell"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="14dp"
+                                android:text="Submit Sell Order"
+                                android:textStyle="bold"
+                                app:cornerRadius="12dp"
+                                android:tag="brand:button=fill" />
+                        </LinearLayout>
+
+                        <!-- ── SWAP PANEL ── -->
+                        <LinearLayout
+                            android:id="@+id/panel_swap"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Instant Swap"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/text_primary"
+                                android:tag="brand:text=on_surface" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="Swap instantly between your NGN Wallet and internal CryptoHub balances."
+                                android:textSize="12sp"
+                                android:textColor="@color/text_secondary"
+                                android:layout_marginTop="4dp"
+                                android:layout_marginBottom="12dp"
+                                android:tag="brand:text=on_surface" />
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="From Wallet"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_swap_from"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="To Wallet"
+                                android:layout_marginTop="10dp"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+                                <AutoCompleteTextView
+                                    android:id="@+id/spinner_swap_to"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="none"
+                                    android:focusable="false" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="Amount to Swap"
+                                android:layout_marginTop="10dp"
+                                style="@style/InputFieldStyle">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et_swap_amount"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberDecimal" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <LinearLayout
+                                android:id="@+id/layout_swap_preview"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:background="@color/surface_variant"
+                                android:padding="12dp"
+                                android:layout_marginTop="10dp"
+                                android:visibility="gone"
+                                android:tag="brand:bg=background">
+
+                                <TextView
+                                    android:id="@+id/tv_swap_preview"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold"
+                                    android:textColor="@color/success" />
+
+                                <TextView
+                                    android:id="@+id/tv_swap_fee"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textSize="11sp"
+                                    android:textColor="@color/text_secondary"
+                                    android:layout_marginTop="4dp"
+                                    android:tag="brand:text=on_surface" />
+                            </LinearLayout>
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_submit_swap"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="14dp"
+                                android:text="Swap Instantly"
+                                android:textStyle="bold"
+                                app:cornerRadius="12dp"
+                                android:tag="brand:button=fill" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Withdraw Swapped / Sold Naira Guidance Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_withdraw_guide"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="1dp"
+                    app:strokeColor="@color/card_border"
+                    app:strokeWidth="1dp"
+                    android:layout_marginBottom="16dp"
+                    android:tag="brand:bg=surface">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Withdraw Your Naira Funds"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary"
+                            android:tag="brand:text=on_surface" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Sold or swapped crypto settles into your NGN Wallet. Withdraw locally via Send Fund or globally via International Transfer."
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="10dp"
+                            android:tag="brand:text=on_surface" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:weightSum="2">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_withdraw_local"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="6dp"
+                                android:text="Send Fund (Local)"
+                                android:textSize="11sp"
+                                app:cornerRadius="10dp"
+                                android:tag="brand:button=outline" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btn_withdraw_intl"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="42dp"
+                                android:layout_weight="1"
+                                android:text="Intl Transfer"
+                                android:textSize="11sp"
+                                app:cornerRadius="10dp"
+                                android:tag="brand:button=outline" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- My Wallets Section -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="My Wallets"
+                    android:text="My CryptoHub Wallets"
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
-                    android:layout_marginBottom="8dp"  android:tag="brand:text=on_surface" />
+                    android:layout_marginBottom="8dp"
+                    android:tag="brand:text=on_surface" />
 
                 <LinearLayout
                     android:id="@+id/container_wallets"
@@ -223,14 +744,15 @@
                     android:id="@+id/tv_no_wallets"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="No active crypto wallets. Tap Deposit to get started."
+                    android:text="No active CryptoHub assets configured yet."
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:gravity="center"
-                    android:padding="16dp"
-                    android:visibility="gone"  android:tag="brand:text=on_surface" />
+                    android:padding="14dp"
+                    android:visibility="gone"
+                    android:tag="brand:text=on_surface" />
 
-                <!-- ââ Recent Activity Section âââââââââââââââââââââââ -->
+                <!-- Recent Activity Section -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -242,17 +764,19 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Recent Activity"
+                        android:text="Recent Crypto Orders"
                         android:textSize="16sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
+                        android:textColor="@color/text_primary"
+                        android:tag="brand:text=on_surface" />
                     <Button
                         android:id="@+id/btn_view_all_history"
                         android:layout_width="wrap_content"
-                        android:layout_height="32dp"
+                        android:layout_height="34dp"
                         android:text="View All"
                         android:textSize="12sp"
-                        style="@style/Widget.Material3.Button.TextButton"  android:tag="brand:button=fill" />
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:tag="brand:button=outline" />
                 </LinearLayout>
 
                 <com.google.android.material.card.MaterialCardView
@@ -260,26 +784,27 @@
                     android:layout_height="wrap_content"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="2dp"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="16dp"
+                    android:tag="brand:bg=surface">
 
                     <LinearLayout
                         android:id="@+id/container_history"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical" />
-
                 </com.google.android.material.card.MaterialCardView>
 
                 <TextView
                     android:id="@+id/tv_no_history"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="No crypto transactions yet."
+                    android:text="No crypto orders yet."
                     android:textColor="@color/text_secondary"
                     android:textSize="14sp"
                     android:gravity="center"
                     android:padding="16dp"
-                    android:visibility="gone"  android:tag="brand:text=on_surface" />
+                    android:visibility="gone"
+                    android:tag="brand:text=on_surface" />
 
             </LinearLayout>
         </ScrollView>

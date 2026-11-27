@@ -408,7 +408,7 @@
                             android:text="Crypto Hub" android:textSize="15sp" android:textStyle="bold"
                             android:textColor="@color/text_primary"  android:tag="brand:text=on_surface" />
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                            android:text="Send, swap &amp; hold stable coins securely"
+                            android:text="Buy, sell &amp; swap crypto cleanly"
                             android:textSize="12sp" android:textColor="@color/text_secondary"  android:tag="brand:text=on_surface" />
                     </LinearLayout>
                 </LinearLayout>

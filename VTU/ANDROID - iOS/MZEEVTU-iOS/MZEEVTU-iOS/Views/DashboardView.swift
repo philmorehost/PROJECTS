@@ -67,7 +67,7 @@ struct DashboardView: View {
                 }
             }
         }
-        .sheet(item: $portal) { service in MobilePortalView(service: service) }
+        .sheet(item: $portal, onDismiss: { reload() }) { service in MobilePortalView(service: service) }
         .sheet(item: $receipt) { item in MobileReceiptView(receipt: item) }
         .onAppear { reload(); if locked { authenticate(enable: false) } }
         .onChange(of: scenePhase) { phase in
