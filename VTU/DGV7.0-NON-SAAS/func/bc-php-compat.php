@@ -48,7 +48,9 @@ set_error_handler(function ($errno, $errstr, $errfile, $errline) {
 // ── Custom exception handler (Legacy-Safe) ────────────────────────────────────
 set_exception_handler(function ($e) {
     $short_file = str_replace(dirname(__DIR__), '', $e->getFile());
-    error_log('[DGV-EXCEPTION] ' . $e->getMessage() . ' in ' . $short_file . ':' . $e->getLine());
+    $log_msg = '[DGV-EXCEPTION] ' . $e->getMessage() . ' in ' . $short_file . ':' . $e->getLine();
+    error_log($log_msg);
+    @file_put_contents(dirname(__DIR__) . '/logs/php_errors.log', '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . $log_msg . "\n", FILE_APPEND | LOCK_EX);
 
     // Detect if client expects JSON or if it's an API route
     $is_json_route = false;
@@ -102,7 +104,9 @@ register_shutdown_function(function () {
     if (!($err['type'] & $fatal_types)) return;
 
     $short_file = str_replace(dirname(__DIR__), '', (string)($err['file'] ?? ''));
-    error_log('[DGV-FATAL-SHUTDOWN] ' . ($err['message'] ?? 'Fatal error') . ' in ' . $short_file . ':' . (int)($err['line'] ?? 0));
+    $log_msg = '[DGV-FATAL-SHUTDOWN] ' . ($err['message'] ?? 'Fatal error') . ' in ' . $short_file . ':' . (int)($err['line'] ?? 0);
+    error_log($log_msg);
+    @file_put_contents(dirname(__DIR__) . '/logs/php_errors.log', '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . $log_msg . "\n", FILE_APPEND | LOCK_EX);
 
     if (defined('CRON_CLI') || headers_sent()) return;
 
