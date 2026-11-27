@@ -1252,15 +1252,15 @@ $js_config = array(
 
             <div class="pc-panel" id="pc-services-personal" role="tabpanel" aria-labelledby="pc-tab-personal">
                 <div class="pc-grid">
-                    <?php foreach ($personal_cards['available'] as $c) { bc_plate_card($c, true); } ?>
-                    <?php foreach ($personal_cards['soon'] as $c) { bc_plate_card($c, false); } ?>
+                    <?php foreach ((array)($personal_cards['live'] ?? array()) as $c) { bc_plate_card($c, true); } ?>
+                    <?php foreach ((array)($personal_cards['soon'] ?? array()) as $c) { bc_plate_card($c, false); } ?>
                 </div>
             </div>
 
             <div class="pc-panel" id="pc-services-business" role="tabpanel" aria-labelledby="pc-tab-business" hidden>
                 <div class="pc-grid">
-                    <?php foreach ($business_cards['available'] as $c) { bc_plate_card($c, true); } ?>
-                    <?php foreach ($business_cards['soon'] as $c) { bc_plate_card($c, false); } ?>
+                    <?php foreach ((array)($business_cards['live'] ?? array()) as $c) { bc_plate_card($c, true); } ?>
+                    <?php foreach ((array)($business_cards['soon'] ?? array()) as $c) { bc_plate_card($c, false); } ?>
                 </div>
             </div>
         </div>

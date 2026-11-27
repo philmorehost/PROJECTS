@@ -41,6 +41,8 @@ while (ob_get_level() > 0) {
 }
 
 t6_check(strpos($html, 'backdrop-filter: blur(') !== false, 'uses modern glassmorphism styling');
+t6_check(strpos($html, 'Warning:') === false && strpos($html, 'Undefined array key') === false && strpos($html, 'foreach() argument') === false, 'renders cleanly with zero PHP warnings');
+t6_check(strpos($html, 'USD Wallet') !== false, 'renders Plate personal partition cards cleanly');
 t6_check(strpos($html, 'pk-hero') !== false && strpos($html, 't6-deck') !== false, 'uses obsidian plate + deck layout');
 t6_check(strpos($html, 'id="pswitch"') !== false && strpos($html, 'data-w="personal"') !== false && strpos($html, 'data-w="business"') !== false, 'includes Meridian-1 Personal/Business switcher');
 t6_check(strpos($html, '.m-brand-mark') !== false && strpos($html, '.pswitch button[aria-checked="true"]') !== false && strpos($html, '.menu-btn { display: none; }') !== false, 'styles Meridian-1 brand mark, active switcher pill contrast, and desktop menu button');

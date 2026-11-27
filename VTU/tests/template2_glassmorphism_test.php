@@ -35,6 +35,7 @@ while (ob_get_level() > 0) {
 }
 
 t2_check(strpos($html, 'backdrop-filter: blur(24px)') !== false, 'uses modern glassmorphism styling');
+t2_check(strpos($html, 'Warning:') === false && strpos($html, 'Undefined array key') === false && strpos($html, 'foreach() argument') === false, 'renders cleanly with zero PHP warnings');
 t2_check(strpos($html, 'id="pswitch"') !== false && strpos($html, 'data-w="personal"') !== false && strpos($html, 'data-w="business"') !== false, 'includes Meridian-1 Personal/Business switcher');
 
 // Meridian-1 menu items
