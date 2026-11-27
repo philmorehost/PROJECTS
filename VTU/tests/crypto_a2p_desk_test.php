@@ -37,6 +37,11 @@ $usdtQuote = bc_crypto_a2p_quote_asset($cfg, $rates, 'USDT_TRC20');
 a2p_chk(abs($usdtQuote['base_ngn'] - 1600.0) < 0.001, 'base NGN rate computed accurately');
 a2p_chk(abs($usdtQuote['buy_rate_ngn'] - 1680.0) < 0.001, 'buy markup (+5%) applied accurately');
 a2p_chk(abs($usdtQuote['sell_rate_ngn'] - 1560.0) < 0.001, 'sell spread (-2.5%) applied accurately');
+$cfg['assets']['USDT_TRC20']['manual_buy_ngn'] = 1710.0;
+$cfg['assets']['USDT_TRC20']['manual_sell_ngn'] = 1590.0;
+$staticQuote = bc_crypto_a2p_quote_asset($cfg, $rates, 'USDT_TRC20');
+a2p_chk(abs($staticQuote['buy_rate_ngn'] - 1710.0) < 0.001, 'static manual buy NGN rate overrides percentage markup');
+a2p_chk(abs($staticQuote['sell_rate_ngn'] - 1590.0) < 0.001, 'static manual sell NGN rate overrides percentage spread');
 
 // User & Admin UI/Security contracts
 $webSrc = file_get_contents($root . '/DGV7.0-SAAS/web/CryptoHub.php');
@@ -44,6 +49,7 @@ a2p_chk(strpos($webSrc, 'data-ch-tab="buy"') !== false && strpos($webSrc, 'data-
 a2p_chk(strpos($webSrc, 'SendFund.php') !== false && strpos($webSrc, 'IntlTransfer.php') !== false, 'web CryptoHub links to SendFund.php and IntlTransfer.php');
 a2p_chk(strpos($webSrc, 'bc_validate_csrf') !== false && strpos($webSrc, 'bc_verify_pin_secure') !== false, 'web CryptoHub validates CSRF and transaction PIN');
 a2p_chk(strpos($webSrc, 'bc_crypto_a2p_submit_buy') !== false && strpos($webSrc, 'bc_crypto_a2p_submit_sell') !== false && strpos($webSrc, 'bc_crypto_a2p_execute_swap') !== false, 'web CryptoHub wires Buy, Sell, and Swap handlers');
+a2p_chk(strpos($webSrc, 'Markup: +') === false && strpos($webSrc, 'Spread: -') === false && strpos($webSrc, 'Admin spread:') === false, 'web CryptoHub keeps admin markup/spread hidden from users');
 
 $admSrc = file_get_contents($root . '/DGV7.0-SAAS/bc-admin/CryptoHub.php');
 a2p_chk(strpos($admSrc, 'approve_a2p_buy') !== false && strpos($admSrc, 'reject_a2p_buy') !== false, 'admin CryptoHub handles A2P Buy fulfillment & refund');

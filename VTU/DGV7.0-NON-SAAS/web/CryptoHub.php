@@ -348,7 +348,6 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
                 <div class="ch-hero__bal mb-2">₦<?php echo number_format($ngnBalance, 2); ?></div>
                 <div class="small opacity-90 mb-3">
                     Crypto Portfolio Value: <strong>≈ ₦<?php echo number_format($portfolioNgn, 2); ?></strong>
-                    <span class="opacity-75 ms-2">(1 USD ≈ ₦<?php echo number_format((float)$a2pRates['usd_ngn'], 2); ?>)</span>
                 </div>
                 <div class="coin-icons-row">
                     <img src="../asset/ngn-icon.png" alt="NGN" title="Naira">
@@ -459,7 +458,7 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
                             <small class="text-muted">Pay from your Naira balance; admin fulfills to your wallet or internal balance.</small>
                         </div>
                         <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 py-2">
-                            Markup: +<?php echo number_format((float)$a2pCfg['buy_markup_pct'], 2); ?>%
+                            <?php echo $a2pCfg['rate_mode'] === 'live' ? 'Live Rate' : 'Fixed Rate'; ?>
                         </span>
                     </div>
 
@@ -513,7 +512,7 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
                             <div class="col-12">
                                 <div class="ch-quote-box">
                                     <div class="d-flex justify-content-between small mb-1">
-                                        <span class="text-muted">Buy Rate (incl. <?php echo number_format((float)$a2pCfg['buy_markup_pct'], 2); ?>% markup)</span>
+                                        <span class="text-muted">Buy Rate</span>
                                         <strong id="buyRatePreview">—</strong>
                                     </div>
                                     <div class="d-flex justify-content-between small mb-1">
@@ -548,7 +547,7 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
                             <small class="text-muted">Send crypto to the admin wallet (or sell from your CryptoHub wallet) to receive Naira.</small>
                         </div>
                         <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
-                            Spread: -<?php echo number_format((float)$a2pCfg['sell_markdown_pct'], 2); ?>%
+                            <?php echo $a2pCfg['rate_mode'] === 'live' ? 'Live Rate' : 'Fixed Rate'; ?>
                         </span>
                     </div>
 
@@ -608,7 +607,7 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
                             <div class="col-12">
                                 <div class="ch-quote-box">
                                     <div class="d-flex justify-content-between small mb-1">
-                                        <span class="text-muted">Sell Rate (after <?php echo number_format((float)$a2pCfg['sell_markdown_pct'], 2); ?>% spread)</span>
+                                        <span class="text-muted">Sell Rate</span>
                                         <strong id="sellRatePreview">—</strong>
                                     </div>
                                     <div class="d-flex justify-content-between pt-2 border-top">
@@ -899,7 +898,14 @@ bc_app_head("CryptoHub | " . ($get_all_site_details["site_title"]));
 </div>
 
 <script>
-const CH_QUOTES = <?php echo json_encode($enabledQuotes, JSON_UNESCAPED_SLASHES); ?>;
+const CH_QUOTES = <?php
+$publicQuotes = [];
+foreach ($enabledQuotes as $qCode => $qRow) {
+    unset($qRow['buy_markup_pct'], $qRow['sell_markdown_pct']);
+    $publicQuotes[$qCode] = $qRow;
+}
+echo json_encode($publicQuotes, JSON_UNESCAPED_SLASHES);
+?>;
 const CH_WALLETS = <?php echo json_encode(array_map(function($w) { return (float)($w['balance'] ?? 0); }, $userWallets), JSON_UNESCAPED_SLASHES); ?>;
 const CH_SWAP_FEE_PCT = <?php echo json_encode((float)$a2pCfg['swap_fee_pct']); ?>;
 const CH_NGN_BAL = <?php echo json_encode((float)$ngnBalance); ?>;
@@ -1010,7 +1016,7 @@ function recalcSell() {
     const src = document.getElementById('sellSource')?.value || 'external';
     document.getElementById('sellWalletAvail').textContent = (src === 'internal')
         ? ('Available CryptoHub balance: ' + formatCrypto(wBal, q.symbol))
-        : ('Admin spread: ' + Number(q.sell_markdown_pct || 0).toFixed(2) + '%');
+        : ('Send ' + q.symbol + ' on ' + q.network_label);
 
     const amt = parseFloat(document.getElementById('sellAmount')?.value || '0') || 0;
     const rate = parseFloat(q.sell_rate_ngn || '0') || 0;

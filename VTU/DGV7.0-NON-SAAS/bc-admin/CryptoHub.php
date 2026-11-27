@@ -57,6 +57,12 @@ if (isset($_POST['save_a2p_config'])) {
         $manualUsd = isset($in['manual_usd_price']) && is_numeric($in['manual_usd_price']) && (float)$in['manual_usd_price'] > 0
             ? (float)$in['manual_usd_price']
             : (float)($curCfg['assets'][$code]['manual_usd_price'] ?? $meta['default_usd']);
+        $manualBuyNgn = isset($in['manual_buy_ngn']) && is_numeric($in['manual_buy_ngn']) && (float)$in['manual_buy_ngn'] > 0
+            ? round((float)$in['manual_buy_ngn'], 4)
+            : 0.0;
+        $manualSellNgn = isset($in['manual_sell_ngn']) && is_numeric($in['manual_sell_ngn']) && (float)$in['manual_sell_ngn'] > 0
+            ? round((float)$in['manual_sell_ngn'], 4)
+            : 0.0;
         $newCfg['assets'][$code] = [
             'enabled' => !empty($in['enabled']),
             'buy_enabled' => !empty($in['buy_enabled']),
@@ -65,6 +71,8 @@ if (isset($_POST['save_a2p_config'])) {
             'deposit_address' => substr(trim(strip_tags((string)($in['deposit_address'] ?? ''))), 0, 128),
             'network_note' => substr(trim(strip_tags((string)($in['network_note'] ?? ''))), 0, 160),
             'manual_usd_price' => $manualUsd,
+            'manual_buy_ngn' => $manualBuyNgn,
+            'manual_sell_ngn' => $manualSellNgn,
         ];
     }
 
@@ -427,8 +435,8 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
 <div class="card shadow-sm border-0 rounded-4 p-3 p-md-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
-            <h6 class="fw-bold mb-0">Rates, Admin Markup Fees &amp; Deposit Wallet Addresses</h6>
-            <small class="text-muted">Use live public market rates + your markup %, or lock fixed manual rates. Set your receiving wallet address for each coin users can sell.</small>
+            <h6 class="fw-bold mb-0">Rates, Hidden Live Markup &amp; Deposit Wallet Addresses</h6>
+            <small class="text-muted">In Live mode, your Buy Markup % / Sell Spread % is silently baked into the displayed Buy/Sell rate (not shown to users as a fee, unlike the separate Swap Fee %). Manual mode uses your static fixed rates.</small>
         </div>
         <form method="post" class="m-0">
             <?php echo $csrfHtml; ?>
@@ -445,8 +453,8 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
             <div class="col-md-3">
                 <label class="form-label small fw-bold">Rate Source Mode</label>
                 <select name="rate_mode" class="form-select">
-                    <option value="live" <?php echo $a2pCfg['rate_mode'] === 'live' ? 'selected' : ''; ?>>Live Market + Admin Markup (%)</option>
-                    <option value="manual" <?php echo $a2pCfg['rate_mode'] === 'manual' ? 'selected' : ''; ?>>Manual Fixed Rates</option>
+                    <option value="live" <?php echo $a2pCfg['rate_mode'] === 'live' ? 'selected' : ''; ?>>Live Market + Hidden Markup (%)</option>
+                    <option value="manual" <?php echo $a2pCfg['rate_mode'] === 'manual' ? 'selected' : ''; ?>>Manual Fixed Rates (Static)</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -454,15 +462,15 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
                 <input type="number" step="0.01" min="1" name="usd_ngn_rate" class="form-control" value="<?php echo htmlspecialchars((string)$a2pCfg['usd_ngn_rate'], ENT_QUOTES, 'UTF-8'); ?>" required>
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-bold">Buy Markup (%)</label>
+                <label class="form-label small fw-bold">Buy Markup (%) <span class="text-muted fw-normal">(Hidden)</span></label>
                 <input type="number" step="0.01" min="0" max="50" name="buy_markup_pct" class="form-control" value="<?php echo htmlspecialchars((string)$a2pCfg['buy_markup_pct'], ENT_QUOTES, 'UTF-8'); ?>" required>
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-bold">Sell Spread (%)</label>
+                <label class="form-label small fw-bold">Sell Spread (%) <span class="text-muted fw-normal">(Hidden)</span></label>
                 <input type="number" step="0.01" min="0" max="50" name="sell_markdown_pct" class="form-control" value="<?php echo htmlspecialchars((string)$a2pCfg['sell_markdown_pct'], ENT_QUOTES, 'UTF-8'); ?>" required>
             </div>
             <div class="col-md-2">
-                <label class="form-label small fw-bold">Swap Fee (%)</label>
+                <label class="form-label small fw-bold">Swap Fee (%) <span class="text-muted fw-normal">(Visible)</span></label>
                 <input type="number" step="0.01" min="0" max="25" name="swap_fee_pct" class="form-control" value="<?php echo htmlspecialchars((string)$a2pCfg['swap_fee_pct'], ENT_QUOTES, 'UTF-8'); ?>" required>
             </div>
             <div class="col-md-3">
@@ -486,7 +494,8 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
                         <th>Coin / Network</th>
                         <th>Permissions</th>
                         <th>Fallback USD ($)</th>
-                        <th>Effective NGN (Buy / Sell)</th>
+                        <th>Static Manual NGN (Optional)</th>
+                        <th>Displayed to Users (Buy / Sell)</th>
                         <th>Admin Deposit Wallet Address (P2A Sell)</th>
                         <th>Network Note</th>
                     </tr>
@@ -509,11 +518,16 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
                         </td>
                         <td style="min-width: 115px;">
                             <input type="number" step="any" min="0.0001" name="assets[<?php echo $code; ?>][manual_usd_price]" class="form-control form-control-sm" value="<?php echo htmlspecialchars((string)($ac['manual_usd_price'] ?? $meta['default_usd']), ENT_QUOTES, 'UTF-8'); ?>">
-                            <div class="text-muted mt-1" style="font-size:.68rem;">Active: $<?php echo number_format((float)($aq['usd_price'] ?? 0), 4); ?></div>
+                            <div class="text-muted mt-1" style="font-size:.68rem;">Live/Base: $<?php echo number_format((float)($aq['usd_price'] ?? 0), 4); ?></div>
                         </td>
-                        <td style="min-width: 160px;">
+                        <td style="min-width: 150px;">
+                            <input type="number" step="0.01" min="0" name="assets[<?php echo $code; ?>][manual_buy_ngn]" class="form-control form-control-sm mb-1" placeholder="Static Buy ₦ (0=auto)" value="<?php echo !empty($ac['manual_buy_ngn']) ? htmlspecialchars((string)$ac['manual_buy_ngn'], ENT_QUOTES, 'UTF-8') : ''; ?>">
+                            <input type="number" step="0.01" min="0" name="assets[<?php echo $code; ?>][manual_sell_ngn]" class="form-control form-control-sm" placeholder="Static Sell ₦ (0=auto)" value="<?php echo !empty($ac['manual_sell_ngn']) ? htmlspecialchars((string)$ac['manual_sell_ngn'], ENT_QUOTES, 'UTF-8') : ''; ?>">
+                        </td>
+                        <td style="min-width: 165px;">
                             <div>Buy: <strong class="text-primary">₦<?php echo number_format((float)($aq['buy_rate_ngn'] ?? 0), 2); ?></strong></div>
                             <div>Sell: <strong class="text-success">₦<?php echo number_format((float)($aq['sell_rate_ngn'] ?? 0), 2); ?></strong></div>
+                            <div class="text-muted" style="font-size:.68rem;">Base: ₦<?php echo number_format((float)($aq['base_ngn'] ?? 0), 2); ?></div>
                         </td>
                         <td style="min-width: 230px;">
                             <input type="text" name="assets[<?php echo $code; ?>][deposit_address]" class="form-control form-control-sm font-monospace" placeholder="Admin receiving wallet address" value="<?php echo htmlspecialchars((string)($ac['deposit_address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">

@@ -171,6 +171,8 @@ if (!function_exists('bc_crypto_a2p_default_config')) {
                 'deposit_address' => '',
                 'network_note' => '',
                 'manual_usd_price' => (float)$meta['default_usd'],
+                'manual_buy_ngn' => 0.0,
+                'manual_sell_ngn' => 0.0,
             ];
         }
         return [
@@ -229,6 +231,12 @@ if (!function_exists('bc_crypto_a2p_get_config')) {
                     'manual_usd_price' => (isset($sa['manual_usd_price']) && is_numeric($sa['manual_usd_price']) && (float)$sa['manual_usd_price'] > 0)
                         ? (float)$sa['manual_usd_price']
                         : (float)$defAsset['manual_usd_price'],
+                    'manual_buy_ngn' => (isset($sa['manual_buy_ngn']) && is_numeric($sa['manual_buy_ngn']) && (float)$sa['manual_buy_ngn'] > 0)
+                        ? round((float)$sa['manual_buy_ngn'], 4)
+                        : 0.0,
+                    'manual_sell_ngn' => (isset($sa['manual_sell_ngn']) && is_numeric($sa['manual_sell_ngn']) && (float)$sa['manual_sell_ngn'] > 0)
+                        ? round((float)$sa['manual_sell_ngn'], 4)
+                        : 0.0,
                 ];
             }
         }
@@ -394,6 +402,14 @@ if (!function_exists('bc_crypto_a2p_quote_asset')) {
         $sellMarkdown = (float)$cfg['sell_markdown_pct'];
         $buyRateNgn = round($baseNgn * (1 + ($buyMarkup / 100)), 4);
         $sellRateNgn = round($baseNgn * max(0.01, (1 - ($sellMarkdown / 100))), 4);
+        if (($cfg['rate_mode'] ?? 'live') === 'manual') {
+            if (!empty($assetCfg['manual_buy_ngn']) && (float)$assetCfg['manual_buy_ngn'] > 0) {
+                $buyRateNgn = round((float)$assetCfg['manual_buy_ngn'], 4);
+            }
+            if (!empty($assetCfg['manual_sell_ngn']) && (float)$assetCfg['manual_sell_ngn'] > 0) {
+                $sellRateNgn = round((float)$assetCfg['manual_sell_ngn'], 4);
+            }
+        }
 
         return [
             'code' => $code,
