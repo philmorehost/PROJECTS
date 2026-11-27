@@ -12,8 +12,8 @@ if (isset($_POST["send-mail"]) && bc_is_demo_mode($connection_server)) {
 
 $vid = $get_logged_admin_details['id'];
 $ai_engine = ai_engine();
-$assigned_model_raw = $get_logged_admin_details['ai_model_assigned'] ?: getSuperAdminOption('ai_default_model', '');
-$assigned_model = $ai_engine->isModelCompatible($assigned_model_raw) ? $assigned_model_raw : $ai_engine->getDefaultModel();
+$assigned_model_raw = (string)(($get_logged_admin_details['ai_model_assigned'] ?? '') ?: (getSuperAdminOption('ai_default_model', '') ?? ''));
+$assigned_model = ($assigned_model_raw !== '' && $ai_engine->isModelCompatible($assigned_model_raw)) ? $assigned_model_raw : $ai_engine->getDefaultModel();
 
 $site_q = @mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vid' LIMIT 1");
 $site_data = ($site_q && ($sr = mysqli_fetch_assoc($site_q))) ? $sr : null;
