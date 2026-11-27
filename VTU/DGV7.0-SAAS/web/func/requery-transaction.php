@@ -122,7 +122,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                     bc_tx_failure_record($get_transaction_data["vendor_id"], $get_transaction_data["username"], 'success', $get_transaction_data["type_alternative"] ?? '', '', (!empty($get_transaction_data["batch_number"]) ? 'bulk' : 'service'));
                                     alterTransaction($requery_reference, "status", $api_response_status);
                                     alterTransaction($requery_reference, "description", $api_response_description);
-                                    $json_response_array = array("ref" => $requery_reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => $api_response_description);
+                                    $json_response_array = array("ref" => $requery_reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                     $json_response_encode = json_encode($json_response_array, true);
                                 }
 
@@ -131,12 +131,12 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                         // Never downgrade a delivered purchase: a requery that only reports
                                         // "pending" must not turn an already-successful order back into pending.
                                         // A later definitive "failed" reply still reverses it (failure branch).
-                                        $json_response_array = array("ref" => $requery_reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => $get_transaction_data["description"]);
+                                        $json_response_array = array("ref" => $requery_reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$get_transaction_data["description"]) : $get_transaction_data["description"]));
                                         $json_response_encode = json_encode($json_response_array, true);
                                     } else {
                                         alterTransaction($requery_reference, "status", $api_response_status);
                                         alterTransaction($requery_reference, "description", $api_response_description);
-                                        $json_response_array = array("ref" => $requery_reference, "status" => "pending", "desc" => "Transaction Pending", "response_desc" => $api_response_description);
+                                        $json_response_array = array("ref" => $requery_reference, "status" => "pending", "desc" => "Transaction Pending", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                         $json_response_encode = json_encode($json_response_array, true);
                                     }
                                 }

@@ -312,6 +312,7 @@ bc_adm_head("Airtime API | " . ($get_all_super_admin_site_details["site_title"])
                 <h5 class="card-title mb-0"><i class="bi bi-gear-wide-connected me-2 text-primary"></i>API Setting</h5>
             </div>
             <div class="card-body p-4">
+              <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('airtime'); ?>
               <form method="post" action="">
                   <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Gateway API</label>

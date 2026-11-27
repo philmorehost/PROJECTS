@@ -194,6 +194,7 @@ bc_adm_head("Identity Services & API | " . ($get_all_super_admin_site_details["s
                     <i class="bi bi-person-badge text-muted fs-4"></i>
                 </div>
                 <div class="card-body p-4">
+                    <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('identity-api'); ?>
                     <div class="alert alert-info border-0 rounded-4 small mb-4">
                         Identity verification is <strong>optional</strong>. Pick any one of the integrated providers - Prembly (IdentityPass), Dojah, QoreID (VerifyMe), Smile Identity, Monnify, or your Local Marketplace (vendor-to-vendor) API - and enter its API keys; leave the others blank. Name matching is always applied. Changing the provider takes effect immediately for users who are already signed in.
                     </div>

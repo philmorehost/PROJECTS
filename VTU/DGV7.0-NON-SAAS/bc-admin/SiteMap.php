@@ -104,6 +104,51 @@ $h = $web_http_host . '/bc-admin/';
   </div>
 </div>
 
+<!-- ── API-to-Service Guide ───────────────────────────────────────── -->
+<div class="sm-section" id="api-service-directory">
+  <h4><i class="bi bi-diagram-3 me-2"></i>API-to-Service Directory — Which API Powers Which Service</h4>
+  <p class="text-muted small mb-3">Quick reference showing every platform API, the service it powers, its exact purpose, where to configure it in <code>bc-admin</code>, and the user-facing page(s) linked to it.</p>
+  <div class="mb-3">
+    <input type="search" id="smApiFilter" class="form-control form-control-sm" placeholder="Filter by API name, service, purpose, or page (e.g. Airtime, Klasha, Tuition, eSIM, Paystack, BVN)..." oninput="(function(q){q=q.toLowerCase();document.querySelectorAll('#smApiTable tbody tr').forEach(function(tr){tr.style.display=tr.textContent.toLowerCase().indexOf(q)!==-1?'':'none';});})(this.value)">
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-bordered align-middle small mb-0" id="smApiTable">
+      <thead class="table-light">
+        <tr>
+          <th>API / Integration</th>
+          <th>Service Powered</th>
+          <th>Purpose</th>
+          <th>Admin API Section</th>
+          <th>Linked Page(s)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach (bc_adm_api_directory() as $api_entry): ?>
+        <tr>
+          <td>
+            <div class="fw-bold text-dark"><?php echo htmlspecialchars($api_entry['api_name'], ENT_QUOTES, 'UTF-8'); ?></div>
+            <span class="sm-tag sm-tag-info"><?php echo htmlspecialchars($api_entry['category'], ENT_QUOTES, 'UTF-8'); ?></span>
+          </td>
+          <td class="fw-semibold text-primary"><?php echo htmlspecialchars($api_entry['service'], ENT_QUOTES, 'UTF-8'); ?></td>
+          <td class="text-muted"><?php echo htmlspecialchars($api_entry['purpose'], ENT_QUOTES, 'UTF-8'); ?></td>
+          <td>
+            <a href="<?php echo htmlspecialchars($h . $api_entry['admin_page'], ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-outline-primary btn-sm py-0 px-2 fw-semibold">
+              <?php echo htmlspecialchars($api_entry['admin_page'], ENT_QUOTES, 'UTF-8'); ?>
+            </a>
+            <div class="text-muted mt-1" style="font-size:.72rem;"><?php echo htmlspecialchars($api_entry['admin_section'], ENT_QUOTES, 'UTF-8'); ?></div>
+          </td>
+          <td>
+            <?php foreach ($api_entry['linked_pages'] as $lp): ?>
+              <div><a href="<?php echo htmlspecialchars($lp['path'], ENT_QUOTES, 'UTF-8'); ?>" class="text-decoration-none"><i class="bi bi-link-45deg"></i> <?php echo htmlspecialchars($lp['label'], ENT_QUOTES, 'UTF-8'); ?></a></div>
+            <?php endforeach; ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- ── API Manager ────────────────────────────────────────────────── -->
 <div class="sm-section">
   <h4><i class="bi bi-menu-button-wide me-2"></i>API Manager — VTU Services</h4>

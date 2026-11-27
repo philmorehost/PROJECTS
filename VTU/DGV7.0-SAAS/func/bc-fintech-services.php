@@ -126,9 +126,11 @@ if (!function_exists('bc_svc_provider_assets')) {
 
 if (!function_exists('bc_svc_provider_label')) {
     function bc_svc_provider_label($provider) {
-        $catalogue = bc_svc_provider_catalogue();
         $provider = strtolower(trim((string)$provider));
-        return $catalogue[$provider]['label'] ?? 'Provider';
+        if ($provider === '') {
+            return 'Unavailable';
+        }
+        return 'Aggregator (Provider)';
     }
 }
 

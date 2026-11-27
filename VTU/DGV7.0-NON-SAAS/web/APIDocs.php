@@ -552,7 +552,7 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 				<div id="virtual-banks" class="card card-api">
 					<div class="card-body">
 						<h3 class="fw-bold section-title">Dedicated Virtual Banks</h3>
-						<p>Fetch the list of dedicated virtual bank accounts (Monnify, Paystack, Payvessel, PayHub) assigned to your account for automated funding.</p>
+						<p>Fetch the list of dedicated virtual bank accounts assigned via Aggregator (Provider) to your account for automated funding.</p>
 
 						<div class="endpoint-box">
 							<span class="badge-method badge-get">GET</span>
@@ -634,23 +634,23 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 								</thead>
 								<tbody>
 									<tr>
-										<td><span class="fw-bold">Monnify</span></td>
+										<td><span class="fw-bold">Aggregator (Provider) — Rail 1</span></td>
 										<td><code><?php echo $web_http_host; ?>/users-monnify.php</code></td>
 									</tr>
 									<tr>
-										<td><span class="fw-bold">Paystack</span></td>
+										<td><span class="fw-bold">Aggregator (Provider) — Rail 2</span></td>
 										<td><code><?php echo $web_http_host; ?>/users-paystack.php</code></td>
 									</tr>
 									<tr>
-										<td><span class="fw-bold">Flutterwave</span></td>
+										<td><span class="fw-bold">Aggregator (Provider) — Rail 3</span></td>
 										<td><code><?php echo $web_http_host; ?>/users-flutterwave.php</code></td>
 									</tr>
 									<tr>
-										<td><span class="fw-bold">Payvessel</span></td>
+										<td><span class="fw-bold">Aggregator (Provider) — Rail 4</span></td>
 										<td><code><?php echo $web_http_host; ?>/users-payvessel.php</code></td>
 									</tr>
 									<tr>
-										<td><span class="fw-bold">PayHub</span></td>
+										<td><span class="fw-bold">Aggregator (Provider) — Rail 5</span></td>
 										<td><code><?php echo $web_http_host; ?>/users-payhub.php</code></td>
 									</tr>
 								</tbody>
@@ -1407,22 +1407,22 @@ bc_app_head("Developer API Documentation | " . ($get_all_site_details["site_titl
 								</thead>
 								<tbody>
 									<tr>
-										<td>Flutterwave</td>
+										<td>Aggregator (Provider) — Rail 3</td>
 										<td><code><?php echo $web_http_host; ?>/users-flutterwave.php</code></td>
 										<td>HTTP_VERIF_HASH</td>
 									</tr>
 									<tr>
-										<td>Paystack</td>
+										<td>Aggregator (Provider) — Rail 2</td>
 										<td><code><?php echo $web_http_host; ?>/users-paystack.php</code></td>
 										<td>X-Paystack-Signature</td>
 									</tr>
 									<tr>
-										<td>Monnify</td>
+										<td>Aggregator (Provider) — Rail 1</td>
 										<td><code><?php echo $web_http_host; ?>/users-monnify.php</code></td>
 										<td>monnify-signature</td>
 									</tr>
 									<tr>
-										<td>PayHub</td>
+										<td>Aggregator (Provider) — Rail 5</td>
 										<td><code><?php echo $web_http_host; ?>/users-payhub.php</code></td>
 										<td>Secret Hash Verification</td>
 									</tr>

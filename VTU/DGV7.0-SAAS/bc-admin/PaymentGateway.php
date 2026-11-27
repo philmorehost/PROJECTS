@@ -371,6 +371,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                     <i class="bi bi-bank text-muted fs-4"></i>
                 </div>
                 <div class="card-body p-4">
+                    <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('payout-gateway'); ?>
                     <?php if($get_logged_admin_details['payout_activated'] == 0):
                         $q_fee = mysqli_query($connection_server, "SELECT option_value FROM sas_super_admin_options WHERE option_name='payout_activation_fee'");
                         $payout_fee = (float)(mysqli_fetch_assoc($q_fee)['option_value'] ?? 15000);
@@ -559,6 +560,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                     <div class="badge bg-primary bg-opacity-10 text-dark-primary rounded-pill px-3"><?php echo bc_is_saas_edition() ? 'Paid Add-ons' : 'Included'; ?></div>
                 </div>
                 <div class="card-body p-4">
+                    <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('fintech-api'); ?>
                     <p class="small text-muted mb-4">These APIs power the new fintech services (global payments, China payouts, tuition &amp; eSIM). <?php echo bc_is_saas_edition() ? 'Buy access once per API; you can then save its keys below and switch it on in Service Control.' : 'These APIs are included with your script by default — just save your keys below.'; ?></p>
                     <div class="row g-4">
                         <?php foreach (bc_fintech_api_providers() as $api_slug => $api_meta):
@@ -616,6 +618,7 @@ bc_adm_head("Payment Gateway | " . ($get_all_super_admin_site_details["site_titl
                     </div>
                 </div>
                 <div class="card-body p-4">
+                    <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('payment-gateways'); ?>
                     <form method="post">
                         <div class="row g-4">
                             <?php foreach($payment_gateway_array as $gateway_name):

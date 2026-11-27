@@ -44,9 +44,9 @@ require_once __DIR__ . '/func/bc-secure-session.php';
 			<span style="font-weight: bolder;" class="color-8 mobile-font-size-20 system-font-size-25">Pay with ATM or USSD</a></span><br>
 			<select onchange="chooseGateway();" id="paymentGateway" class="select-box color-8 bg-10 mobile-font-size-12 system-font-size-14 mobile-width-97 system-width-60">
 				<option selected disabled>Choose Payment Gateway</option>
-				<option <?php if($monnify_keys["api_status"] == false){ echo "hidden"; } ?> value="monnify">Pay With Monnify</option>
-				<option <?php if($flutterwave_keys["api_status"] == false){ echo "hidden"; } ?> value="flutterwave">Pay With Flutterwave</option>
-				<option <?php if($paystack_keys["api_status"] == false){ echo "hidden"; } ?> value="paystack">Pay With Paystack</option>
+				<option <?php if($monnify_keys["api_status"] == false){ echo "hidden"; } ?> value="monnify">Pay With Aggregator (Provider)</option>
+				<option <?php if($flutterwave_keys["api_status"] == false){ echo "hidden"; } ?> value="flutterwave">Pay With Aggregator (Provider)</option>
+				<option <?php if($paystack_keys["api_status"] == false){ echo "hidden"; } ?> value="paystack">Pay With Aggregator (Provider)</option>
 			</select><br>
 			<input hidden value="<?php echo $all_user_details['firstname']." ".$all_user_details['lastname']; ?>" id="fullname" type="text"/>
 			<input hidden value="<?php echo $all_user_details['email']; ?>" id="email" type="email"/>
@@ -58,9 +58,9 @@ require_once __DIR__ . '/func/bc-secure-session.php';
 			<span id="monnify-amount-div" class="color-8 mobile-font-size-12 system-font-size-16"></span>
 			<span id="paystack-amount-div" class="color-8 mobile-font-size-12 system-font-size-16"></span><br>
 			
-			<button style="display:none;" type="button" id="monnify-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="payWithMonnify();">Pay With Monnify</button>
-			<button style="display:none;" type="button" id="flutterwave-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="makePaymentFlutterwave();">Pay With Flutterwave</button>
-			<button style="display:none;" type="button" id="paystack-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="makePaymentPaystack();">Pay With Paystack</button>
+			<button style="display:none;" type="button" id="monnify-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="payWithMonnify();">Pay With Aggregator (Provider)</button>
+			<button style="display:none;" type="button" id="flutterwave-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="makePaymentFlutterwave();">Pay With Aggregator (Provider)</button>
+			<button style="display:none;" type="button" id="paystack-btn" class="button-box color-8 bg-5 mobile-font-size-15 system-font-size-16 mobile-width-95 system-width-59" onclick="makePaymentPaystack();">Pay With Aggregator (Provider)</button>
 
 		</form>
 	</div>

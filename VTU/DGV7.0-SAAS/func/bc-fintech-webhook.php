@@ -557,6 +557,10 @@ if (!function_exists('bc_fintech_webhook_notify')) {
 
             $funding_subject = str_replace(array_keys($funding_vars), array_values($funding_vars), $funding_subject);
             $funding_body    = str_replace(array_keys($funding_vars), array_values($funding_vars), $funding_body);
+            if (function_exists('bc_mask_provider_names')) {
+                $funding_subject = bc_mask_provider_names($funding_subject);
+                $funding_body    = bc_mask_provider_names($funding_body);
+            }
             $tx_subject      = str_replace(array_keys($tx_vars), array_values($tx_vars), $tx_subject);
             $tx_body         = str_replace(array_keys($tx_vars), array_values($tx_vars), $tx_body);
 

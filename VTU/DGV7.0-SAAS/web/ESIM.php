@@ -29,7 +29,7 @@ $plans = [
 // debited from this page (see DGV7_FINTECH_UPGRADE.md §26).
 include_once(__DIR__ . "/../func/bc-fintech-platnova.php");
 $live_plans = [];
-$esim_rail = '1GLOBAL';
+$esim_rail = 'Aggregator (Provider)';
 if (function_exists('bc_fintech_provider_configured') && bc_fintech_provider_configured($vid, 'platnova', 'esim_plans')['ready']) {
     $res = bc_platnova_esim_plans($vid);
     $rows = [];
@@ -50,7 +50,7 @@ if (function_exists('bc_fintech_provider_configured') && bc_fintech_provider_con
             ];
         }
     }
-    if ($live_plans) $esim_rail = 'Platnova';
+    if ($live_plans) $esim_rail = 'Aggregator (Provider)';
 }
 $notice = '';
 $notice_type = 'info';
@@ -305,7 +305,7 @@ bc_app_topbar(array("title" => "ESIM", "crumb" => "Home / eSIM"));
                             <td><strong><?php echo htmlspecialchars($r['reference']); ?></strong></td>
                             <td><?php echo htmlspecialchars($p['plan'] ?? $p['plan_id'] ?? '—'); ?></td>
                             <td><?php echo htmlspecialchars($p['email'] ?? '—'); ?></td>
-                            <td><?php echo htmlspecialchars(strtoupper((string)($r['provider'] ?? $esim_rail))); ?></td>
+                            <td><?php echo htmlspecialchars($esim_rail); ?></td>
                             <td><span class="ft-status-pill <?php echo $pill_cls; ?>"><?php echo htmlspecialchars($r['status']); ?></span></td>
                         </tr>
                         <?php endforeach; ?>

@@ -115,6 +115,7 @@ bc_adm_head("Crypto | Vendor Admin", array("area" => "admin"));
 <?php bc_adm_topbar(array("area" => "admin", "title" => "CRYPTO HUB MANAGEMENT", "crumb" => "Home / Crypto")); ?>
 
     <section class="section p-4">
+<?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('crypto-hub'); ?>
 <p class="p-3"><a href="CryptoCustody.php">Custody review requirements</a></p>
         <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto asset/network policies and emergency stop</a></p>
         <div class="alert alert-info">The previous provider integration has been retired. Replacement trading is not enabled. Existing payout holds are unchanged.</div>

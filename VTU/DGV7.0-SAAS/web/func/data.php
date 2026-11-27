@@ -140,7 +140,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                                 $bonus_message = isset($_SESSION['bonus_message']) ? $_SESSION['bonus_message'] : null;
                                                                 unset($_SESSION['bonus_message']);
 
-                                                                $json_response_array = array("ref" => $reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => $api_response_description, "bonus_message" => $bonus_message);
+                                                                $json_response_array = array("ref" => $reference, "status" => "success", "desc" => "Transaction Successful", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description), "bonus_message" => $bonus_message);
                                                                 $json_response_encode = json_encode($json_response_array, true);
                                                             }
 
@@ -152,7 +152,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                                 alterTransaction($reference, "api_reference", $api_response_reference);
                                                                 alterTransaction($reference, "description", $api_response_description);
                                                                 alterTransaction($reference, "api_website", $api_detail["api_base_url"]);
-                                                                $json_response_array = array("ref" => $reference, "status" => "pending", "desc" => "Transaction Pending", "response_desc" => $api_response_description);
+                                                                $json_response_array = array("ref" => $reference, "status" => "pending", "desc" => "Transaction Pending", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                                                 $json_response_encode = json_encode($json_response_array, true);
                                                             }
 
@@ -173,7 +173,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                                 }
                                                                 sendVendorEmail($get_logged_user_details["email"], $raw_log_template_subject, $raw_log_template_body);
                                                                 // Email End
-                                                                $json_response_array = array("status" => "failed", "desc" => $api_response_description);
+                                                                $json_response_array = array("status" => "failed", "desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                                                 $json_response_encode = json_encode($json_response_array, true);
                                                             }
                                                         } else {

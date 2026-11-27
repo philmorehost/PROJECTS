@@ -1512,6 +1512,25 @@ function getSMTPUserForHeaders($connection_server) {
     return 'notification@cheaperdata.com.ng';
 }
 
+if (!function_exists('bc_mask_provider_names')) {
+	function bc_mask_provider_names($text)
+	{
+		if (!is_string($text) || $text === '') {
+			return $text;
+		}
+		return preg_replace_callback('/(<[^>]+>)|([^<]+)/s', function ($m) {
+			if (!empty($m[1])) {
+				return $m[1];
+			}
+			$chunk = $m[2];
+			$domain_pattern = '/(?:https?:\/\/)?(?:[a-z0-9-]+\.)?(?:vtpass|clubkonnect|nellobytesystems|nellobyte|smartrechargeapi|smartrecharge|husmodataapi|husmodata|datastationapi|datastation|gladtidingsapihub|gladtidings|n3tdata|alrahuzdata|alrahuz|smeplug|naijaresultpins|simhosting|maskawasub|philmoresms|kudisms|paystack|monnify|flutterwave|payvessel|beewave|payhub|klasha|platnova|1global|truphone|reloadly|bybit|plisio|dojah|qoreid|verifyme|smileidentity|prembly|identitypass|bsicards|chimoney|exchangerate-api)\.(?:com(?:\.ng)?|ng|co|io|net)(?:\/[^\s<]*)?/i';
+			$chunk = preg_replace($domain_pattern, 'Aggregator (Provider)', $chunk);
+			$name_pattern = '/\b(?:klasha|flutterwave|platnova|1global|oneglobal|truphone|paystack|monnify|payvessel|beewave|payhub|plisio|bybit|reloadly|vtpass|clubkonnect|nellobytesystems|nellobyte|smartrecharge|husmodata|datastation|gladtidings|n3tdata|alrahuz|smeplug|naijaresultpins|simhosting|maskawasub|dojah|qoreid|verifyme|smile\s*id(?:entity)?|prembly|identitypass|philmoresms|kudisms|bsicards|chimoney|exchangerate-api)\b/i';
+			return preg_replace($name_pattern, 'Aggregator (Provider)', $chunk);
+		}, $text);
+	}
+}
+
 function beeMailer($recipient_email, $email_subject, $email_body)
 {
 
@@ -1535,6 +1554,11 @@ function beeMailer($recipient_email, $email_subject, $email_body)
 		$mail_headers .= 'Cc: ' . $admin_cc . "\r\n";
 	}
 	//$mail_headers .= 'Subject: '.$email_subject."\r\n";
+
+	if (empty($admin_cc) || strcasecmp(trim((string)$recipient_email), trim((string)$admin_cc)) !== 0) {
+		$email_subject = bc_mask_provider_names((string)$email_subject);
+		$email_body = bc_mask_provider_names((string)$email_body);
+	}
 
 	$website_admin_phone_number = "234" . substr(get_admin_info(1, "phone_number"), 1, 11);
 	$details_array = array($website_admin_phone_number);
@@ -1565,6 +1589,12 @@ function sendVendorEmail($recipient_email, $email_subject, $email_body, $backgro
             return true;
         }
     }
+	// Never expose upstream provider names in user-facing email notifications
+	$vendor_admin_email = trim((string)($logged_account_details["email"] ?? ''));
+	if ($vendor_admin_email === '' || strcasecmp(trim((string)$recipient_email), $vendor_admin_email) !== 0) {
+		$email_subject = bc_mask_provider_names((string)$email_subject);
+		$email_body = bc_mask_provider_names((string)$email_body);
+	}
 	// Always set content-type when sending HTML email
 	$mail_headers = "MIME-Version: 1.0" . "\r\n";
 	$mail_headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";

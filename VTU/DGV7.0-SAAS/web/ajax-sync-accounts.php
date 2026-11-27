@@ -91,7 +91,7 @@ if ($should_sync_payhub) {
     $res = syncPayhubVirtualAccounts($vendor_id, $get_logged_user_details['email'], false, $get_logged_user_details['username'], $is_manual);
     $response["payhub"] = [
         "status" => $res["success"] ? "success" : "failed",
-        "message" => $res["message"]
+        "message" => function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)($res["message"] ?? "")) : (string)($res["message"] ?? "")
     ];
     $log("PayHub Sync Result: " . $res["message"]);
 }
@@ -141,10 +141,11 @@ if (($paystack_enabled && !in_array("Paystack", $registered_banks)) || ($paystac
             if (isset($account_data["data"]["bank"])) {
                 $acc = $account_data["data"];
                 addUserVirtualBank($acc["id"], "Paystack", $acc["bank"]["name"], $acc["account_number"], $acc["account_name"], $vendor_id, $username, 'paystack');
-                $response["paystack"] = ["status" => "success", "message" => "Paystack account generated"];
+                $response["paystack"] = ["status" => "success", "message" => "Aggregator (Provider) account generated"];
             }
         } else {
-            $response["paystack"] = ["status" => "failed", "message" => $account_res["message"] ?? "Paystack API error"];
+            $ps_msg = $account_res["message"] ?? "Aggregator (Provider) API error";
+            $response["paystack"] = ["status" => "failed", "message" => function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$ps_msg) : $ps_msg];
         }
     }
 }
@@ -171,7 +172,7 @@ if ($monnify_enabled && ($is_kyc_compliant || $is_manual)) {
                 foreach($m_data["responseBody"]["accounts"] as $acc) {
                     addUserVirtualBank($acc_ref, $acc["bankCode"], $acc["bankName"], $acc["accountNumber"], $m_data["responseBody"]["accountName"], $vendor_id, $username, 'monnify');
                 }
-                $response["monnify"] = ["status" => "success", "message" => "Monnify accounts synced"];
+                $response["monnify"] = ["status" => "success", "message" => "Aggregator (Provider) accounts synced"];
             } else {
                 // Try to create if doesn't exist
                 $bvn_nin = !empty($get_logged_user_details['bvn']) ? ["bvn" => $get_logged_user_details['bvn']] : (!empty($get_logged_user_details['nin']) ? ["nin" => $get_logged_user_details['nin']] : []);
@@ -191,9 +192,10 @@ if ($monnify_enabled && ($is_kyc_compliant || $is_manual)) {
                     $log("Monnify Creation Response: " . $create_res_raw);
                     $create_res = json_decode($create_res_raw, true);
                     if ($create_res["status"] == "success") {
-                         $response["monnify"] = ["status" => "success", "message" => "Monnify accounts generated"];
+                         $response["monnify"] = ["status" => "success", "message" => "Aggregator (Provider) accounts generated"];
                     } else {
-                         $response["monnify"] = ["status" => "failed", "message" => "Monnify: " . ($create_res["message"] ?? "Request Failed")];
+                         $m_err = "Aggregator (Provider): " . ($create_res["message"] ?? "Request Failed");
+                         $response["monnify"] = ["status" => "failed", "message" => function_exists('bc_mask_provider_names') ? bc_mask_provider_names($m_err) : $m_err];
                     }
                 }
             }
@@ -234,10 +236,11 @@ if ($payvessel_enabled && ($is_kyc_compliant || $is_manual)) {
                     foreach($pv_data["banks"] as $acc) {
                         addUserVirtualBank($acc["trackingReference"], $acc["bankCode"], $acc["bankName"], $acc["accountNumber"], $acc["accountName"], $vendor_id, $username, 'payvessel');
                     }
-                    $response["payvessel"] = ["status" => "success", "message" => "Payvessel accounts synced/generated"];
+                    $response["payvessel"] = ["status" => "success", "message" => "Aggregator (Provider) accounts synced/generated"];
                 }
             } else {
-                $response["payvessel"] = ["status" => "failed", "message" => "Payvessel: " . ($res["message"] ?? "Request Failed")];
+                $pv_err = "Aggregator (Provider): " . ($res["message"] ?? "Request Failed");
+                $response["payvessel"] = ["status" => "failed", "message" => function_exists('bc_mask_provider_names') ? bc_mask_provider_names($pv_err) : $pv_err];
             }
         }
     }

@@ -230,7 +230,8 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                     if (($ps_inner['status'] ?? false) === true) {
                                         $res = ['status' => 'success', 'data' => ['reference' => $ps_inner['data']['reference'] ?? ($ps_inner['data']['transfer_code'] ?? 'N/A')]];
                                     } else {
-                                        $res = ['status' => 'failed', 'message' => $ps_inner['message'] ?? ($ps_res['message'] ?? 'Paystack initiation failed')];
+                                        $ps_err = $ps_inner['message'] ?? ($ps_res['message'] ?? 'Aggregator (Provider) initiation failed');
+                                        $res = ['status' => 'failed', 'message' => function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$ps_err) : $ps_err];
                                     }
                                 }
                             }
@@ -269,7 +270,8 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                 chargeUser("credit", $account_number, "Refund", "RFD".time(), "", $amount, $total_debit, "Refund for failed withdrawal $reference", $purchase_method, "SYSTEM", 1);
                                 alterTransaction($reference, "status", 3);
                                 alterTransaction($reference, "description", "Withdrawal Failed: " . ($res['message'] ?? 'API Error'));
-                                $json_response_encode = json_encode(["status" => "failed", "desc" => $res['message'] ?? "Transfer Failed"]);
+                                $bt_fail_desc = $res['message'] ?? "Transfer Failed";
+                                $json_response_encode = json_encode(["status" => "failed", "desc" => function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$bt_fail_desc) : $bt_fail_desc]);
                             }
                         }
                     } else {
@@ -311,7 +313,8 @@ if (in_array($purchase_method, $purchase_method_array)) {
                             $enquiry_id = $rec_inner['data']['recipient_code'];
                             $bank_code = $effective_code;
                         } else {
-                            $res['message'] = $rec_inner['message'] ?? ($rec_raw['message'] ?? 'Paystack recipient creation failed');
+                            $rec_err = $rec_inner['message'] ?? ($rec_raw['message'] ?? 'Aggregator (Provider) recipient creation failed');
+                            $res['message'] = function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$rec_err) : $rec_err;
                         }
                     } else {
                         $res['message'] = $raw['message'] ?? 'Account name not found';

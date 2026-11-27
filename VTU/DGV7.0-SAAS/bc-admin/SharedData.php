@@ -345,6 +345,7 @@ bc_adm_head("Shared Data API | " . ($get_all_super_admin_site_details["site_titl
                             Setting</h5>
                     </div>
                     <div class="card-body p-4">
+              <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('shared-data'); ?>
                         <form method="post" action="">
                             <div class="mb-3">
                                 <label class="form-label small fw-bold text-muted text-uppercase">Gateway API</label>

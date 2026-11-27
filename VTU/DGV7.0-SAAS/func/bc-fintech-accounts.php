@@ -24,10 +24,10 @@ if (!function_exists('bc_fintech_matrix_services')) {
         return [
             'developer_api' => 'Developer API (merchant keys, webhooks)',
             'airtime'       => 'Airtime',
-            'esim'          => '1GLOBAL eSIM',
+            'esim'          => 'Aggregator (Provider) eSIM',
             'tuition'       => 'Tuition payments',
-            'bills'         => 'Bills & utilities (Flutterwave)',
-            'invoices'      => 'Invoices (Flutterwave)',
+            'bills'         => 'Bills & utilities (Aggregator (Provider))',
+            'invoices'      => 'Invoices (Aggregator (Provider))',
             'pos'           => 'POS terminals',
             'transfers'     => 'Accounts & transfers',
             'cross_border'  => 'Cross-border payouts',
@@ -400,7 +400,7 @@ if (!function_exists('bc_fintech_marketing_services')) {
                 'tiers' => ['personal', 'business'],
             ],
             'esim' => [
-                'name'  => '1GLOBAL eSIM',
+                'name'  => 'Aggregator (Provider) eSIM',
                 'copy'  => 'Stay connected in 100+ countries with a data eSIM.',
                 'tiers' => ['personal'],
             ],

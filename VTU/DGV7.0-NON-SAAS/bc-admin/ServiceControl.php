@@ -291,6 +291,7 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
 <?php endforeach; ?>
 </div></div>
             <div class="col-lg-6 mb-4"><div class="card shadow-sm border-0 rounded-4 mb-4"><div class="card-header bg-white py-3 border-0"><h5 class="fw-bold mb-0 text-primary"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h5></div>                    <div class="card-body border-top">
+                        <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('fintech-routing'); ?>
                         <h6 class="fw-bold mb-1"><i class="bi bi-diagram-3 me-2"></i>Active Fintech Provider</h6>
                         <p class="small text-muted">Legacy default for pages without an independent route. Saved per-service request routes above take precedence. BTC swap is not offered by the new payment APIs, so BTC pairs hide automatically while one of them is active.</p>
                         <form method="post" action="" class="d-flex flex-wrap gap-2 align-items-center">
@@ -376,6 +377,7 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
                         <p class="small text-muted mb-0">Live exchange rates for the public landing-page converter and currency-priced services.</p>
                     </div>
                     <div class="card-body">
+                        <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('fx-api'); ?>
                         <?php $fx_api_key_saved = trim((string) getVendorOption((int)$get_logged_admin_details['id'], 'fx_api_key', '')); ?>
                         <div class="alert <?php echo $fx_api_key_saved !== '' ? 'alert-success' : 'alert-warning'; ?> border-0 rounded-3 small">
                             <?php if ($fx_api_key_saved !== ''): ?>

@@ -20,7 +20,7 @@ include_once '_header.php';
 
 <h2>5. Wallet Funding &amp; Withdrawals</h2>
 <ul>
-    <li>Wallet funding via approved gateways (Paystack, Monnify, etc.) is instant.</li>
+    <li>Wallet funding via approved Aggregator (Provider) gateways is instant.</li>
     <li>For manual bank transfer funding, submit accurate proof of payment. Processing may take up to 24 hours.</li>
     <li>Withdrawals are subject to account verification status and daily limits set by the vendor.</li>
     <li>We reserve the right to place a hold on wallet funds pending AML/fraud investigation.</li>

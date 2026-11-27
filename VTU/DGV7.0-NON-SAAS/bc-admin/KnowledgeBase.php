@@ -23,6 +23,48 @@ bc_adm_head("Knowledge Base | " . ($get_all_super_admin_site_details["site_title
 
               <div class="accordion accordion-flush" id="knowledgeBaseAccordion">
 
+                <!-- Which API is for which service -->
+                <div class="accordion-item">
+                  <h2 class="accordion-header" id="headingApiMap">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseApiMap" aria-expanded="true" aria-controls="collapseApiMap">
+                      Which API is for Which Service (Complete API &amp; Linked Page Directory)
+                    </button>
+                  </h2>
+                  <div id="collapseApiMap" class="accordion-collapse collapse show" aria-labelledby="headingApiMap" data-bs-parent="#knowledgeBaseAccordion">
+                    <div class="accordion-body">
+                      <p class="small text-muted mb-3">Use this directory to see which API powers each service, its purpose, where to configure it in <code>bc-admin</code>, and which user page(s) it links to. You can also view the full interactive <a href="SiteMap.php#api-service-directory">Admin Platform Guide &amp; Site Map</a>.</p>
+                      <div class="table-responsive">
+                        <table class="table table-sm table-bordered table-hover align-middle small mb-0">
+                          <thead class="table-light">
+                            <tr>
+                              <th>API / Integration</th>
+                              <th>Service Powered</th>
+                              <th>Purpose</th>
+                              <th>Admin API Page</th>
+                              <th>Linked Page(s)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <?php foreach (bc_adm_api_directory() as $api_entry): ?>
+                            <tr>
+                              <td class="fw-bold"><?php echo htmlspecialchars($api_entry['api_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td class="text-primary fw-semibold"><?php echo htmlspecialchars($api_entry['service'], ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td class="text-muted"><?php echo htmlspecialchars($api_entry['purpose'], ENT_QUOTES, 'UTF-8'); ?></td>
+                              <td><a href="<?php echo htmlspecialchars($api_entry['admin_page'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($api_entry['admin_page'], ENT_QUOTES, 'UTF-8'); ?></a> <span class="text-muted">(<?php echo htmlspecialchars($api_entry['admin_section'], ENT_QUOTES, 'UTF-8'); ?>)</span></td>
+                              <td>
+                                <?php foreach ($api_entry['linked_pages'] as $lp): ?>
+                                  <div><a href="<?php echo htmlspecialchars($lp['path'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($lp['label'], ENT_QUOTES, 'UTF-8'); ?></a></div>
+                                <?php endforeach; ?>
+                              </td>
+                            </tr>
+                            <?php endforeach; ?>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- How to order VTU vendor website -->
                 <div class="accordion-item">
                   <h2 class="accordion-header" id="headingOne">
