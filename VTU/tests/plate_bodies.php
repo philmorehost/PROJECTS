@@ -9,6 +9,7 @@
 // authenticator enrolment block — spliced from the working tree the same way.
 // Email-verified no-reload setup: only the two AccountSettings authenticator
 // pending/begin UI blocks are intentionally re-baselined; all other bodies kept.
+// BulkSMS.php (both editions): intentional Transaction PIN field re-baseline.
 return array(
     "VTU/DGV7.0-SAAS/web/AI-Assistant.php" => <<<'PLATEBODY'
 
@@ -1270,6 +1271,14 @@ PLATEBODY,
                     <input class="form-check-input" type="checkbox" id="phone-bypass" onclick="bypassBulkSMSPhoneNumbers();" checked>
                     <label class="form-check-label small fw-bold text-muted" for="phone-bypass">Bypass Verification</label>
                 </div>
+
+                <?php if (!empty($force_security_pin_for_users) && (int)$force_security_pin_for_users === 1): ?>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-uppercase" for="transaction-pin">Transaction PIN</label>
+                    <input id="transaction-pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" class="form-control form-control-lg text-center" placeholder="Enter your 4-digit PIN" required />
+                    <div class="form-text">Your account requires a transaction PIN for every purchase.</div>
+                </div>
+                <?php endif; ?>
 
                 <button id="proceedBtn" name="send-sms" type="submit" data-no-lock class="btn btn-primary btn-lg w-100 shadow-sm py-3 fw-bold rounded-3" style="pointer-events: none; opacity: 0.7;">
                     SEND BULK SMS
@@ -6503,6 +6512,14 @@ PLATEBODY,
                     <input class="form-check-input" type="checkbox" id="phone-bypass" onclick="bypassBulkSMSPhoneNumbers();" checked>
                     <label class="form-check-label small fw-bold text-muted" for="phone-bypass">Bypass Verification</label>
                 </div>
+
+                <?php if (!empty($force_security_pin_for_users) && (int)$force_security_pin_for_users === 1): ?>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-uppercase" for="transaction-pin">Transaction PIN</label>
+                    <input id="transaction-pin" name="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" pattern="[0-9]{4}" class="form-control form-control-lg text-center" placeholder="Enter your 4-digit PIN" required />
+                    <div class="form-text">Your account requires a transaction PIN for every purchase.</div>
+                </div>
+                <?php endif; ?>
 
                 <button id="proceedBtn" name="send-sms" type="submit" data-no-lock class="btn btn-primary btn-lg w-100 shadow-sm py-3 fw-bold rounded-3" style="pointer-events: none; opacity: 0.7;">
                     SEND BULK SMS

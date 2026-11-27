@@ -8,6 +8,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.datagifting.app.R
 import com.datagifting.app.databinding.ActivityLoginBinding
 import com.datagifting.app.data.model.ApiResult
 import com.datagifting.app.data.repository.LoginOutcome

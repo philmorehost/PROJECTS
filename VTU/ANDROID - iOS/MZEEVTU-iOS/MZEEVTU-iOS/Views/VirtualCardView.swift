@@ -56,8 +56,8 @@ struct VirtualCardView: View {
             Section {
                 NavigationLink(destination: CreateCardView()) {
                     Text("Create New Card")
-                        .foregroundColor(brandTheme.ink)
                         .bold()
+                        .foregroundColor(brandTheme.ink)
                 }
             }
         }

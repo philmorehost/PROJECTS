@@ -75,9 +75,9 @@ struct IntlTransferView: View {
                         ProgressView().frame(maxWidth: .infinity)
                     } else {
                         Text("Submit Transfer Request")
+                            .bold()
                             .frame(maxWidth: .infinity)
                             .foregroundColor(brandTheme.onPrimary)
-                            .bold()
                     }
                 }
                 .listRowBackground(brandTheme.primary)

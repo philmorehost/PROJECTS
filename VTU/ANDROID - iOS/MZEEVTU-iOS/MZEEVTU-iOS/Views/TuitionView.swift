@@ -63,9 +63,9 @@ struct TuitionView: View {
                         ProgressView().frame(maxWidth: .infinity)
                     } else {
                         Text("Submit Tuition Request")
+                            .bold()
                             .frame(maxWidth: .infinity)
                             .foregroundColor(brandTheme.onPrimary)
-                            .bold()
                     }
                 }
                 .listRowBackground(brandTheme.primary)
