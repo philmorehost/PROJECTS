@@ -21,8 +21,9 @@ include_once("../../func/bc-connect.php");
 // bc-connect.php does not pull in by itself. Without this the status/upload replies fatal on an
 // undefined function.
 include_once(__DIR__ . "/../../func/bc-security.php");
-// AI KYC Compliance Engine: document analysis via multimodal AI
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
 include_once(__DIR__ . "/../../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../../func/bc-kyc-av-scanner.php");
 
 $vendor_id = resolveVendorID();
 $select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server,
@@ -157,6 +158,8 @@ if ($action === 'upload_document') {
             http_response_code(422);echo json_encode(['status'=>'failed','code'=>'VIDEO_EVIDENCE_INVALID','desc'=>'Video could not be validated.' . ($v_detail !== '' ? ' ' . $v_detail : '') . ' Record a clear 1–6 second video with audio, maximum 3 MB (MP4/WebM). If retry fails, contact support; do not assume it was saved.']);exit;
         }
     }
+    $av_errors = [];
+    $av_scan_reports = [];
     foreach ($kinds as $input_name => $spec) {
         list($db_col, $exts, $max_mb) = $spec;
         if (empty($_FILES[$input_name]['name'])) continue;
@@ -171,6 +174,18 @@ if ($action === 'upload_document') {
         // Images must really be images - the extension comes from the client.
         if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true) && @getimagesize($tmp) === false) continue;
 
+        // Pre-upload Antivirus, Trojan & Blank-File Scanner BEFORE moving into storage
+        $av_scan = bc_kyc_av_scan_upload($tmp, (string)$_FILES[$input_name]['name'], $ext, [
+            'connection' => $connection_server,
+            'vendor_id'  => $vendor_id,
+            'user_id'    => $user_id,
+            'doc_kind'   => $input_name,
+        ]);
+        if (empty($av_scan['allowed'])) {
+            $av_errors[] = $input_name . ': ' . ($av_scan['reason'] ?? 'Blocked by security scanner');
+            continue;
+        }
+
         $filename = "kyc_{$user_id}_{$input_name}_" . bin2hex(random_bytes(6)) . ".$ext";
         if (move_uploaded_file($tmp, $upload_dir . $filename)) {
             $fn_esc = mysqli_real_escape_string($connection_server, $filename);
@@ -179,7 +194,22 @@ if ($action === 'upload_document') {
                 $updates[] = "liveliness_picture='$fn_esc'";
             }
             $uploaded[] = $input_name;
+            $av_scan_reports[$input_name] = [
+                'scan_mode'      => $av_scan['scan_mode'] ?? 'standard_antivirus',
+                'security_score' => (int)($av_scan['security_score'] ?? 95),
+                'reason'         => (string)($av_scan['reason'] ?? 'Clean'),
+            ];
         }
+    }
+
+    if (!empty($av_errors) && empty($updates)) {
+        http_response_code(422);
+        echo json_encode([
+            "status" => "failed",
+            "code"   => "AV_SCAN_REJECTED",
+            "desc"   => implode(' | ', $av_errors),
+        ]);
+        exit;
     }
 
     if (!empty($updates)) {
@@ -209,12 +239,35 @@ if ($action === 'upload_document') {
             $in_review = true;
         }
 
+        // Auto-trigger AI compliance review & per-doc ratings for admin when AI is enabled
+        $ai_summary = null;
+        $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vendor_id);
+        if (!empty($ai_gate['enabled']) && $after) {
+            $analysis = bc_kyc_ai_analyze_all($after, $enabled_checks);
+            $analysis['username'] = $after['username'] ?? ($user['username'] ?? '');
+            if (!empty($av_scan_reports)) {
+                $analysis['decision']['av_scans'] = $av_scan_reports;
+            }
+            $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, false);
+            $ai_summary = [
+                'status'         => $store_result['decision']['status'] ?? 'review',
+                'confidence'     => (int)($store_result['decision']['confidence'] ?? 0),
+                'overall_rating' => (int)($store_result['decision']['overall_rating'] ?? 0),
+                'overall_grade'  => (string)($store_result['decision']['overall_grade'] ?? 'C'),
+                'reason'         => (string)($store_result['decision']['reason'] ?? ''),
+                'ratings'        => $store_result['decision']['ratings'] ?? [],
+            ];
+        }
+
         echo json_encode([
             "status" => "success",
             "desc"   => $in_review ? "Documents submitted and waiting for admin review" : "Documents saved",
             "in_review" => $in_review,
             "accepted_media" => $uploaded,
             "still_needed" => array_map('bc_kyc_check_label', $still),
+            "av_scans" => $av_scan_reports,
+            "av_warnings" => $av_errors,
+            "ai_analysis" => $ai_summary,
         ]);
     } else {
         echo json_encode(["status" => "failed", "desc" => "No valid documents received"]);
@@ -226,16 +279,13 @@ if ($action === 'upload_document') {
 
 // Trigger AI analysis of all uploaded KYC documents
 if ($action === 'ai_analyze_documents') {
+    $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vendor_id);
+    if (empty($ai_gate['enabled'])) {
+        echo json_encode(["status" => "failed", "desc" => $ai_gate['reason'] ?? "AI KYC analysis is not enabled for this vendor."]);
+        exit;
+    }
     $vendor_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve, kyc_ai_billing FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
-    $vendor_row = $vendor_q ? mysqli_fetch_assoc($vendor_q) : null;
-    if (!$vendor_row || (int)($vendor_row['kyc_ai_enabled'] ?? 0) !== 1) {
-        echo json_encode(["status" => "failed", "desc" => "AI KYC analysis is not enabled for this vendor."]);
-        exit;
-    }
-    if (!function_exists('ai_engine')) {
-        echo json_encode(["status" => "failed", "desc" => "AI engine is not available on this installation."]);
-        exit;
-    }
+    $vendor_row = $vendor_q ? mysqli_fetch_assoc($vendor_q) : [];
     $user_id = (int)$user['id'];
     $q_user = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
     $user_row = $q_user ? (mysqli_fetch_assoc($q_user) ?: $user) : $user;

@@ -42,6 +42,12 @@ struct DashboardView: View {
                                 shortcut("Gift card", "gift", "giftcards")
                                 NavigationLink(destination: serviceList(group: "VTU")) { tile("VTU", "square.grid.2x2") }
                             }
+                            HStack(spacing: 8) {
+                                NavigationLink(destination: IntlTransferView()) { tile("Send Abroad", "globe") }
+                                NavigationLink(destination: TuitionView()) { tile("Tuition", "graduationcap") }
+                                NavigationLink(destination: EsimView()) { tile("eSIM", "simcard") }
+                                NavigationLink(destination: PosRequestView()) { tile("POS Device", "creditcard.and.123") }
+                            }
                             transactionCard
                             if !error.isEmpty { Text(error).font(.caption).foregroundColor(.orange).padding() }
                         }.padding(16)
@@ -155,6 +161,10 @@ struct DashboardView: View {
                         else if service.id == "electric" || service.id == "cable" { NavigationLink(service.title, destination: BillPaymentView(serviceType: service.id)) }
                         else if service.id == "kyc" { NavigationLink(service.title, destination: KYCView()) }
                         else if service.id == "cards" { NavigationLink(service.title, destination: VirtualCardView()) }
+                        else if service.id == "international" { NavigationLink(service.title, destination: IntlTransferView()) }
+                        else if service.id == "tuition" { NavigationLink(service.title, destination: TuitionView()) }
+                        else if service.id == "esim" { NavigationLink(service.title, destination: EsimView()) }
+                        else if service.id == "pos" { NavigationLink(service.title, destination: PosRequestView()) }
                         else { Button(service.title) { portal = service } }
                     }
                 }

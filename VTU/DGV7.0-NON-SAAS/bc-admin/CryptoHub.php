@@ -76,11 +76,15 @@ if (isset($_POST['save_a2p_config'])) {
         ];
     }
 
-    bc_crypto_a2p_save_config($vid, $newCfg);
-    if (function_exists('bc_sec_audit')) {
-        bc_sec_audit($vid, 'admin', $adminEmail, 'crypto_a2p_config_save', 'crypto_a2p', 'Updated rates, markups, and deposit wallets');
+    $savedOk = bc_crypto_a2p_save_config($vid, $newCfg);
+    if ($savedOk) {
+        if (function_exists('bc_sec_audit')) {
+            bc_sec_audit($vid, 'admin', $adminEmail, 'crypto_a2p_config_save', 'crypto_a2p', 'Updated rates, markups, and deposit wallets');
+        }
+        $_SESSION['product_purchase_response'] = "CryptoHub rates, markup fees, and deposit wallets saved.";
+    } else {
+        $_SESSION['product_purchase_response'] = "Error: Unable to save CryptoHub settings. Please verify database connectivity and sas_settings table.";
     }
-    $_SESSION['product_purchase_response'] = "CryptoHub rates, markup fees, and deposit wallets saved.";
     header("Location: CryptoHub.php?tab=rates");
     exit();
 }
@@ -227,9 +231,7 @@ bc_adm_head("CryptoHub Desk | Vendor Admin", array("area" => "admin"));
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-primary btn-sm rounded-pill" href="CryptoPolicies.php">Crypto Asset Policies</a>
-        <a class="btn btn-outline-secondary btn-sm rounded-pill" href="CryptoCustody.php">Custody Review</a>
-        <a class="btn btn-outline-secondary btn-sm rounded-pill" href="CryptoInvoices.php">Invoice History</a>
+        <a class="btn btn-outline-secondary btn-sm rounded-pill" href="CryptoInvoices.php">Legacy Invoice History</a>
     </div>
     <form method="post" class="m-0">
         <?php echo $csrfHtml; ?>

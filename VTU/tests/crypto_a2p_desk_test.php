@@ -56,5 +56,32 @@ a2p_chk(strpos($admSrc, 'approve_a2p_buy') !== false && strpos($admSrc, 'reject_
 a2p_chk(strpos($admSrc, 'approve_p2a_sell') !== false && strpos($admSrc, 'reject_p2a_sell') !== false, 'admin CryptoHub handles P2A Sell settlement & reject');
 a2p_chk(strpos($admSrc, 'save_a2p_config') !== false && strpos($admSrc, 'buy_markup_pct') !== false && strpos($admSrc, 'sell_markdown_pct') !== false, 'admin CryptoHub configures rates, markups, and deposit addresses');
 a2p_chk(strpos($admSrc, 'bc_stepup_admin_verify') !== false && strpos($admSrc, 'bc_sec_audit') !== false, 'admin CryptoHub enforces step-up 2FA and audit logs');
+a2p_chk(strpos($admSrc, 'CryptoPolicies.php') === false && strpos($admSrc, 'CryptoCustody.php') === false, 'admin CryptoHub drops irrelevant V2/Bybit policy links');
+
+// Storage round-trip check under sas_settings VARCHAR(225) constraint
+$GLOBALS['__a2p_mock_settings'] = [];
+$GLOBALS['__a2p_max_val_len'] = 0;
+function getVendorOption($vid, $name, $default = '') {
+    return $GLOBALS['__a2p_mock_settings'][$vid . ':' . $name] ?? $default;
+}
+function setVendorOption($vid, $name, $value) {
+    $len = strlen((string)$value);
+    if ($len > $GLOBALS['__a2p_max_val_len']) $GLOBALS['__a2p_max_val_len'] = $len;
+    if ($len > 225) throw new RuntimeException("sas_settings VARCHAR(225) exceeded for $name ($len bytes)");
+    $GLOBALS['__a2p_mock_settings'][$vid . ':' . $name] = (string)$value;
+}
+$testCfg = bc_crypto_a2p_default_config();
+$testCfg['buy_markup_pct'] = 6.75;
+$testCfg['sell_markdown_pct'] = 4.25;
+$testCfg['swap_fee_pct'] = 1.5;
+$testCfg['desk_notice'] = str_repeat('Custom Desk Notice ', 25);
+$testCfg['assets']['USDT_TRC20']['deposit_address'] = 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL';
+$testCfg['assets']['USDT_TRC20']['manual_buy_ngn'] = 1725.5;
+a2p_chk(bc_crypto_a2p_save_config(7, $testCfg) === true, 'bc_crypto_a2p_save_config persists within VARCHAR(225) per row');
+a2p_chk($GLOBALS['__a2p_max_val_len'] <= 225, 'all saved sas_settings values stay within 225 bytes');
+$loadedCfg = bc_crypto_a2p_get_config(7);
+a2p_chk(abs($loadedCfg['buy_markup_pct'] - 6.75) < 0.001 && abs($loadedCfg['sell_markdown_pct'] - 4.25) < 0.001, 'saved buy_markup_pct & sell_markdown_pct reload accurately');
+a2p_chk($loadedCfg['assets']['USDT_TRC20']['deposit_address'] === 'TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL', 'saved deposit_address reloads accurately');
+a2p_chk(abs($loadedCfg['assets']['USDT_TRC20']['manual_buy_ngn'] - 1725.5) < 0.001, 'saved manual_buy_ngn reloads accurately');
 
 echo "PASS $n crypto A2P/P2A desk checks\n";

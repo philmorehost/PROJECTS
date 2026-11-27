@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-admin-config.php");
+include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
 
 /**
  * DGV7: business upgrade (KYB) review queue.
@@ -64,6 +66,47 @@ if (isset($_GET['doc'], $_GET['uid'])) {
 // ── Decisions ────────────────────────────────────────────────────────────────
 $bc_review_message = '';
 $bc_review_type = 'info';
+
+if (isset($_POST['run_kyb_ai_review'])) {
+    bc_validate_csrf();
+    $uid = (int)($_POST['uid'] ?? 0);
+    $q_target = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$uid' AND vendor_id='$vid' LIMIT 1");
+    $target_user = $q_target ? mysqli_fetch_assoc($q_target) : null;
+    $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+    if (!$target_user || empty($target_user['kyb_document'])) {
+        $_SESSION['product_purchase_response'] = 'Error: KYB applicant or registration document not found.';
+    } elseif (empty($ai_gate['enabled'])) {
+        $_SESSION['product_purchase_response'] = 'AI Compliance disabled: ' . ($ai_gate['reason'] ?? 'Enable Global AI & KYC/KYB AI to run automated document rating.');
+    } else {
+        $doc_name = basename((string)$target_user['kyb_document']);
+        $doc_path = '';
+        foreach ([rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/') . '/uploads/kyb/', dirname(__DIR__) . '/uploads/kyb/'] as $dir_cand) {
+            if ($dir_cand !== '/uploads/kyb/' && is_file($dir_cand . $doc_name)) {
+                $doc_path = $dir_cand . $doc_name;
+                break;
+            }
+        }
+        if ($doc_path === '') {
+            $_SESSION['product_purchase_response'] = 'Error: KYB document file not found on disk.';
+        } else {
+            $applicant_name = trim((string)($target_user['firstname'] ?? '') . ' ' . (string)($target_user['lastname'] ?? ''));
+            $report = bc_kyb_ai_analyze_document(
+                $doc_path,
+                (string)($target_user['kyb_business_name'] ?? ''),
+                (string)($target_user['kyb_registration_no'] ?? ''),
+                (string)($target_user['kyb_category'] ?? ''),
+                $applicant_name
+            );
+            if (function_exists('bc_kyb_ai_store_report')) {
+                bc_kyb_ai_store_report($connection_server, $uid, $vid, (string)($target_user['username'] ?? ''), $report);
+            }
+            $_SESSION['product_purchase_response'] = 'AI KYB Review complete for @' . ($target_user['username'] ?? '')
+                . ' — Rating: ' . (int)($report['rating'] ?? 0) . '/100 (Grade ' . ($report['grade'] ?? 'C') . ').';
+        }
+    }
+    header("Location: BusinessKYB.php");
+    exit();
+}
 
 if (isset($_POST['kyb_decision'])) {
     bc_validate_csrf();
@@ -141,14 +184,18 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                             <th class="ps-4">Applicant</th>
                             <th>Business</th>
                             <th>Document</th>
+                            <th>AI Review &amp; Rating</th>
                             <th>Submitted</th>
                             <th class="pe-4 text-end">Decision</th>
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($bc_pending as $row):
+                    <?php
+                        $ai_gate_kyb = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+                        foreach ($bc_pending as $row):
                         $uid = (int)$row['id'];
                         $cat = $bc_categories[$row['kyb_category'] ?? ''] ?? ($row['kyb_category'] ?? '—');
+                        $kyb_report = function_exists('bc_kyb_ai_get_report') ? bc_kyb_ai_get_report($connection_server, $uid, $vid) : null;
                     ?>
                         <tr>
                             <td class="ps-4">
@@ -171,6 +218,45 @@ bc_adm_head("Business KYB Review | " . ($get_all_super_admin_site_details["site_
                                     </a>
                                 <?php else: ?>
                                     <span class="small text-danger">Missing</span>
+                                <?php endif; ?>
+                            </td>
+                            <td style="min-width:230px; max-width:300px;">
+                                <?php if ($kyb_report):
+                                    $kst = (string)($kyb_report['ai_status'] ?? 'kyb_review');
+                                    $kbadge = $kst === 'kyb_approve' ? 'success' : ($kst === 'kyb_reject' ? 'danger' : 'warning');
+                                    $krating = (int)($kyb_report['rating'] ?? 0);
+                                    $kgrade = (string)($kyb_report['grade'] ?? '');
+                                    $kdoc = is_array($kyb_report['document'] ?? null) ? $kyb_report['document'] : [];
+                                ?>
+                                    <div class="d-flex align-items-center gap-1 flex-wrap mb-1">
+                                        <span class="badge bg-<?php echo $kbadge; ?>"><?php echo htmlspecialchars((string)($kyb_report['recommendation'] ?? 'AI Reviewed')); ?></span>
+                                        <span class="badge bg-dark"><?php echo $krating; ?>/100<?php echo $kgrade !== '' ? ' (' . htmlspecialchars($kgrade) . ')' : ''; ?></span>
+                                    </div>
+                                    <div class="small text-muted"><?php echo htmlspecialchars((string)($kyb_report['reason'] ?? '')); ?></div>
+                                    <?php if (!empty($kdoc)): ?>
+                                        <div class="x-small text-muted mt-1">
+                                            <?php if (($kdoc['business_name_matches'] ?? null) !== null): ?>
+                                                Name: <strong class="text-<?php echo $kdoc['business_name_matches'] ? 'success' : 'danger'; ?>"><?php echo $kdoc['business_name_matches'] ? 'Matched' : 'Mismatch'; ?></strong> &middot;
+                                            <?php endif; ?>
+                                            <?php if (($kdoc['reg_no_matches'] ?? null) !== null): ?>
+                                                Reg#: <strong class="text-<?php echo $kdoc['reg_no_matches'] ? 'success' : 'danger'; ?>"><?php echo $kdoc['reg_no_matches'] ? 'Matched' : 'Mismatch'; ?></strong>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($kyb_report['av_scan']['scan_mode'])): ?>
+                                        <div class="x-small text-success mt-1"><i class="bi bi-shield-check me-1"></i>AV: <?php echo htmlspecialchars((string)$kyb_report['av_scan']['scan_mode']); ?></div>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="small text-muted d-block">No AI report yet</span>
+                                <?php endif; ?>
+                                <?php if (!empty($ai_gate_kyb['enabled']) && !empty($row['kyb_document'])): ?>
+                                    <form method="post" action="BusinessKYB.php" class="mt-1">
+                                        <?php echo bc_csrf_field(); ?>
+                                        <input type="hidden" name="uid" value="<?php echo $uid; ?>">
+                                        <button type="submit" name="run_kyb_ai_review" value="1" class="btn btn-xs btn-outline-primary rounded-pill py-0 px-2" style="font-size:0.75rem;">
+                                            <i class="bi bi-cpu me-1"></i><?php echo $kyb_report ? 'Re-run AI' : 'Run AI Review'; ?>
+                                        </button>
+                                    </form>
                                 <?php endif; ?>
                             </td>
                             <td class="small text-muted"><?php echo htmlspecialchars((string)($row['kyb_submitted_at'] ?? '')); ?></td>

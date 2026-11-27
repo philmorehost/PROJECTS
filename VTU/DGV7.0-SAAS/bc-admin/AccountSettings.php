@@ -589,6 +589,17 @@ if (isset($_POST["upload-vendor-kyc-doc"])) {
             $upload_errors[] = "$label is not a valid image file.";
             continue;
         }
+        include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
+        $av_scan = bc_kyc_av_scan_upload($tmp, (string)$_FILES[$input_name]['name'], $ext, [
+            'connection' => $connection_server,
+            'vendor_id'  => (int)$vid,
+            'user_id'    => 0,
+            'doc_kind'   => 'vendor_' . $input_name,
+        ]);
+        if (empty($av_scan['allowed'])) {
+            $upload_errors[] = "$label blocked by security scanner: " . ($av_scan['reason'] ?? 'Invalid or blank file.');
+            continue;
+        }
         $filename = 'vkyc_' . $vid . '_' . $input_name . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
         if (move_uploaded_file($tmp, $upload_dir . $filename)) {
             $fn_esc = mysqli_real_escape_string($connection_server, $filename);

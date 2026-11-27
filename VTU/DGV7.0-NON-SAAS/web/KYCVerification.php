@@ -34,8 +34,9 @@ $kyc_still_needed = $enabled_checks ? bc_kyc_checks_pending($kyc_self, $enabled_
 
 $is_kyc_enabled = isKYCEnforced($vid);
 
-// AI KYC Compliance Engine
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
 
 // Handle Submissions
 if (isset($_POST['submit_bvn_nin'])) {
@@ -186,11 +187,28 @@ if (isset($_POST['submit_media'])) {
             continue;
         }
 
+        // Pre-upload Antivirus, Trojan & Blank-File Scanner (AI-assisted when enabled, else standard local scanner)
+        $av_scan = bc_kyc_av_scan_upload($tmp, (string)$_FILES[$input_name]['name'], $ext, [
+            'connection' => $connection_server,
+            'vendor_id'  => $vid,
+            'user_id'    => $user_id,
+            'doc_kind'   => $input_name,
+        ]);
+        if (empty($av_scan['allowed'])) {
+            $upload_errors[] = "$label blocked by security scanner: " . ($av_scan['reason'] ?? 'Invalid or suspicious file.');
+            continue;
+        }
+
         $filename = 'kyc_' . $user_id . '_' . $input_name . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
         if (move_uploaded_file($tmp, $upload_dir . $filename)) {
             $fn_esc = mysqli_real_escape_string($connection_server, $filename);
             $updates[] = "$db_col = '$fn_esc'";
             $uploaded[] = $input_name;
+            $av_scan_reports[$input_name] = [
+                'scan_mode'      => $av_scan['scan_mode'] ?? 'standard_antivirus',
+                'security_score' => (int)($av_scan['security_score'] ?? 95),
+                'reason'         => (string)($av_scan['reason'] ?? 'Clean'),
+            ];
             if ($input_name === 'selfie') $selfie_filename = $filename;
         } else {
             $upload_errors[] = "$label could not be saved on the server. Please contact support.";
@@ -241,31 +259,33 @@ if (isset($_POST['submit_media'])) {
         $_SESSION['product_purchase_response'] = $msg;
 
         // ─── Auto-trigger AI KYC analysis after document submission ────────────────────────────
-        if (!empty($updates) && function_exists('ai_engine')) {
-            $vendor_kyc_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve FROM sas_vendors WHERE id='$vid' LIMIT 1");
-            $vendor_kyc_ai = $vendor_kyc_ai_q ? mysqli_fetch_assoc($vendor_kyc_ai_q) : null;
-            if ($vendor_kyc_ai && (int)($vendor_kyc_ai['kyc_ai_enabled'] ?? 0) === 1) {
-                $q_reread = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
-                $user_reread = $q_reread ? (mysqli_fetch_assoc($q_reread) ?: []) : [];
-                if ($user_reread) {
-                    $analysis = bc_kyc_ai_analyze_all($user_reread, $enabled_checks);
-                    $analysis['username'] = $user_reread['username'];
-                    $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
-                    $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
-                    if ($store_result['applied']) {
-                        $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC automatically! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
-                    } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
-                        $_SESSION['product_purchase_response'] = "AI has reviewed your documents but could not approve them: " . ($store_result['decision']['reason'] ?? 'Please check your documents and resubmit.');
-                    } else {
-                        $_SESSION['product_purchase_response'] = "Your documents have been submitted and are being analyzed by our AI Compliance Engine.";
-                    }
+        $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+        if (!empty($updates) && !empty($ai_gate['enabled'])) {
+            $q_reread = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$user_id' LIMIT 1");
+            $user_reread = $q_reread ? (mysqli_fetch_assoc($q_reread) ?: []) : [];
+            if ($user_reread) {
+                $analysis = bc_kyc_ai_analyze_all($user_reread, $enabled_checks);
+                $analysis['username'] = $user_reread['username'];
+                if (!empty($av_scan_reports)) {
+                    $analysis['decision']['av_scans'] = $av_scan_reports;
+                }
+                $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
+                $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vid, $analysis, $auto_apply);
+                if ($store_result['applied']) {
+                    $_SESSION['product_purchase_response'] = "AI has verified your documents and approved your KYC automatically! Confidence: " . ($store_result['decision']['confidence'] ?? 0) . "%.";
+                } elseif (($store_result['decision']['status'] ?? '') === 'reject') {
+                    $_SESSION['product_purchase_response'] = "AI reviewed your documents and flagged issues for the admin report: " . ($store_result['decision']['reason'] ?? 'Please check your documents and resubmit.');
+                } else {
+                    $_SESSION['product_purchase_response'] = "Your documents passed antivirus screening and were analyzed by our AI Compliance Engine. An admin will review the AI report shortly.";
                 }
             }
         }
     } else {
         if (!empty($upload_errors)) {
+            $_SESSION['product_purchase_status'] = 'failed';
             $_SESSION['product_purchase_response'] = "Error: " . implode(' ', $upload_errors);
         } else {
+            $_SESSION['product_purchase_status'] = 'failed';
             $_SESSION['product_purchase_response'] = "Error: no file was selected or captured. Please attach a document or capture your live photo/video before submitting.";
         }
     }
@@ -276,15 +296,9 @@ if (isset($_POST['submit_media'])) {
 
 // ─── Manual AI analysis trigger ──────────────────────────────────────────────────────────────────
 if (isset($_POST['ai_analyze'])) {
-    if (!function_exists('ai_engine')) {
-        $_SESSION['product_purchase_response'] = "AI engine is not available on this installation.";
-        header("Location: KYCVerification.php");
-        exit();
-    }
-    $vendor_kyc_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled, kyc_ai_auto_approve FROM sas_vendors WHERE id='$vid' LIMIT 1");
-    $vendor_kyc_ai = $vendor_kyc_ai_q ? mysqli_fetch_assoc($vendor_kyc_ai_q) : null;
-    if (!$vendor_kyc_ai || (int)($vendor_kyc_ai['kyc_ai_enabled'] ?? 0) !== 1) {
-        $_SESSION['product_purchase_response'] = "AI KYC analysis is not enabled for your vendor.";
+    $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+    if (empty($ai_gate['enabled'])) {
+        $_SESSION['product_purchase_response'] = $ai_gate['reason'] ?? "AI KYC analysis is not enabled for your vendor.";
         header("Location: KYCVerification.php");
         exit();
     }
@@ -567,9 +581,8 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                     <!-- AI KYC Analysis Section -->
                     <?php
                     $ai_decision = bc_kyc_ai_get_decision($connection_server, (int)$get_logged_user_details['id']);
-                    $v_ai_q = mysqli_query($connection_server, "SELECT kyc_ai_enabled FROM sas_vendors WHERE id='$vid' LIMIT 1");
-                    $v_ai = $v_ai_q ? mysqli_fetch_assoc($v_ai_q) : null;
-                    $vendor_ai_enabled = ($v_ai && (int)($v_ai['kyc_ai_enabled'] ?? 0) === 1);
+                    $ai_gate_ui = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+                    $vendor_ai_enabled = !empty($ai_gate_ui['enabled']);
                     ?>
                     <?php if ($vendor_ai_enabled): ?>
                     <div class="col-md-12">
@@ -663,5 +676,57 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
     </div>
 
 
+
+<script>
+(function(){
+  ['govt_id', 'proof_of_address'].forEach(function(name){
+    var inp = document.querySelector('input[type="file"][name="' + name + '"]');
+    if (!inp) return;
+    inp.addEventListener('change', function(){
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      if (f.size < 256) {
+        alert('Blank or empty file detected (' + f.size + ' bytes). Please select a valid document.');
+        inp.value = '';
+        return;
+      }
+      if (/\.(php\d*|phtml|exe|dll|bat|cmd|sh|js|vbs|ps1|scr)\./i.test(f.name)) {
+        alert('Suspicious filename detected. Upload blocked.');
+        inp.value = '';
+        return;
+      }
+      if (/^image\//i.test(f.type)) {
+        var img = new Image();
+        var url = URL.createObjectURL(f);
+        img.onload = function(){
+          try {
+            var c = document.createElement('canvas');
+            c.width = 24; c.height = 24;
+            var ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, 24, 24);
+            var d = ctx.getImageData(0, 0, 24, 24).data;
+            var lums = [], minL = 255, maxL = 0;
+            for (var i = 0; i < d.length; i += 4) {
+              var l = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+              lums.push(l);
+              if (l < minL) minL = l;
+              if (l > maxL) maxL = l;
+            }
+            var mean = lums.reduce(function(a,b){return a+b;},0) / lums.length;
+            var variance = lums.reduce(function(a,b){return a + (b-mean)*(b-mean);},0) / lums.length;
+            if (Math.sqrt(variance) < 4.0 || (maxL - minL) < 12) {
+              alert('Blank or solid-color image detected. Please upload a clear, readable document.');
+              inp.value = '';
+            }
+          } catch(e) {}
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = function(){ URL.revokeObjectURL(url); };
+        img.src = url;
+      }
+    });
+  });
+})();
+</script>
 
 <?php bc_app_foot(); ?>

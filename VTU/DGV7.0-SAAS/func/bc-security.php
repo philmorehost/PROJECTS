@@ -1415,6 +1415,58 @@ if (!function_exists('bc_kyc_enabled_checks')) {
 
 // ─── AI KYC Compliance Engine: decision storage & logging ───────────────────────────────────────────
 
+if (!function_exists('bc_kyc_ai_ensure_schema')) {
+    /**
+     * Lazily ensure KYC/KYB AI columns & audit table exist on live installations.
+     */
+    function bc_kyc_ai_ensure_schema($connection_server)
+    {
+        static $done = false;
+        if ($done || !$connection_server) return;
+        $done = true;
+
+        $q_v = @mysqli_query($connection_server, "SHOW COLUMNS FROM sas_vendors LIKE 'kyc_ai_enabled'");
+        if ($q_v && mysqli_num_rows($q_v) === 0) {
+            @mysqli_query($connection_server, "ALTER TABLE sas_vendors
+                ADD COLUMN `kyc_ai_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN `kyc_ai_auto_approve` TINYINT(1) NOT NULL DEFAULT 0,
+                ADD COLUMN `kyc_ai_billing` TINYINT(1) NOT NULL DEFAULT 0");
+        }
+
+        $q_u = @mysqli_query($connection_server, "SHOW COLUMNS FROM sas_users LIKE 'kyc_ai_status'");
+        if ($q_u && mysqli_num_rows($q_u) === 0) {
+            @mysqli_query($connection_server, "ALTER TABLE sas_users
+                ADD COLUMN `kyc_ai_status` VARCHAR(32) DEFAULT NULL,
+                ADD COLUMN `kyc_ai_reason` TEXT NULL,
+                ADD COLUMN `kyc_ai_confidence` INT NOT NULL DEFAULT 0,
+                ADD COLUMN `kyc_ai_decision` LONGTEXT NULL,
+                ADD COLUMN `kyc_ai_analyzed_at` DATETIME NULL,
+                ADD COLUMN `kyc_ai_tokens_used` INT NOT NULL DEFAULT 0");
+        }
+
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS `sas_kyc_ai_results` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            `vendor_id` INT NOT NULL DEFAULT 0,
+            `user_id` INT NOT NULL DEFAULT 0,
+            `username` VARCHAR(120) NOT NULL DEFAULT '',
+            `ai_status` VARCHAR(32) NOT NULL DEFAULT '',
+            `kyc_status` TINYINT(1) NOT NULL DEFAULT 0,
+            `decision_reason` TEXT NULL,
+            `confidence` INT NOT NULL DEFAULT 0,
+            `ai_provider` VARCHAR(64) NOT NULL DEFAULT '',
+            `ai_model` VARCHAR(120) NOT NULL DEFAULT '',
+            `tokens_used` INT NOT NULL DEFAULT 0,
+            `billing_markup` INT NOT NULL DEFAULT 0,
+            `total_tokens` INT NOT NULL DEFAULT 0,
+            `billed` TINYINT(1) NOT NULL DEFAULT 0,
+            `results_json` LONGTEXT NULL,
+            `duration_ms` INT NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_vendor_user_status` (`vendor_id`, `user_id`, `ai_status`, `id`)
+        )");
+    }
+}
+
 if (!function_exists('bc_kyc_ai_store_result')) {
     /**
      * Store an AI KYC analysis result on the user row and optionally apply the decision.
@@ -1428,6 +1480,7 @@ if (!function_exists('bc_kyc_ai_store_result')) {
      */
     function bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, $auto_apply = false)
     {
+        bc_kyc_ai_ensure_schema($connection_server);
         $decision = $analysis['decision'] ?? [];
         $ai_status = $decision['status'] ?? 'error';
         $reason = $decision['reason'] ?? '';
@@ -1526,6 +1579,7 @@ if (!function_exists('bc_kyc_ai_get_decision')) {
      */
     function bc_kyc_ai_get_decision($connection_server, $user_id)
     {
+        bc_kyc_ai_ensure_schema($connection_server);
         $q = mysqli_query($connection_server, "SELECT kyc_ai_status, kyc_ai_reason, kyc_ai_confidence, kyc_ai_decision, kyc_ai_analyzed_at, kyc_ai_tokens_used FROM sas_users WHERE id='$user_id' LIMIT 1");
         if (!$q) return null;
         $row = mysqli_fetch_assoc($q);
@@ -1593,6 +1647,65 @@ if (!function_exists('bc_kyc_ai_check_satisfied')) {
         }
 
         return false;
+    }
+}
+
+if (!function_exists('bc_kyb_ai_store_report')) {
+    /**
+     * Persist an AI KYB compliance review report & document rating for admin inspection.
+     */
+    function bc_kyb_ai_store_report($connection_server, int $user_id, int $vendor_id, string $username, array $report): bool
+    {
+        bc_kyc_ai_ensure_schema($connection_server);
+        $ai_status = (string)($report['ai_status'] ?? 'kyb_review');
+        if (strpos($ai_status, 'kyb_') !== 0) $ai_status = 'kyb_' . $ai_status;
+        $reason = (string)($report['reason'] ?? '');
+        $confidence = (int)($report['confidence'] ?? ($report['rating'] ?? 0));
+        $payload = json_encode($report, JSON_UNESCAPED_UNICODE);
+
+        $ok = @mysqli_query($connection_server, "INSERT INTO sas_kyc_ai_results (
+            vendor_id, user_id, username, ai_status, kyc_status, decision_reason, confidence,
+            ai_provider, ai_model, tokens_used, billing_markup, total_tokens, billed,
+            results_json, duration_ms
+        ) VALUES (
+            '" . (int)$vendor_id . "', '" . (int)$user_id . "',
+            '" . mysqli_real_escape_string($connection_server, $username) . "',
+            '" . mysqli_real_escape_string($connection_server, $ai_status) . "',
+            0,
+            '" . mysqli_real_escape_string($connection_server, $reason) . "',
+            '" . (int)$confidence . "',
+            '" . mysqli_real_escape_string($connection_server, (string)($report['provider'] ?? '')) . "',
+            '" . mysqli_real_escape_string($connection_server, (string)($report['model'] ?? '')) . "',
+            '" . (int)($report['tokens_used'] ?? 0) . "',
+            0, '" . (int)($report['tokens_used'] ?? 0) . "', 0,
+            '" . mysqli_real_escape_string($connection_server, (string)$payload) . "',
+            '" . (int)($report['duration_ms'] ?? 0) . "'
+        )");
+        return (bool)$ok;
+    }
+}
+
+if (!function_exists('bc_kyb_ai_get_report')) {
+    /**
+     * Fetch the latest AI KYB compliance review report for an applicant.
+     */
+    function bc_kyb_ai_get_report($connection_server, int $user_id, int $vendor_id): ?array
+    {
+        bc_kyc_ai_ensure_schema($connection_server);
+        $q = @mysqli_query($connection_server, "SELECT ai_status, decision_reason, confidence, ai_provider, ai_model, results_json, created_at
+            FROM sas_kyc_ai_results
+            WHERE user_id='" . (int)$user_id . "' AND vendor_id='" . (int)$vendor_id . "' AND ai_status LIKE 'kyb_%'
+            ORDER BY id DESC LIMIT 1");
+        if (!$q) return null;
+        $row = mysqli_fetch_assoc($q);
+        if (!$row) return null;
+        $decoded = json_decode((string)($row['results_json'] ?? ''), true);
+        if (!is_array($decoded)) $decoded = [];
+        $decoded['ai_status'] = $decoded['ai_status'] ?? $row['ai_status'];
+        $decoded['reason'] = $decoded['reason'] ?? ($row['decision_reason'] ?? '');
+        $decoded['confidence'] = (int)($decoded['confidence'] ?? ($row['confidence'] ?? 0));
+        $decoded['analyzed_at'] = $decoded['analyzed_at'] ?? ($row['created_at'] ?? '');
+        return $decoded;
     }
 }
 

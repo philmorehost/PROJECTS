@@ -189,16 +189,135 @@ if (!function_exists('bc_crypto_a2p_default_config')) {
     }
 }
 
+if (!function_exists('bc_crypto_a2p_read_setting')) {
+    function bc_crypto_a2p_read_setting($vendorId, $name, $default = '') {
+        $vid = (int)$vendorId;
+        $key = (string)$name;
+        $db = $GLOBALS['connection_server'] ?? null;
+        if ($db instanceof mysqli) {
+            $stmt = $db->prepare('SELECT setting_value FROM sas_settings WHERE vendor_id=? AND setting_name=? ORDER BY id DESC LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('is', $vid, $key);
+                $stmt->execute();
+                $row = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($row && isset($row['setting_value'])) {
+                    return (string)$row['setting_value'];
+                }
+                return $default;
+            }
+        }
+        return function_exists('getVendorOption') ? (string)getVendorOption($vid, $key, $default) : $default;
+    }
+}
+
+if (!function_exists('bc_crypto_a2p_write_setting')) {
+    function bc_crypto_a2p_write_setting($vendorId, $name, $value) {
+        $vid = (int)$vendorId;
+        $key = substr((string)$name, 0, 220);
+        $val = substr((string)$value, 0, 225);
+        $db = $GLOBALS['connection_server'] ?? null;
+        if ($db instanceof mysqli) {
+            $chk = $db->prepare('SELECT id FROM sas_settings WHERE vendor_id=? AND setting_name=? ORDER BY id DESC LIMIT 1');
+            if (!$chk) {
+                return false;
+            }
+            $chk->bind_param('is', $vid, $key);
+            $chk->execute();
+            $row = $chk->get_result()->fetch_assoc();
+            $chk->close();
+            if ($row) {
+                $upd = $db->prepare('UPDATE sas_settings SET setting_value=? WHERE vendor_id=? AND setting_name=?');
+                if (!$upd) {
+                    return false;
+                }
+                $upd->bind_param('sis', $val, $vid, $key);
+                $ok = $upd->execute();
+                $upd->close();
+                return (bool)$ok;
+            }
+            $ins = $db->prepare('INSERT INTO sas_settings (vendor_id, setting_name, setting_value) VALUES (?,?,?)');
+            if (!$ins) {
+                return false;
+            }
+            $ins->bind_param('iss', $vid, $key, $val);
+            $ok = $ins->execute();
+            $ins->close();
+            return (bool)$ok;
+        }
+        if (function_exists('setVendorOption')) {
+            setVendorOption($vid, $key, $val);
+            return true;
+        }
+        return false;
+    }
+}
+
 if (!function_exists('bc_crypto_a2p_get_config')) {
     function bc_crypto_a2p_get_config($vendorId) {
         $vid = (int)$vendorId;
-        $defaults = bc_crypto_a2p_default_config();
-        $raw = function_exists('getVendorOption') ? (string)getVendorOption($vid, 'crypto_a2p_config', '') : '';
+        $cfg = bc_crypto_a2p_default_config();
+
+        // Compact VARCHAR(225)-safe storage (ca2p_core + ca2p_n0..n2 + per-asset keys)
+        $coreRaw = bc_crypto_a2p_read_setting($vid, 'ca2p_core', '');
+        $core = $coreRaw !== '' ? json_decode($coreRaw, true) : null;
+        if (is_array($core)) {
+            $cfg['rate_mode'] = (($core['rm'] ?? 'live') === 'manual') ? 'manual' : 'live';
+            if (isset($core['fx']) && is_numeric($core['fx']) && (float)$core['fx'] > 0) {
+                $cfg['usd_ngn_rate'] = round((float)$core['fx'], 4);
+            }
+            foreach (['bm' => ['buy_markup_pct', 50.0], 'sm' => ['sell_markdown_pct', 50.0], 'sf' => ['swap_fee_pct', 25.0]] as $ck => $metaPct) {
+                if (isset($core[$ck]) && is_numeric($core[$ck])) {
+                    $cfg[$metaPct[0]] = max(0.0, min($metaPct[1], round((float)$core[$ck], 2)));
+                }
+            }
+            if (isset($core['mn']) && is_numeric($core['mn']) && (float)$core['mn'] >= 100) {
+                $cfg['min_trade_ngn'] = round((float)$core['mn'], 2);
+            }
+            if (isset($core['mx']) && is_numeric($core['mx']) && (float)$core['mx'] >= $cfg['min_trade_ngn']) {
+                $cfg['max_trade_ngn'] = round((float)$core['mx'], 2);
+            }
+
+            $notice = '';
+            for ($i = 0; $i < 3; $i++) {
+                $notice .= bc_crypto_a2p_read_setting($vid, 'ca2p_n' . $i, '');
+            }
+            if (trim($notice) !== '') {
+                $cfg['desk_notice'] = substr(trim(strip_tags($notice)), 0, 500);
+            }
+
+            foreach ($cfg['assets'] as $code => $defAsset) {
+                $pRaw = bc_crypto_a2p_read_setting($vid, 'ca2p_p_' . $code, '');
+                $pArr = $pRaw !== '' ? json_decode($pRaw, true) : null;
+                if (is_array($pArr)) {
+                    $cfg['assets'][$code] = [
+                        'enabled' => !empty($pArr['e']),
+                        'buy_enabled' => !empty($pArr['b']),
+                        'sell_enabled' => !empty($pArr['s']),
+                        'swap_enabled' => !empty($pArr['w']),
+                        'deposit_address' => substr(trim(strip_tags(bc_crypto_a2p_read_setting($vid, 'ca2p_a_' . $code, ''))), 0, 128),
+                        'network_note' => substr(trim(strip_tags(bc_crypto_a2p_read_setting($vid, 'ca2p_m_' . $code, ''))), 0, 160),
+                        'manual_usd_price' => (isset($pArr['u']) && is_numeric($pArr['u']) && (float)$pArr['u'] > 0)
+                            ? (float)$pArr['u']
+                            : (float)$defAsset['manual_usd_price'],
+                        'manual_buy_ngn' => (isset($pArr['mb']) && is_numeric($pArr['mb']) && (float)$pArr['mb'] > 0)
+                            ? round((float)$pArr['mb'], 4)
+                            : 0.0,
+                        'manual_sell_ngn' => (isset($pArr['ms']) && is_numeric($pArr['ms']) && (float)$pArr['ms'] > 0)
+                            ? round((float)$pArr['ms'], 4)
+                            : 0.0,
+                    ];
+                }
+            }
+            return $cfg;
+        }
+
+        // Legacy fallback if an installation has full-length crypto_a2p_config stored
+        $raw = bc_crypto_a2p_read_setting($vid, 'crypto_a2p_config', '');
         $saved = $raw !== '' ? json_decode($raw, true) : null;
         if (!is_array($saved)) {
-            return $defaults;
+            return $cfg;
         }
-        $cfg = $defaults;
         $cfg['rate_mode'] = (($saved['rate_mode'] ?? 'live') === 'manual') ? 'manual' : 'live';
         if (isset($saved['usd_ngn_rate']) && is_numeric($saved['usd_ngn_rate']) && (float)$saved['usd_ngn_rate'] > 0) {
             $cfg['usd_ngn_rate'] = round((float)$saved['usd_ngn_rate'], 4);
@@ -218,7 +337,7 @@ if (!function_exists('bc_crypto_a2p_get_config')) {
             $cfg['desk_notice'] = substr(trim(strip_tags($saved['desk_notice'])), 0, 500);
         }
         if (isset($saved['assets']) && is_array($saved['assets'])) {
-            foreach ($defaults['assets'] as $code => $defAsset) {
+            foreach ($cfg['assets'] as $code => $defAsset) {
                 $sa = $saved['assets'][$code] ?? null;
                 if (!is_array($sa)) continue;
                 $cfg['assets'][$code] = [
@@ -246,10 +365,47 @@ if (!function_exists('bc_crypto_a2p_get_config')) {
 
 if (!function_exists('bc_crypto_a2p_save_config')) {
     function bc_crypto_a2p_save_config($vendorId, array $cfg) {
-        if (!function_exists('setVendorOption')) {
+        $vid = (int)$vendorId;
+        $core = json_encode([
+            'rm' => (($cfg['rate_mode'] ?? 'live') === 'manual') ? 'manual' : 'live',
+            'fx' => round((float)($cfg['usd_ngn_rate'] ?? 1650), 4),
+            'bm' => round((float)($cfg['buy_markup_pct'] ?? 0), 2),
+            'sm' => round((float)($cfg['sell_markdown_pct'] ?? 0), 2),
+            'sf' => round((float)($cfg['swap_fee_pct'] ?? 0), 2),
+            'mn' => round((float)($cfg['min_trade_ngn'] ?? 2000), 2),
+            'mx' => round((float)($cfg['max_trade_ngn'] ?? 5000000), 2),
+        ]);
+        if (!bc_crypto_a2p_write_setting($vid, 'ca2p_core', $core)) {
             return false;
         }
-        setVendorOption((int)$vendorId, 'crypto_a2p_config', json_encode($cfg));
+
+        $notice = substr(trim(strip_tags((string)($cfg['desk_notice'] ?? ''))), 0, 500);
+        $chunks = $notice !== '' ? str_split($notice, 180) : [];
+        for ($i = 0; $i < 3; $i++) {
+            if (!bc_crypto_a2p_write_setting($vid, 'ca2p_n' . $i, $chunks[$i] ?? '')) {
+                return false;
+            }
+        }
+
+        $assets = is_array($cfg['assets'] ?? null) ? $cfg['assets'] : [];
+        foreach (bc_crypto_a2p_catalogue() as $code => $meta) {
+            $ac = is_array($assets[$code] ?? null) ? $assets[$code] : [];
+            $pJson = json_encode([
+                'e' => !empty($ac['enabled']) ? 1 : 0,
+                'b' => !empty($ac['buy_enabled']) ? 1 : 0,
+                's' => !empty($ac['sell_enabled']) ? 1 : 0,
+                'w' => !empty($ac['swap_enabled']) ? 1 : 0,
+                'u' => (float)($ac['manual_usd_price'] ?? $meta['default_usd']),
+                'mb' => round((float)($ac['manual_buy_ngn'] ?? 0), 4),
+                'ms' => round((float)($ac['manual_sell_ngn'] ?? 0), 4),
+            ]);
+            $addr = substr(trim(strip_tags((string)($ac['deposit_address'] ?? ''))), 0, 128);
+            $note = substr(trim(strip_tags((string)($ac['network_note'] ?? ''))), 0, 160);
+            if (!bc_crypto_a2p_write_setting($vid, 'ca2p_p_' . $code, $pJson)) return false;
+            if (!bc_crypto_a2p_write_setting($vid, 'ca2p_a_' . $code, $addr)) return false;
+            if (!bc_crypto_a2p_write_setting($vid, 'ca2p_m_' . $code, $note)) return false;
+        }
+
         return true;
     }
 }
@@ -304,10 +460,20 @@ if (!function_exists('bc_crypto_a2p_get_rates')) {
             ];
         }
 
-        $cacheRaw = function_exists('getVendorOption') ? (string)getVendorOption($vid, 'crypto_a2p_rate_cache', '') : '';
-        $cache = $cacheRaw !== '' ? json_decode($cacheRaw, true) : null;
+        $cacheMetaRaw = bc_crypto_a2p_read_setting($vid, 'ca2p_rc_meta', '');
+        $cacheMeta = $cacheMetaRaw !== '' ? json_decode($cacheMetaRaw, true) : null;
+        $cacheP1 = json_decode(bc_crypto_a2p_read_setting($vid, 'ca2p_rc_1', ''), true);
+        $cacheP2 = json_decode(bc_crypto_a2p_read_setting($vid, 'ca2p_rc_2', ''), true);
+        $cachePrices = array_merge(is_array($cacheP1) ? $cacheP1 : [], is_array($cacheP2) ? $cacheP2 : []);
+        $cache = is_array($cacheMeta) ? [
+            'fetched_ts' => (int)($cacheMeta['ts'] ?? 0),
+            'updated_at' => (string)($cacheMeta['at'] ?? ''),
+            'usd_ngn' => (float)($cacheMeta['fx'] ?? 0),
+            'usd_prices' => $cachePrices,
+        ] : null;
         $cacheFresh = is_array($cache)
-            && isset($cache['fetched_ts'], $cache['usd_prices'], $cache['usd_ngn'])
+            && !empty($cache['usd_prices'])
+            && isset($cache['fetched_ts'], $cache['usd_ngn'])
             && (time() - (int)$cache['fetched_ts']) < 300;
 
         if (!$forceRefresh && $cacheFresh) {
@@ -350,20 +516,17 @@ if (!function_exists('bc_crypto_a2p_get_rates')) {
             $resolvedUsdNgn = $liveUsdNgn > 0
                 ? $liveUsdNgn
                 : ((isset($cache['usd_ngn']) && (float)$cache['usd_ngn'] > 100) ? (float)$cache['usd_ngn'] : $fallbackUsdNgn);
-            $payload = [
-                'fetched_ts' => time(),
-                'updated_at' => gmdate('Y-m-d H:i:s') . ' UTC',
-                'usd_ngn' => $resolvedUsdNgn,
-                'usd_prices' => $resolvedPrices,
-            ];
-            if (function_exists('setVendorOption')) {
-                setVendorOption($vid, 'crypto_a2p_rate_cache', json_encode($payload));
-            }
+            $updatedAt = gmdate('Y-m-d H:i:s') . ' UTC';
+            $metaJson = json_encode(['ts' => time(), 'at' => $updatedAt, 'fx' => round($resolvedUsdNgn, 4)]);
+            $half = (int)ceil(count($resolvedPrices) / 2);
+            bc_crypto_a2p_write_setting($vid, 'ca2p_rc_meta', $metaJson);
+            bc_crypto_a2p_write_setting($vid, 'ca2p_rc_1', json_encode(array_slice($resolvedPrices, 0, $half, true)));
+            bc_crypto_a2p_write_setting($vid, 'ca2p_rc_2', json_encode(array_slice($resolvedPrices, $half, null, true)));
             return [
                 'source' => 'live',
                 'usd_ngn' => $resolvedUsdNgn,
                 'usd_prices' => $resolvedPrices,
-                'updated_at' => $payload['updated_at'],
+                'updated_at' => $updatedAt,
             ];
         }
 

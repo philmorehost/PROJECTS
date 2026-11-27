@@ -82,12 +82,18 @@ class HomeFragment : Fragment() {
             action("Top up", "+") { findNavController().safeNavigate(R.id.nav_fund_wallet) }, action("More", "⋮") { services(null) })
             .forEach { actions.addView(it, LinearLayout.LayoutParams(0,-2,1f)) }
         hero.addView(actions); root.addView(hero)
-        val shortcuts = LinearLayout(requireContext()).apply { setPadding(0,dp(18),0,dp(18)) }
+        val shortcuts = LinearLayout(requireContext()).apply { setPadding(0,dp(18),0,dp(8)) }
         listOf(Triple("Crypto", "₿", "crypto"), Triple("Virtual card", "▱", "cards"), Triple("Gift card", "♧", "giftcards"), Triple("VTU", "▤", "vtu")).forEach { (title, icon, slug) ->
             val tile=action(title,icon) { if(slug=="vtu") services("VTU") else openService(slug) }.apply { tag="brand:bg=surface"; background=rounded(com.datagifting.app.util.BrandTheme.color(requireContext(), "surface"),18) }
             for (i in 0 until tile.childCount) { val child=tile.getChildAt(i); if(child is TextView) child.tag="brand:text=on_surface"; if(child is ViewGroup) for(k in 0 until child.childCount) child.getChildAt(k).tag="brand:text=primary_text" }; shortcuts.addView(tile, LinearLayout.LayoutParams(0,dp(108),1f).apply { setMargins(dp(3),0,dp(3),0) })
         }
         root.addView(shortcuts)
+        val globalShortcuts = LinearLayout(requireContext()).apply { setPadding(0,0,0,dp(18)) }
+        listOf(Triple("Send Abroad", "⊕", "international"), Triple("Tuition", "★", "tuition"), Triple("eSIM", "◈", "esim"), Triple("POS Device", "▣", "pos")).forEach { (title, icon, slug) ->
+            val tile=action(title,icon) { openService(slug) }.apply { tag="brand:bg=surface"; background=rounded(com.datagifting.app.util.BrandTheme.color(requireContext(), "surface"),18) }
+            for (i in 0 until tile.childCount) { val child=tile.getChildAt(i); if(child is TextView) child.tag="brand:text=on_surface"; if(child is ViewGroup) for(k in 0 until child.childCount) child.getChildAt(k).tag="brand:text=primary_text" }; globalShortcuts.addView(tile, LinearLayout.LayoutParams(0,dp(108),1f).apply { setMargins(dp(3),0,dp(3),0) })
+        }
+        root.addView(globalShortcuts)
         history = LinearLayout(requireContext()).apply { tag="brand:bg=surface"; orientation=LinearLayout.VERTICAL; background=rounded(Color.WHITE,28); setPadding(dp(12),dp(14),dp(12),dp(14)) }
         history.addView(text("Transaction history  →",20f,Color.BLACK).apply { setTypeface(typeface,1); setOnClickListener { findNavController().safeNavigate(R.id.nav_transactions) } })
         root.addView(history)

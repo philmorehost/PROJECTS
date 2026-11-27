@@ -29,7 +29,11 @@ $plans = [
 // debited from this page (see DGV7_FINTECH_UPGRADE.md §26).
 include_once(__DIR__ . "/../func/bc-fintech-platnova.php");
 $live_plans = [];
-$esim_rail = 'Aggregator (Provider)';
+$vendor_brand = trim((string)($get_all_site_details['site_title'] ?? ''));
+if ($vendor_brand === '') {
+    $vendor_brand = 'Platform';
+}
+$esim_rail = $vendor_brand;
 if (function_exists('bc_fintech_provider_configured') && bc_fintech_provider_configured($vid, 'platnova', 'esim_plans')['ready']) {
     $res = bc_platnova_esim_plans($vid);
     $rows = [];
@@ -50,7 +54,7 @@ if (function_exists('bc_fintech_provider_configured') && bc_fintech_provider_con
             ];
         }
     }
-    if ($live_plans) $esim_rail = 'Aggregator (Provider)';
+    if ($live_plans) $esim_rail = $vendor_brand;
 }
 $notice = '';
 $notice_type = 'info';
@@ -154,7 +158,7 @@ bc_app_topbar(array("title" => "ESIM", "crumb" => "Home / eSIM"));
                 <p class="opacity-75 mb-0" style="max-width:62ch">Pick a travel data bundle, receive your QR code &amp; SM-DP+ profile by email, and activate seamlessly on iOS &amp; Android with no physical SIM swap.</p>
             </div>
             <div class="col-lg-4 text-lg-end">
-                <a href="#esim-order-form" class="btn btn-light rounded-pill px-4 fw-bold">Choose eSIM Plan</a>
+                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold" onclick="var f=document.getElementById('esim-order-form');if(f){f.scrollIntoView({behavior:'smooth',block:'start'});}return false;">Choose eSIM Plan</button>
             </div>
         </div>
     </div>
