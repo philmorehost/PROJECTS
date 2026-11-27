@@ -150,13 +150,16 @@ if (isset($_POST['save-provider-credentials'])) {
 }
 
 if (isset($_POST['toggle_service'])) {
-    $service_name = mysqli_real_escape_string($connection_server, $_POST['service_name']);
-    $status = (int)$_POST['status'];
-    $vid = $get_logged_admin_details['id'];
+    $service_name = mysqli_real_escape_string($connection_server, trim((string)($_POST['service_name'] ?? '')));
+    $status = ((int)($_POST['status'] ?? 0) === 1) ? 1 : 0;
+    $vid = (int)$get_logged_admin_details['id'];
 
-    mysqli_query($connection_server, "INSERT INTO sas_service_control (vendor_id, service_name, status)
-        VALUES ('$vid', '$service_name', $status)
-        ON DUPLICATE KEY UPDATE status=$status");
+    $existing = mysqli_query($connection_server, "SELECT id FROM sas_service_control WHERE vendor_id='$vid' AND service_name='$service_name' LIMIT 1");
+    if ($existing && mysqli_num_rows($existing) > 0) {
+        mysqli_query($connection_server, "UPDATE sas_service_control SET status=$status WHERE vendor_id='$vid' AND service_name='$service_name'");
+    } else {
+        mysqli_query($connection_server, "INSERT INTO sas_service_control (vendor_id, service_name, status) VALUES ('$vid', '$service_name', $status)");
+    }
 
     $_SESSION["product_purchase_response"] = "Setting updated successfully.";
     header("Location: ServiceControl.php");
@@ -179,13 +182,13 @@ if (isset($_POST['bulk_update_banks'])) {
 // Fetch current settings
 $settings = [];
 $vid = $get_logged_admin_details['id'];
-$q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid'");
-while($r = mysqli_fetch_assoc($q)) $settings[$r['service_name']] = $r['status'];
+$q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid' ORDER BY id ASC");
+if ($q) { while($r = mysqli_fetch_assoc($q)) $settings[$r['service_name']] = $r['status']; }
 
 // Fetch global settings
 $global_settings = [];
-$qg = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control");
-while($rg = mysqli_fetch_assoc($qg)) $global_settings[$rg['service_name']] = $rg['status'];
+$qg = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control ORDER BY id ASC");
+if ($qg) { while($rg = mysqli_fetch_assoc($qg)) $global_settings[$rg['service_name']] = $rg['status']; }
 
 // Fetch virtual accounts for management
 $user_banks = [];
@@ -255,13 +258,22 @@ bc_adm_head("Service Control Center | " . ($get_all_super_admin_site_details["si
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
                             <?php foreach($services as $key => $label):
-                                $status = isset($settings[$key]) ? $settings[$key] : 1;
-                                $globally_enabled = !isset($global_settings[$key]) || $global_settings[$key] == 1;
+                                $globally_enabled = !isset($global_settings[$key]) || (int)$global_settings[$key] === 1;
+                                if ($key === 'registration') {
+                                    $local_status = isset($settings[$key]) ? (int)$settings[$key] : 1;
+                                    $status = ($globally_enabled && $local_status === 1) ? 1 : 0;
+                                } elseif (isset($settings[$key])) {
+                                    $status = (int)$settings[$key];
+                                } elseif (isset($global_settings[$key])) {
+                                    $status = (int)$global_settings[$key];
+                                } else {
+                                    $status = ($key === 'virtual_bank_display') ? 0 : 1;
+                                }
                             ?>
                             <div class="list-group-item d-flex justify-content-between align-items-center py-3 px-4">
                                 <div>
                                     <h6 class="mb-0 fw-bold"><?php echo $label; ?> 
-                                        <?php if(!$globally_enabled): ?><span class="badge bg-secondary bg-opacity-10 text-secondary ms-2" style="font-size: 0.65rem; border: 1px solid rgba(108,117,125,0.2);">Default: OFF</span><?php endif; ?>
+                                        <?php if(!$globally_enabled): ?><span class="badge bg-secondary bg-opacity-10 text-secondary ms-2" style="font-size: 0.65rem; border: 1px solid rgba(108,117,125,0.2);"><?php echo ($key === 'registration') ? 'Platform OFF (Super Admin)' : 'Default: OFF'; ?></span><?php endif; ?>
                                     </h6>
                                     <span class="small text-muted">ID: <?php echo $key; ?></span>
                                 </div>

@@ -771,13 +771,13 @@ if (!function_exists('bc_registration_enabled')) {
         // Platform ceiling (SAAS only; table does not exist on NON-SAAS).
         $t = @mysqli_query($connection_server, "SHOW TABLES LIKE 'sas_global_service_control'");
         if ($t && mysqli_num_rows($t) > 0) {
-            $q = @mysqli_query($connection_server, "SELECT status FROM sas_global_service_control WHERE service_name='registration' LIMIT 1");
+            $q = @mysqli_query($connection_server, "SELECT status FROM sas_global_service_control WHERE service_name='registration' ORDER BY id DESC LIMIT 1");
             if ($q && ($r = mysqli_fetch_assoc($q)) && (int)$r['status'] === 0) {
                 $enabled = false;
             }
         }
         if ($enabled && $vendor_id > 0) {
-            $q = @mysqli_query($connection_server, "SELECT status FROM sas_service_control WHERE vendor_id='" . $vendor_id . "' AND service_name='registration' LIMIT 1");
+            $q = @mysqli_query($connection_server, "SELECT status FROM sas_service_control WHERE vendor_id='" . $vendor_id . "' AND service_name='registration' ORDER BY id DESC LIMIT 1");
             if ($q && ($r = mysqli_fetch_assoc($q)) && (int)$r['status'] === 0) {
                 $enabled = false;
             }

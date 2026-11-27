@@ -17,14 +17,27 @@ if ($get_vendor) {
     $get_style = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_vendor_style_templates WHERE vendor_id='$vendor_id' LIMIT 1"));
 
     // Check which services are enabled
-    $services = array();
-    // §33: effective registration state for the mobile App (hides sign-up when off).
-    $services['registration'] = (function_exists('bc_registration_enabled') && !bc_registration_enabled($vendor_id)) ? 0 : 1;
     if (file_exists(__DIR__ . '/../../func/bc-stepup.php')) { include_once(__DIR__ . '/../../func/bc-stepup.php'); }
-    $get_sc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vendor_id'");
-    while($row = mysqli_fetch_assoc($get_sc)){
-        $services[$row['service_name']] = (int)$row['status'];
+    $services = array();
+    $has_global_sc = mysqli_query($connection_server, "SHOW TABLES LIKE 'sas_global_service_control'");
+    if ($has_global_sc && mysqli_num_rows($has_global_sc) > 0) {
+        $get_gsc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control ORDER BY id ASC");
+        if ($get_gsc) {
+            while ($grow = mysqli_fetch_assoc($get_gsc)) {
+                $services[$grow['service_name']] = (int)$grow['status'];
+            }
+        }
     }
+    $get_sc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vendor_id' ORDER BY id ASC");
+    if ($get_sc) {
+        while($row = mysqli_fetch_assoc($get_sc)){
+            $services[$row['service_name']] = (int)$row['status'];
+        }
+    }
+    // §33: effective registration and password_reset state for the mobile App after table merges
+    // so stale/missing vendor rows or global overrides cannot leave login actions out of sync.
+    $services['registration'] = (!function_exists('bc_registration_enabled') || bc_registration_enabled($vendor_id)) ? 1 : 0;
+    $services['password_reset'] = (!function_exists('isServiceEnabled') || isServiceEnabled('password_reset', $vendor_id)) ? 1 : 0;
     // New Services
     $services['gift_card'] = isServiceEnabled('gift_card', $vendor_id) ? 1 : 0;
     $services['virtual_card'] = isServiceEnabled('virtual_card', $vendor_id) ? 1 : 0;

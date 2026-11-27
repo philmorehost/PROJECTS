@@ -247,7 +247,7 @@ bc_plate_auth_top(array(
                 <div class="pk-auth__field">
                     <div style="display:flex; justify-content:space-between; align-items:baseline;">
                         <label class="pk-auth__label" for="password-field">Password</label>
-                        <a class="pk-auth__link" href="PasswordRecovery.php">Forgot?</a>
+                        <?php if (!function_exists('isServiceEnabled') || isServiceEnabled('password_reset', (int)($select_vendor_table["id"] ?? 0))): ?><a class="pk-auth__link" href="PasswordRecovery.php">Forgot?</a><?php endif; ?>
                     </div>
                     <div style="position: relative;">
                         <input id="password-field" name="pass" type="password" class="pk-auth__input"
@@ -439,7 +439,7 @@ function togglePasswordVisibility(fieldId, toggleElement) {
 bc_plate_auth_end(array(
     'links' => array(
         ...( (!function_exists('bc_registration_enabled') || bc_registration_enabled((int)($select_vendor_table["id"] ?? 0))) ? array(array('href' => 'Register.php', 'label' => 'Create account')) : array() ),
-        array('href' => 'PasswordRecovery.php', 'label' => 'Forgot password'),
+        ...( (!function_exists('isServiceEnabled') || isServiceEnabled('password_reset', (int)($select_vendor_table["id"] ?? 0))) ? array(array('href' => 'PasswordRecovery.php', 'label' => 'Forgot password')) : array() ),
     ),
 ));
 ?>
