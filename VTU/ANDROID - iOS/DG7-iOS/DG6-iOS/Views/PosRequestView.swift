@@ -62,9 +62,9 @@ struct PosRequestView: View {
                         ProgressView().frame(maxWidth: .infinity)
                     } else {
                         Text("Submit POS Request")
+                            .bold()
                             .frame(maxWidth: .infinity)
                             .foregroundColor(brandTheme.onPrimary)
-                            .bold()
                     }
                 }
                 .listRowBackground(brandTheme.primary)

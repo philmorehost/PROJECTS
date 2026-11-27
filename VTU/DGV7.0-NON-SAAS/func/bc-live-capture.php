@@ -7,14 +7,23 @@ function bc_live_capture_widget($name, $video = false) {
     $name = htmlspecialchars($raw_name, ENT_QUOTES, 'UTF-8');
     $kind = $video ? 'video' : 'photo';
     $reqAttr = $required ? ' data-kyc-required="1"' : '';
-    echo '<div data-live-capture="'.$kind.'" class="border rounded p-2">'
+    echo '<div data-live-capture="'.$kind.'" class="border rounded-4 p-3 bg-light bg-opacity-50">'
         .'<input type="file" hidden tabindex="-1" aria-hidden="true" name="'.$name.'"'.$reqAttr.' accept="'.($video?'video/webm,video/mp4':'image/jpeg').'">'
-        .'<video autoplay playsinline muted style="width:100%;max-width:480px" hidden></video>'
-        .'<img alt="Captured photo preview" style="width:100%;max-width:480px" hidden>'
-        .'<button type="button" data-camera-start class="btn btn-outline-primary btn-sm">Start camera'.($video?' & record':'').'</button> '
-        .(!$video?'<button type="button" data-camera-shot class="btn btn-primary btn-sm" hidden>Take photo</button>':'')
-        .'<button type="button" data-camera-reset class="btn btn-outline-secondary btn-sm" hidden>Retake</button>'
-        .'<p role="status" class="small mb-0">'.($video?'Record a short 6-second video: say your full name and today’s date, then turn your head slowly. Maximum 3 MB.':'Take a clear live photo. JPEG up to 960 pixels, maximum 512 KB.').' Camera permission and HTTPS required. No gallery upload. Captures are subject to review.</p></div>';
+        .'<div data-camera-stage style="position:relative;max-width:480px;margin-bottom:8px;" hidden>'
+            .'<video autoplay playsinline muted style="width:100%;max-width:480px;border-radius:14px;background:#0f172a;display:block;" hidden></video>'
+            .'<div data-face-overlay style="pointer-events:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;" hidden>'
+                .'<div data-face-oval style="width:52%;max-width:210px;aspect-ratio:3/4;border:3px dashed rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 0 0 9999px rgba(15,23,42,0.38);transition:border-color .2s ease;"></div>'
+                .'<div data-prompt-pill style="position:relative;z-index:2;margin-top:10px;background:rgba(15,23,42,0.86);color:#fff;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;text-align:center;">'.($video?'Look at camera &amp; say the word &ldquo;HI&rdquo;':'Center your face inside the oval').'</div>'
+                .($video?'<div data-mic-wrap style="position:relative;z-index:2;margin-top:6px;display:flex;align-items:center;gap:6px;background:rgba(15,23,42,0.8);color:#e2e8f0;padding:4px 10px;border-radius:999px;font-size:11px;"><span>Mic</span><span style="display:inline-block;width:72px;height:6px;background:rgba(255,255,255,0.2);border-radius:999px;overflow:hidden;"><span data-mic-bar style="display:block;height:100%;width:8%;background:#10b981;transition:width .08s linear;"></span></span></div>':'')
+            .'</div>'
+        .'</div>'
+        .'<img alt="Captured photo preview" style="width:100%;max-width:480px;border-radius:14px;margin-bottom:8px;" hidden>'
+        .'<div class="d-flex flex-wrap gap-2 align-items-center mb-2">'
+            .'<button type="button" data-camera-start class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold">Start camera'.($video?' &amp; say "HI"':'').'</button>'
+            .(!$video?'<button type="button" data-camera-shot class="btn btn-primary btn-sm rounded-pill px-3 fw-bold" hidden>Take photo now</button>':'')
+            .'<button type="button" data-camera-reset class="btn btn-outline-secondary btn-sm rounded-pill px-3" hidden>Retake</button>'
+        .'</div>'
+        .'<p role="status" class="small text-muted mb-0">'.($video?'Click Start, look inside the oval, and say the word &ldquo;HI&rdquo; aloud (4-second live video with audio, max 3 MB).':'Click Start and hold your face inside the oval — it auto-captures once your face is clearly framed (JPEG up to 960px, max 512 KB).').' Camera permission and HTTPS required. No gallery upload. Captures are subject to review.</p></div>';
     static $loaded = false;
     if (!$loaded) { echo '<script src="../asset/bc-live-capture.js" defer></script>'; $loaded = true; }
 }

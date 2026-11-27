@@ -1349,6 +1349,22 @@ if (!function_exists('bc_app_topbar')) {
             $notification = isset($GLOBALS['user_vendor_status_message_template_text']) ? (string)$GLOBALS['user_vendor_status_message_template_text'] : '';
         }
         $username = $site['username'] !== '' ? $site['username'] : 'Account';
+        $user_notifs = array('unread' => 0, 'items' => array());
+        $notif_lib = __DIR__ . '/bc-compliance-notifications.php';
+        if (is_file($notif_lib)) {
+            include_once($notif_lib);
+            $conn = isset($GLOBALS['connection_server']) ? $GLOBALS['connection_server'] : null;
+            $u_row = isset($GLOBALS['get_logged_user_details']) && is_array($GLOBALS['get_logged_user_details']) ? $GLOBALS['get_logged_user_details'] : array();
+            $n_vid = (int)($u_row['vendor_id'] ?? ($GLOBALS['vendor_id'] ?? 0));
+            $n_uname = (string)($u_row['username'] ?? $username);
+            if ($conn instanceof mysqli && $n_vid > 0 && $n_uname !== '') {
+                if (isset($_GET['bc_mark_user_notifs']) && $_GET['bc_mark_user_notifs'] === '1') {
+                    bc_compliance_mark_user_notifications_read($conn, $n_vid, $n_uname);
+                }
+                $user_notifs = bc_compliance_fetch_user_notifications($conn, $n_vid, $n_uname, 8);
+            }
+        }
+        $notif_badge = (int)$user_notifs['unread'] + ($notification !== '' ? 1 : 0);
         ?><div class="pk-app__main">
 <header class="pk-app__top">
     <button class="pk-app__burger" type="button" id="pkAppBurger" aria-label="Open navigation" aria-expanded="false">
@@ -1365,15 +1381,37 @@ if (!function_exists('bc_app_topbar')) {
         <a class="pk-app__iconbtn" href="<?php echo htmlspecialchars(bc_app_url('Referral.php')); ?>" title="Refer and Earn">
             <i class="bi bi-gift" aria-hidden="true"></i><span class="pk-app__hide-sm">Refer</span>
         </a>
-        <?php if ($notification !== ''): ?>
-            <button class="pk-app__iconbtn" type="button" id="pkAppNotice" title="Message from support">
-                <i class="bi bi-bell" aria-hidden="true"></i><span class="pk-app__dot">1</span>
-            </button>
-            <div class="pk-app__menu" id="pkAppNoticeMenu" role="dialog" aria-label="Notifications">
-                <div class="pk-app__menuhead"><strong>Message from Admin</strong><span>Latest notification</span></div>
-                <div style="padding:4px 10px 10px;font-size:.86rem;line-height:1.55;"><?php echo nl2br(htmlspecialchars($notification)); ?></div>
-            </div>
-        <?php endif; ?>
+        <button class="pk-app__iconbtn" type="button" id="pkAppNotice" title="Notifications">
+            <i class="bi bi-bell" aria-hidden="true"></i><?php if ($notif_badge > 0): ?><span class="pk-app__dot" id="pkAppNoticeDot"><?php echo $notif_badge > 9 ? '9+' : $notif_badge; ?></span><?php endif; ?>
+        </button>
+        <div class="pk-app__menu" id="pkAppNoticeMenu" role="dialog" aria-label="Notifications" style="max-width:340px;width:92vw;max-height:420px;overflow-y:auto;">
+            <div class="pk-app__menuhead"><strong>Notifications</strong><span><?php echo (int)$user_notifs['unread']; ?> unread</span></div>
+            <?php if (!empty($user_notifs['items'])): ?>
+                <?php foreach ($user_notifs['items'] as $ni):
+                    $ni_href = trim((string)($ni['link'] ?? ''));
+                    if ($ni_href !== '' && strpos($ni_href, '/') !== 0) $ni_href = bc_app_url($ni_href);
+                ?>
+                    <div style="padding:8px 12px;border-bottom:1px solid rgba(0,0,0,.06);<?php echo empty($ni['is_read']) ? 'background:rgba(40,123,255,.06);' : ''; ?>">
+                        <div style="font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;gap:6px;">
+                            <span><?php echo htmlspecialchars((string)$ni['title']); ?></span>
+                            <?php if (empty($ni['is_read'])): ?><span style="color:#287bff;font-size:.7rem;">NEW</span><?php endif; ?>
+                        </div>
+                        <div style="font-size:.78rem;line-height:1.45;color:var(--muted);margin-top:2px;"><?php echo htmlspecialchars((string)$ni['message']); ?></div>
+                        <?php if ($ni_href !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($ni_href); ?>" style="font-size:.74rem;font-weight:600;display:inline-block;margin-top:4px;">View details &rarr;</a>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            <?php if ($notification !== ''): ?>
+                <div style="padding:8px 12px;font-size:.82rem;line-height:1.5;">
+                    <div style="font-weight:700;margin-bottom:2px;">Message from Admin</div>
+                    <?php echo nl2br(htmlspecialchars($notification)); ?>
+                </div>
+            <?php elseif (empty($user_notifs['items'])): ?>
+                <div style="padding:12px;font-size:.82rem;color:var(--muted);">No notifications yet.</div>
+            <?php endif; ?>
+        </div>
         <div class="pk-app__profile">
             <button class="pk-app__iconbtn" type="button" id="pkAppProfile" aria-expanded="false" aria-haspopup="true" aria-label="<?php echo htmlspecialchars($username . ' profile menu', ENT_QUOTES, 'UTF-8'); ?>" title="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>">
                 <span class="pk-app__avatar"><?php echo htmlspecialchars(strtoupper(substr($username, 0, 1))); ?></span>
@@ -1818,7 +1856,14 @@ if (!function_exists('bc_app_foot')) {
         notice.addEventListener('click', function (e) {
             e.stopPropagation();
             closeAll();
-            toggle(noticeMenu, notice);
+            var opened = toggle(noticeMenu, notice);
+            if (opened) {
+                var dot = document.getElementById('pkAppNoticeDot');
+                if (dot) {
+                    dot.style.display = 'none';
+                    try { fetch(window.location.pathname + '?bc_mark_user_notifs=1', { credentials: 'same-origin' }).catch(function () {}); } catch (err) {}
+                }
+            }
         });
     }
     [profileMenu, noticeMenu].forEach(function (m) {

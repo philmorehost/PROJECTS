@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct MZEEVTUApp: App {
     @StateObject private var requiredSetup = RequiredSetupState.shared
+    @StateObject private var complianceGate = ComplianceGateState.shared
     @State private var checkingSession = true
     @State private var validatingSession = false
     @StateObject private var brandTheme = BrandTheme.shared
@@ -40,6 +41,11 @@ struct MZEEVTUApp: App {
                     }
                 )
                 .environmentObject(SessionManager(isLoggedIn: $isLoggedIn))
+            } else if complianceGate.locked {
+                NavigationView {
+                    KYCView(isOverlayLocked: true)
+                        .environmentObject(SessionManager(isLoggedIn: $isLoggedIn))
+                }
             } else {
                 DashboardView()
                     .environmentObject(SessionManager(isLoggedIn: $isLoggedIn))
@@ -54,7 +60,12 @@ struct MZEEVTUApp: App {
                 if phase == .active { validateSession(); Task { await brandTheme.refresh() } }
             }
             .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
-                if themeScenePhase == .active { Task { await brandTheme.refresh() } }
+                if themeScenePhase == .active {
+                    Task { await brandTheme.refresh() }
+                    if isLoggedIn && pinSet && complianceGate.locked {
+                        ComplianceGateState.shared.refresh()
+                    }
+                }
             }
         }
     }
@@ -63,9 +74,16 @@ struct MZEEVTUApp: App {
         guard AppNetworkService.shared.apiKey != nil else { checkingSession = false; return }
         checkingSession = true
         validatingSession = true
-        AppNetworkService.shared.requestObject("profile.php", params: [:]) { _ in
+        AppNetworkService.shared.requestObject("profile.php", params: [:]) { result in
             checkingSession = false
             validatingSession = false
+            if case .success(let json) = result,
+               let data = json["data"] as? [String: Any] {
+                let locked = (data["kyc_gate_locked"] as? Bool)
+                    ?? (((data["kyc_enforced"] as? Bool) == true) && (((data["kyc_status"] as? Int) ?? 0) != 2))
+                if locked { ComplianceGateState.shared.activateLock() }
+            }
+            ComplianceGateState.shared.refresh()
         }
     }
 
@@ -81,6 +99,7 @@ class SessionManager: ObservableObject {
     func logout() {
         AppNetworkService.shared.apiKey = nil
         AppNetworkService.shared.pinSet = false
+        Task { @MainActor in ComplianceGateState.shared.reset() }
         isLoggedIn = false
     }
 }

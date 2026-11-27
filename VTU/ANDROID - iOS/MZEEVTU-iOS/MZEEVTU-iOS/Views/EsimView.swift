@@ -64,9 +64,9 @@ struct EsimView: View {
                         ProgressView().frame(maxWidth: .infinity)
                     } else {
                         Text("Order eSIM")
+                            .bold()
                             .frame(maxWidth: .infinity)
                             .foregroundColor(brandTheme.onPrimary)
-                            .bold()
                     }
                 }
                 .listRowBackground(brandTheme.primary)

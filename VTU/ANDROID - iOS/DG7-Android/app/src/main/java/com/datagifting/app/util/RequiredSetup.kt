@@ -21,12 +21,21 @@ object RequiredSetup {
     private lateinit var app: Application
     private val main = Handler(Looper.getMainLooper())
     private val key get() = "required-setup:" + Constants.BASE_URL
+    const val ACTION_KYC_GATE_REQUIRED = "com.platform.ACTION_KYC_GATE_REQUIRED"
+    const val ACTION_COMPLIANCE_UPDATE = "com.platform.ACTION_COMPLIANCE_UPDATE"
     private val store get() = app.getSharedPreferences("required_security_setup", 0)
     fun install(application: Application) { app = application }
     fun pending(): Boolean = ::app.isInitialized && store.getBoolean(key, false)
     fun inspect(response: Response) {
         if (response.code != 403 || !::app.isInitialized) return
         val code = runCatching { JSONObject(response.peekBody(8192).string()).optString("code") }.getOrNull()
+        if (code == "KYC_REQUIRED") {
+            PreferenceManager(app).saveBoolean("kyc_gate_locked", true)
+            main.post {
+                app.sendBroadcast(Intent(ACTION_KYC_GATE_REQUIRED).setPackage(app.packageName))
+            }
+            return
+        }
         if (code != "AUTHENTICATOR_SETUP_REQUIRED" && code != "PASSWORD_CHANGE_REQUIRED") return
         store.edit().putBoolean(key, true).apply()
         TransactionCredentials.clear()

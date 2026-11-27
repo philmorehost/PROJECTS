@@ -66,7 +66,8 @@ class HomeFragment : Fragment() {
         greeting = text("Hello, ${prefs.getString(Constants.KEY_FIRSTNAME)}", 18f)
         val header = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
         header.addView(greeting, LinearLayout.LayoutParams(0, -2, 1f))
-        header.addView(text("◎", 25f).apply { contentDescription = "Account and notifications"; setOnClickListener { findNavController().safeNavigate(R.id.nav_profile) } })
+        header.addView(text("🔔", 20f).apply { contentDescription = "Compliance and account notifications"; setOnClickListener { openNotificationsDialog() } })
+        header.addView(text("◎", 25f).apply { contentDescription = "Account and profile"; setOnClickListener { findNavController().safeNavigate(R.id.nav_profile) } })
         hero.addView(header)
         val titleRow = LinearLayout(requireContext()).apply { gravity = Gravity.CENTER_VERTICAL }
         titleRow.addView(text("Wallet balance  ◉", 13f).apply { isFocusable=true; contentDescription="Show or hide wallet balance"; setOnClickListener { visible = !visible; renderBalance() } }, LinearLayout.LayoutParams(0,-2,1f))
@@ -153,6 +154,47 @@ class HomeFragment : Fragment() {
         if(items.isEmpty()) { Toast.makeText(requireContext(),"No available services. Pull to refresh.",Toast.LENGTH_LONG).show(); return }
         AlertDialog.Builder(requireContext()).setTitle(group ?: "All services").setItems(items.map { "${it["group"]} · ${it["title"]}" }.toTypedArray()) { _,i -> openService(items[i]["id"] ?: "") }.show()
     }
+    private fun openNotificationsDialog() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.getService().kycAction(
+                    mapOf("api_key" to prefs.getApiKey(), "action" to "notifications", "mark_read" to "1")
+                )
+                val body = resp.body()
+                @Suppress("UNCHECKED_CAST")
+                val items = (body?.get("items") as? List<Map<String, Any>>) ?: emptyList()
+                prefs.saveBoolean("has_unread_compliance_notif", false)
+                val lines = if (items.isEmpty()) {
+                    arrayOf("No notifications yet.")
+                } else {
+                    items.map { item ->
+                        val t = item["title"]?.toString().orEmpty()
+                        val m = item["message"]?.toString().orEmpty()
+                        val ts = item["created_at"]?.toString().orEmpty()
+                        "$t\n$m" + if (ts.isNotBlank()) "\n($ts)" else ""
+                    }.toTypedArray()
+                }
+                if (context != null) {
+                    AlertDialog.Builder(requireContext())
+                        .setTitle("Notifications")
+                        .setItems(lines) { _, idx ->
+                            val link = items.getOrNull(idx)?.get("link")?.toString().orEmpty()
+                            if (link.contains("KYC", ignoreCase = true)) {
+                                findNavController().safeNavigate(R.id.nav_kyc)
+                            }
+                        }
+                        .setPositiveButton("Open KYC") { _, _ -> findNavController().safeNavigate(R.id.nav_kyc) }
+                        .setNegativeButton("Close", null)
+                        .show()
+                }
+            } catch (_: Exception) {
+                if (context != null) {
+                    Toast.makeText(requireContext(), "Unable to load notifications.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     private fun openService(slug: String) {
         if(directory.none { it["id"]==slug }) { Toast.makeText(requireContext(),"This service is not available on your platform yet.",Toast.LENGTH_LONG).show(); return }
         MobileServiceNavigator.launch(this,slug)

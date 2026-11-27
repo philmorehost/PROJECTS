@@ -22,6 +22,8 @@ $site_data = mysqli_fetch_assoc($site_q);
 $biz_name = $get_logged_admin_details['company_name'] ?? ($site_data['site_title'] ?? 'Our VTU Platform');
 
 $current_bg = $get_logged_admin_details['ai_marketing_bg'] ?? 'midnight';
+$is_saas_mode = bc_ai_is_saas();
+$copilot_cost_display = $is_saas_mode ? bc_ai_get_action_cost('marketing_copilot') : 0;
 
 // ─── AJAX: AI "Help me write" / "Refine content" ─────────────────────────────
 if (isset($_GET['action']) && in_array($_GET['action'], ['ai_write', 'ai_refine'], true)) {
@@ -33,9 +35,10 @@ if (isset($_GET['action']) && in_array($_GET['action'], ['ai_write', 'ai_refine'
     }
 
     $token_bal = (int)($get_logged_admin_details['ai_token_balance'] ?? 0);
-    $per_tx_cost = (int)($get_logged_admin_details['ai_per_tx_cost'] ?? 2);
-    if ($token_bal < $per_tx_cost) {
-        echo json_encode(['status' => 'error', 'message' => 'Insufficient AI tokens. Please top up in AI Suite.']);
+    $per_tx_cost = $copilot_cost_display;
+    $plat = bc_ai_platform_status($connection_server, (int)$vendor_id, 'marketing_copilot');
+    if (empty($plat['available'])) {
+        echo json_encode(['status' => 'error', 'message' => (string)$plat['reason'], 'copilot_cost' => $per_tx_cost, 'tokens_remaining' => $token_bal]);
         exit;
     }
 
@@ -80,20 +83,23 @@ $safe_input";
 
     if ($result['status'] === 'success') {
         $generated = trim($result['response']);
-        $tokens = strlen($prompt . $generated) / 4;
-        $esc_res = mysqli_real_escape_string($connection_server, $generated);
-        $esc_label = mysqli_real_escape_string($connection_server, ($action === 'ai_write' ? 'Marketing Write' : 'Marketing Refine') . ': ' . substr($safe_input, 0, 150));
-        mysqli_query($connection_server, "INSERT INTO sas_ai_transactions (vendor_id, username, prompt, response, tokens_burned, status, duration_ms) VALUES ('$vendor_id', 'admin_{$get_logged_admin_details['email']}', '$esc_label', '$esc_res', '$tokens', 'success', '$duration')");
-
-        // Atomic debit
-        $deduct_result = mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance = ai_token_balance - $per_tx_cost WHERE id='$vendor_id' AND ai_token_balance >= $per_tx_cost");
-        if (!$deduct_result || mysqli_affected_rows($connection_server) === 0) {
-            mysqli_query($connection_server, "UPDATE sas_ai_transactions SET status='failed' WHERE vendor_id='$vendor_id' AND prompt='$esc_label' ORDER BY id DESC LIMIT 1");
-            $get_logged_admin_details['ai_token_balance'] = 0;
-            echo json_encode(['status' => 'error', 'message' => 'Insufficient AI token balance. Please top up your account.']);
+        $billing = bc_ai_charge_vendor_tokens(
+            $connection_server,
+            (int)$vendor_id,
+            'marketing_copilot',
+            'admin_' . ($get_logged_admin_details['email'] ?? 'admin'),
+            ($action === 'ai_write' ? 'Marketing Write' : 'Marketing Refine') . ': ' . substr($safe_input, 0, 150),
+            substr($generated, 0, 500),
+            (string)$assigned_model,
+            (int)$duration,
+            $per_tx_cost
+        );
+        if (!$billing['ok']) {
+            $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
+            echo json_encode(['status' => 'error', 'message' => $billing['error'] ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
             exit;
         }
-        $get_logged_admin_details['ai_token_balance'] = $token_bal - $per_tx_cost;
+        $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
 
         // Split off a leading "SUBJECT:" line if the model produced one, so the client can
         // route it straight into the subject field instead of leaving it in the body.
@@ -109,6 +115,7 @@ $safe_input";
             'subject'          => $subject_out,
             'body'             => $body_out,
             'tokens_remaining' => $get_logged_admin_details['ai_token_balance'],
+            'tokens_charged'   => $per_tx_cost,
         ]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'AI Error: ' . ($result['message'] ?? 'Unable to connect to AI engine.')]);
@@ -122,6 +129,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'campaign_progress') {
     $cid = (int)($_GET['campaign_id'] ?? 0);
     $progress = bc_get_mail_campaign_progress($connection_server, $cid, $vendor_id);
     echo json_encode($progress ?: ['status' => 'error', 'message' => 'Campaign not found.']);
+    exit;
+}
+
+// ─── AJAX: cancel a queued/sending campaign (stops remaining emails) ────────
+if (isset($_GET['action']) && $_GET['action'] === 'cancel_campaign') {
+    header('Content-Type: application/json');
+    $cid = (int)($_GET['campaign_id'] ?? 0);
+    $result = bc_cancel_mail_campaign($connection_server, $cid, $vendor_id, false);
+    echo json_encode($result);
     exit;
 }
 
@@ -246,6 +262,13 @@ bc_adm_head(($title), array("area" => "admin"));
                         <textarea id="briefInput" class="form-control rounded-4 p-3 bg-light border-0" rows="4" placeholder="e.g. Promote our new 1GB data plan at a discounted weekend rate"></textarea>
                     </div>
                     <button type="button" id="btnGenerate" class="btn btn-primary w-100 rounded-pill py-3 fw-bold">Generate Magic 🪄</button>
+                    <div class="text-center text-muted small mt-2">
+                        <?php if ($is_saas_mode): ?>
+                            <i class="bi bi-coin me-1"></i>Copilot costs <strong><?php echo $copilot_cost_display; ?> token<?php echo $copilot_cost_display == 1 ? '' : 's'; ?></strong> per generate or refine
+                        <?php else: ?>
+                            <i class="bi bi-key me-1"></i>Connected directly via your configured AI API key
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
@@ -332,7 +355,12 @@ bc_adm_head(($title), array("area" => "admin"));
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="fw-bold mb-0"><i class="bi bi-broadcast-pin me-2"></i>Live Send Report</h6>
-                        <span class="badge bg-primary-subtle text-primary" id="progressStatus">—</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary-subtle text-primary" id="progressStatus">—</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="cancelActiveBtn">
+                                <i class="bi bi-x-circle me-1"></i>Cancel Campaign
+                            </button>
+                        </div>
                     </div>
                     <div class="progress campaign-progress-bar mb-2">
                         <div class="progress-bar bg-success" id="progressBarSent" style="width:0%"></div>
@@ -355,7 +383,7 @@ bc_adm_head(($title), array("area" => "admin"));
                     <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-sm campaign-row align-middle mb-0">
-                                <thead class="text-muted"><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Failed</th><th>Total</th></tr></thead>
+                                <thead class="text-muted"><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Failed</th><th>Total</th><th>Action</th></tr></thead>
                                 <tbody>
                                 <?php foreach ($recent_campaigns as $c): ?>
                                     <tr>
@@ -364,6 +392,13 @@ bc_adm_head(($title), array("area" => "admin"));
                                         <td><?php echo (int)$c['sent_count']; ?></td>
                                         <td><?php echo (int)$c['failed_count']; ?></td>
                                         <td><?php echo (int)$c['total_count']; ?></td>
+                                        <td>
+                                            <?php if (in_array($c['status'], ['queued', 'sending'], true)): ?>
+                                                <button type="button" class="btn btn-sm btn-outline-danger cancel-campaign-btn" data-id="<?php echo (int)$c['id']; ?>" data-subject="<?php echo htmlspecialchars($c['subject'], ENT_QUOTES); ?>">Cancel</button>
+                                            <?php else: ?>
+                                                <span class="text-muted small">—</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>
@@ -478,6 +513,26 @@ bc_adm_head(($title), array("area" => "admin"));
         const elPending = document.getElementById('progressPending');
         const elTotal = document.getElementById('progressTotal');
         const elStatus = document.getElementById('progressStatus');
+        const cancelActiveBtn = document.getElementById('cancelActiveBtn');
+
+        function stopPolling() { cancelActiveBtn.disabled = true; cancelActiveBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Cancelled'; }
+
+        cancelActiveBtn.addEventListener('click', function() {
+            if (!confirm('Cancel this campaign? Emails that have not been sent yet will not be sent.')) return;
+            cancelActiveBtn.disabled = true;
+            cancelActiveBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Cancelling...';
+            fetch('AIMarketing.php?action=cancel_campaign&campaign_id=' + activeCampaignId)
+                .then(r => r.json())
+                .then(data => {
+                    alert(data.message || (data.success ? 'Campaign cancelled.' : 'Could not cancel campaign.'));
+                    if (data.success) { stopPolling(); setTimeout(() => location.reload(), 1200); }
+                    else { cancelActiveBtn.disabled = false; cancelActiveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Campaign'; }
+                })
+                .catch(() => {
+                    cancelActiveBtn.disabled = false;
+                    cancelActiveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Campaign';
+                });
+        });
 
         function poll() {
             fetch('AIMarketing.php?action=campaign_progress&campaign_id=' + activeCampaignId)
@@ -494,6 +549,7 @@ bc_adm_head(($title), array("area" => "admin"));
                     elPending.textContent = data.pending;
                     elTotal.textContent = total;
                     elStatus.textContent = data.status;
+                    if (data.status === 'cancelled') { stopPolling(); return; }
                     if (data.status !== 'completed') {
                         setTimeout(poll, 3000);
                     }
@@ -502,6 +558,24 @@ bc_adm_head(($title), array("area" => "admin"));
         }
         poll();
     }
+
+    // ─── Cancel buttons in the Recent Campaigns table ─────────────────────
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.cancel-campaign-btn');
+        if (!btn) return;
+        const cid = btn.dataset.id;
+        if (!confirm('Cancel campaign "' + (btn.dataset.subject || '') + '"? Emails that have not been sent yet will not be sent.')) return;
+        btn.disabled = true;
+        btn.textContent = 'Cancelling...';
+        fetch('AIMarketing.php?action=cancel_campaign&campaign_id=' + cid)
+            .then(r => r.json())
+            .then(data => {
+                alert(data.message || (data.success ? 'Campaign cancelled.' : 'Could not cancel campaign.'));
+                if (data.success) { location.reload(); }
+                else { btn.disabled = false; btn.textContent = 'Cancel'; }
+            })
+            .catch(() => { btn.disabled = false; btn.textContent = 'Cancel'; });
+    });
 })();
 </script>
 

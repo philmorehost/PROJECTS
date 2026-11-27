@@ -194,9 +194,12 @@ if ($connection_server) {
 
                             $admin_kyc_status = (int)($get_logged_admin_details["kyc_status"] ?? 0);
                             if ($global_force_kyc == 1 && count($config_kyc_verification_status_array_value) > 0 && $admin_kyc_status != 2) {
-                                $_SESSION["product_purchase_response"] = "Dear " . ucwords($get_logged_admin_details["firstname"]) . ", To comply with CBN regulations and unlock all platform features.<br>Please complete your identity verification (" . implode(", ", $config_kyc_verification_status_array_value) . ") securely.<br>Your information is treated confidentially.";
-                                if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/bc-admin/AccountSettings.php", "/bc-admin/Fund.php", "/bc-admin/SelfSubmitPayment.php", "/bc-admin/SelfPaymentOrders.php"))) {
-                                    header("Location: /bc-admin/AccountSettings.php");
+                                $GLOBALS['bc_vendor_kyc_locked'] = true;
+                                $_SESSION["product_purchase_response"] = $admin_kyc_status === 1
+                                    ? "Dear " . ucwords($get_logged_admin_details["firstname"]) . ", your Vendor KYC/KYB file is currently under Super Admin review. Full admin console access unlocks automatically once approved."
+                                    : "Dear " . ucwords($get_logged_admin_details["firstname"]) . ", To comply with CBN regulations and unlock all platform features.<br>Please complete your identity verification (" . implode(", ", $config_kyc_verification_status_array_value) . ") securely.<br>Your information is treated confidentially.";
+                                if (!in_array(explode("?", trim($_SERVER["REQUEST_URI"]))[0], array("/bc-admin/AccountSettings.php"))) {
+                                    header("Location: /bc-admin/AccountSettings.php#tab-kyc");
                                     exit();
                                 }
                             }

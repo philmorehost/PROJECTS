@@ -21,9 +21,10 @@ include_once("../../func/bc-connect.php");
 // bc-connect.php does not pull in by itself. Without this the status/upload replies fatal on an
 // undefined function.
 include_once(__DIR__ . "/../../func/bc-security.php");
-// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner + Notifications
 include_once(__DIR__ . "/../../func/bc-kyc-ai-analyzer.php");
 include_once(__DIR__ . "/../../func/bc-kyc-av-scanner.php");
+include_once(__DIR__ . "/../../func/bc-compliance-notifications.php");
 
 $vendor_id = resolveVendorID();
 $select_vendor_table = mysqli_fetch_array(mysqli_query($connection_server,
@@ -58,20 +59,59 @@ $enabled_checks = bc_kyc_enabled_checks($connection_server, $vendor_id);
 // Return current KYC status
 if ($action === 'status') {
     $kyc_names = [0 => "Unverified", 1 => "Under Review", 2 => "Verified", 3 => "Rejected"];
-    
+    $pending_raw = array_values(bc_kyc_checks_pending($user, $enabled_checks));
+    $kyc_enforced = function_exists('isKYCEnforced') ? (bool)isKYCEnforced((int)$vendor_id) : false;
+    $kyc_gate_locked = false;
+    try {
+        $kyc_gate_locked = function_exists('bc_kyc_app_confinement_required') ? (bool)bc_kyc_app_confinement_required($user) : false;
+    } catch (Throwable $e) {
+        $kyc_gate_locked = $kyc_enforced && ((int)$user['kyc_status'] !== 2);
+    }
+    $ai_gate = function_exists('bc_kyc_is_ai_enabled') ? bc_kyc_is_ai_enabled($connection_server, (int)$vendor_id) : ['enabled' => false];
+    $ai_dec = function_exists('bc_kyc_ai_get_decision') ? bc_kyc_ai_get_decision($connection_server, (int)$user['id']) : null;
+    $notifs = bc_compliance_fetch_user_notifications($connection_server, (int)$vendor_id, (string)$user['username'], 10);
+
     echo json_encode([
-        "status"      => "success",
-        "kyc_status"  => (int)$user['kyc_status'],
-        "kyc_name"    => $kyc_names[$user['kyc_status']] ?? "Unknown",
-        "kyc_verified"=> ($user['kyc_status'] == 2) ? "Yes" : "No",
-        "bvn_set"     => !empty($user['bvn']) ? "Yes" : "No",
-        "nin_set"     => !empty($user['nin']) ? "Yes" : "No",
+        "status"            => "success",
+        "kyc_status"        => (int)$user['kyc_status'],
+        "kyc_name"          => $kyc_names[$user['kyc_status']] ?? "Unknown",
+        "kyc_verified"      => ($user['kyc_status'] == 2) ? "Yes" : "No",
+        "kyc_enforced"      => $kyc_enforced,
+        "kyc_gate_locked"   => $kyc_gate_locked,
+        "bvn_set"           => !empty($user['bvn']) ? "Yes" : "No",
+        "nin_set"           => !empty($user['nin']) ? "Yes" : "No",
+        "id_type"           => (string)($user['kyc_id_type'] ?? ''),
+        "has_govt_id"       => !empty($user['govt_id_card']),
+        "has_selfie"        => !empty($user['kyc_face_image']),
+        "has_poa"           => !empty($user['proof_of_address']),
+        "has_video"         => !empty($user['liveliness_video']),
         // Manual (non-API) KYC: what the reviewer decided, why, and what is still outstanding, so the
         // app can show the same information the website does instead of just "Unverified".
         "kyc_reject_reason" => (string)($user['kyc_reject_reason'] ?? ''),
         "submitted_at"      => (string)($user['kyc_submitted_at'] ?? ''),
         "has_documents"     => (empty($user['govt_id_card']) && empty($user['kyc_face_image'])) ? "No" : "Yes",
-        "still_needed"      => array_map('bc_kyc_check_label', bc_kyc_checks_pending($user, $enabled_checks)),
+        "enabled_checks"    => array_values($enabled_checks),
+        "pending_checks"    => $pending_raw,
+        "still_needed"      => array_map('bc_kyc_check_label', $pending_raw),
+        "ai_enabled"        => !empty($ai_gate['enabled']),
+        "ai_status"         => $ai_dec['status'] ?? null,
+        "ai_reason"         => $ai_dec['reason'] ?? null,
+        "ai_rating"         => isset($ai_dec['decision']['overall_rating']) ? (int)$ai_dec['decision']['overall_rating'] : null,
+        "ai_grade"          => $ai_dec['decision']['overall_grade'] ?? null,
+        "notifications"     => $notifs,
+    ]);
+    exit;
+}
+
+if ($action === 'notifications') {
+    if (!empty($_POST['mark_read'])) {
+        bc_compliance_mark_user_notifications_read($connection_server, (int)$vendor_id, (string)$user['username']);
+    }
+    $notifs = bc_compliance_fetch_user_notifications($connection_server, (int)$vendor_id, (string)$user['username'], 20);
+    echo json_encode([
+        "status"  => "success",
+        "unread"  => $notifs['unread'],
+        "items"   => $notifs['items'],
     ]);
     exit;
 }
@@ -105,12 +145,37 @@ if ($action === 'submit_bvn_nin') {
     $outcome = bc_kyc_provider_verify($connection_server, $vendor_id, $uid, $type, $value, $verification, 'KYC-' . strtoupper($type) . '-' . $uid);
 
     if ($outcome['status'] === 'verified') {
+        $q_u2 = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$uid' LIMIT 1");
+        $u2 = $q_u2 ? (mysqli_fetch_assoc($q_u2) ?: $user) : $user;
+        $still_labels = array_map('bc_kyc_check_label', $outcome['still_needed']);
+        if ((int)$outcome['kyc_status'] === 2) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_decision', [
+                'vendor_id' => (int)$vendor_id, 'user' => $u2, 'status' => 2, 'label' => 'Approved (Verified)',
+            ]);
+        } elseif ((int)$outcome['kyc_status'] === 1) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_submitted', [
+                'vendor_id' => (int)$vendor_id, 'user' => $u2,
+            ]);
+        } else {
+            bc_compliance_notify_event($connection_server, 'user_kyc_partial_saved', [
+                'vendor_id' => (int)$vendor_id, 'user' => $u2, 'still_needed' => $still_labels,
+            ]);
+        }
+        $gate_locked = false;
+        try {
+            $gate_locked = function_exists('bc_kyc_app_confinement_required') ? (bool)bc_kyc_app_confinement_required($u2) : false;
+        } catch (Throwable $e) {
+            $gate_locked = ((int)$outcome['kyc_status'] !== 2);
+        }
         echo json_encode([
-            "status"       => "success",
-            "desc"         => $outcome['message'],
-            "kyc_status"   => $outcome['kyc_status'],
-            "auto_approved"=> $outcome['auto_approved'],
-            "still_needed" => array_map('bc_kyc_check_label', $outcome['still_needed']),
+            "status"          => "success",
+            "desc"            => $outcome['message'],
+            "kyc_status"      => $outcome['kyc_status'],
+            "kyc_enforced"    => function_exists('isKYCEnforced') ? (bool)isKYCEnforced((int)$vendor_id) : false,
+            "kyc_gate_locked" => $gate_locked,
+            "auto_approved"   => $outcome['auto_approved'],
+            "pending_checks"  => array_values((array)$outcome['still_needed']),
+            "still_needed"    => $still_labels,
         ]);
         exit;
     }
@@ -141,9 +206,9 @@ if ($action === 'upload_document') {
     // input name => [column, allowed extensions, max MB]. Same contract as the website flow, except the
     // app sends camera images for the ID and never a PDF for the selfie.
     $kinds = [
-        'govt_id'          => ['govt_id_card',     ['jpg', 'jpeg', 'png', 'webp'], 8],
+        'govt_id'          => ['govt_id_card',     ['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
         'selfie'           => ['kyc_face_image',   ['jpg'], 0.5],
-        'proof_of_address' => ['proof_of_address', ['jpg', 'jpeg', 'png', 'webp'], 8],
+        'proof_of_address' => ['proof_of_address', ['jpg', 'jpeg', 'png', 'webp', 'pdf'], 8],
         'liveliness_video' => ['liveliness_video', ['mp4', 'webm'], 3],
     ];
 
@@ -203,6 +268,11 @@ if ($action === 'upload_document') {
     }
 
     if (!empty($av_errors) && empty($updates)) {
+        bc_compliance_notify_event($connection_server, 'user_kyc_av_blocked', [
+            'vendor_id' => (int)$vendor_id,
+            'user'      => $user,
+            'reason'    => implode(' | ', $av_errors),
+        ]);
         http_response_code(422);
         echo json_encode([
             "status" => "failed",
@@ -236,6 +306,7 @@ if ($action === 'upload_document') {
         $in_review = false;
         if (empty($still) && (int)($after['kyc_status'] ?? 0) !== 2) {
             mysqli_query($connection_server, "UPDATE sas_users SET kyc_status=1, kyc_submitted_at=NOW() WHERE id='$user_id'");
+            $after['kyc_status'] = 1;
             $in_review = true;
         }
 
@@ -257,17 +328,63 @@ if ($action === 'upload_document') {
                 'reason'         => (string)($store_result['decision']['reason'] ?? ''),
                 'ratings'        => $store_result['decision']['ratings'] ?? [],
             ];
+            bc_compliance_notify_event($connection_server, 'user_kyc_ai_screened', [
+                'vendor_id'          => (int)$vendor_id,
+                'user'               => $after,
+                'ai_status'          => $ai_summary['status'],
+                'overall_rating'     => $ai_summary['overall_rating'],
+                'overall_grade'      => $ai_summary['overall_grade'],
+                'reason'             => $ai_summary['reason'],
+                'notify_admin_email' => !$in_review,
+            ]);
+        }
+
+        $still_labels = array_map('bc_kyc_check_label', $still);
+        if ($in_review) {
+            $ai_txt = $ai_summary ? ('AI Rating: ' . $ai_summary['overall_rating'] . '/100 (Grade ' . $ai_summary['overall_grade'] . ').') : '';
+            bc_compliance_notify_event($connection_server, 'user_kyc_submitted', [
+                'vendor_id'       => (int)$vendor_id,
+                'user'            => $after,
+                'ai_summary_text' => $ai_txt,
+            ]);
+        } else {
+            bc_compliance_notify_event($connection_server, 'user_kyc_partial_saved', [
+                'vendor_id'    => (int)$vendor_id,
+                'user'         => $after,
+                'still_needed' => $still_labels,
+            ]);
+        }
+        if (!empty($av_errors)) {
+            bc_compliance_notify_event($connection_server, 'user_kyc_av_blocked', [
+                'vendor_id' => (int)$vendor_id,
+                'user'      => $after ?: $user,
+                'reason'    => implode(' | ', $av_errors),
+            ]);
+        }
+
+        $cur_status = (int)($after['kyc_status'] ?? 0);
+        $kyc_names = [0 => "Unverified", 1 => "Under Review", 2 => "Verified", 3 => "Rejected"];
+        $gate_locked = false;
+        try {
+            $gate_locked = function_exists('bc_kyc_app_confinement_required') ? (bool)bc_kyc_app_confinement_required($after ?: $user) : false;
+        } catch (Throwable $e) {
+            $gate_locked = ($cur_status !== 2);
         }
 
         echo json_encode([
-            "status" => "success",
-            "desc"   => $in_review ? "Documents submitted and waiting for admin review" : "Documents saved",
-            "in_review" => $in_review,
+            "status"          => "success",
+            "desc"            => $in_review ? "Documents submitted and waiting for admin review" : "Documents saved",
+            "in_review"       => $in_review,
+            "kyc_status"      => $cur_status,
+            "kyc_name"        => $kyc_names[$cur_status] ?? "Unknown",
+            "kyc_enforced"    => function_exists('isKYCEnforced') ? (bool)isKYCEnforced((int)$vendor_id) : false,
+            "kyc_gate_locked" => $gate_locked,
             "accepted_media" => $uploaded,
-            "still_needed" => array_map('bc_kyc_check_label', $still),
-            "av_scans" => $av_scan_reports,
-            "av_warnings" => $av_errors,
-            "ai_analysis" => $ai_summary,
+            "pending_checks"  => array_values($still),
+            "still_needed"    => $still_labels,
+            "av_scans"        => $av_scan_reports,
+            "av_warnings"     => $av_errors,
+            "ai_analysis"     => $ai_summary,
         ]);
     } else {
         echo json_encode(["status" => "failed", "desc" => "No valid documents received"]);
@@ -301,6 +418,15 @@ if ($action === 'ai_analyze_documents') {
     $analysis['billing'] = $billing;
     $auto_apply = false; // §33: AI advises the human reviewer; it never approves on its own.
     $store_result = bc_kyc_ai_store_result($connection_server, $user_id, $vendor_id, $analysis, $auto_apply);
+    bc_compliance_notify_event($connection_server, 'user_kyc_ai_screened', [
+        'vendor_id'          => (int)$vendor_id,
+        'user'               => $user_row,
+        'ai_status'          => $store_result['decision']['status'] ?? 'review',
+        'overall_rating'     => (int)($store_result['decision']['overall_rating'] ?? 0),
+        'overall_grade'      => (string)($store_result['decision']['overall_grade'] ?? 'C'),
+        'reason'             => (string)($store_result['decision']['reason'] ?? ''),
+        'notify_admin_email' => true,
+    ]);
     if ($billing['billed'] && $billing['total_tokens'] > 0) {
         $vendor_ai_q = mysqli_query($connection_server, "SELECT ai_token_balance FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
         $vendor_ai = $vendor_ai_q ? mysqli_fetch_assoc($vendor_ai_q) : null;

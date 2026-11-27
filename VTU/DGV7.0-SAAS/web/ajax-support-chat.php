@@ -102,29 +102,98 @@ if ($action === 'send') {
     // Re-read: posting bumped last_message_at, and a reply may change status.
     $thread = bc_chat_thread_get($bc_chat_vendor_id, $thread_id);
     
-// §25: account context for the support assistant — the customer's own recent
-// activity (service, status, date only; never balances or credentials), so the
-// AI can guide from real events and escalate with facts. Registered as a
-// callback so the chat engine itself stays money-blind.
+// Secure read-only account, transaction & website context provider for the AI support
+// assistant (never exposes passwords, PINs, or secrets). Registered as a callback so
+// func/bc-support-chat.php stays strictly separated from user/ledger tables.
 if (!function_exists('bc_chat_user_context')) {
-    function bc_chat_user_context($vendor_id, $user_id) {
+    function bc_chat_user_context($vendor_id, $user_id, $latest_query = '') {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return '';
         $vendor_id = (int)$vendor_id; $user_id = (int)$user_id;
         if ($vendor_id <= 0 || $user_id <= 0) return '';
-        $q = mysqli_query($connection_server, "SELECT username FROM sas_users WHERE vendor_id='$vendor_id' AND id='$user_id' LIMIT 1");
+
+        $q = @mysqli_query($connection_server, "SELECT username, firstname, lastname, email, phone_number, balance, account_level, kyc_status, kyc_reject_reason, is_blocked, reg_date FROM sas_users WHERE vendor_id='$vendor_id' AND id='$user_id' LIMIT 1");
         $u = $q ? mysqli_fetch_assoc($q) : null;
         if (!$u) return '';
+
         $uname = mysqli_real_escape_string($connection_server, (string)$u['username']);
-        $q2 = mysqli_query($connection_server, "SELECT type_alternative, status, date FROM sas_transactions
-            WHERE vendor_id='$vendor_id' AND username='$uname' ORDER BY id DESC LIMIT 5");
-        if (!$q2 || mysqli_num_rows($q2) === 0) return 'No recent transactions on this account.';
-        $lines = [];
-        while ($r = mysqli_fetch_assoc($q2)) {
-            $status = (int)$r['status'] === 1 ? 'successful' : 'not completed';
-            $lines[] = '- ' . ($r['type_alternative'] ?: 'transaction') . ' (' . $status . ', ' . $r['date'] . ')';
+        $lvl_map = [1 => 'Smart Earner', 2 => 'Agent', 3 => 'API / Vendor'];
+        $kyc_map = [0 => 'Unverified', 1 => 'Pending Admin Review', 2 => 'Verified', 3 => 'Rejected'];
+        $kyc_st = (int)($u['kyc_status'] ?? 0);
+
+        $out = [];
+        // 1. Website / Brand info
+        $vq = @mysqli_query($connection_server, "SELECT company_name, website_url, email, phone_number FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+        $vrow = $vq ? mysqli_fetch_assoc($vq) : null;
+        $sq = @mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+        $srow = $sq ? mysqli_fetch_assoc($sq) : null;
+        $brand = trim((string)($srow['site_title'] ?? ($vrow['company_name'] ?? 'Platform')));
+        $out[] = "Website: {$brand}"
+            . (!empty($vrow['website_url']) ? " ({$vrow['website_url']})" : '')
+            . (!empty($vrow['email']) ? " | Support Email: {$vrow['email']}" : '')
+            . (!empty($vrow['phone_number']) ? " | Support Phone: {$vrow['phone_number']}" : '');
+
+        // 2. User account summary (strictly non-credential fields)
+        $full_name = trim((string)($u['firstname'] ?? '') . ' ' . (string)($u['lastname'] ?? ''));
+        $out[] = "Customer: " . ($full_name !== '' ? $full_name . " (@{$u['username']})" : "@{$u['username']}")
+            . " | Tier: " . ($lvl_map[(int)($u['account_level'] ?? 1)] ?? 'Smart')
+            . " | Wallet Balance: NGN " . number_format((float)($u['balance'] ?? 0), 2)
+            . " | Account Status: " . ((int)($u['is_blocked'] ?? 0) === 1 ? 'Blocked/Restricted' : 'Active');
+        $out[] = "KYC Status: " . ($kyc_map[$kyc_st] ?? 'Unknown')
+            . ($kyc_st === 3 && !empty($u['kyc_reject_reason']) ? " (Reason: " . substr((string)$u['kyc_reject_reason'], 0, 180) . ")" : '');
+
+        // 3. Specific reference lookup if user mentioned a ref in their message
+        $latest_query = (string)$latest_query;
+        if ($latest_query !== '' && preg_match('/\b([A-Za-z0-9_-]{6,40})\b/', $latest_query)) {
+            preg_match_all('/\b([A-Za-z0-9_-]{6,40})\b/', $latest_query, $rm);
+            $cands = array_slice(array_unique($rm[1] ?? []), 0, 3);
+            foreach ($cands as $cand) {
+                if (!preg_match('/[0-9]/', $cand)) continue;
+                $cand_esc = mysqli_real_escape_string($connection_server, $cand);
+                $rq = @mysqli_query($connection_server, "SELECT reference, type_alternative, description, amount, discounted_amount, status, date FROM sas_transactions WHERE vendor_id='$vendor_id' AND username='$uname' AND reference LIKE '%$cand_esc%' ORDER BY id DESC LIMIT 2");
+                if ($rq && mysqli_num_rows($rq) > 0) {
+                    $out[] = "Matched Transaction(s) for '{$cand}':";
+                    while ($tr = mysqli_fetch_assoc($rq)) {
+                        $st = (int)$tr['status'] === 1 ? 'Successful' : ((int)$tr['status'] === 2 ? 'Pending' : 'Failed');
+                        $out[] = "  - Ref {$tr['reference']}: {$tr['type_alternative']} | NGN " . number_format((float)($tr['discounted_amount'] ?: $tr['amount']), 2) . " | {$st} | {$tr['date']} | " . substr((string)$tr['description'], 0, 100);
+                    }
+                }
+            }
         }
-        return implode("\n", $lines);
+
+        // 4. Recent transactions (last 8)
+        $q2 = @mysqli_query($connection_server, "SELECT reference, type_alternative, description, amount, discounted_amount, status, date FROM sas_transactions WHERE vendor_id='$vendor_id' AND username='$uname' ORDER BY id DESC LIMIT 8");
+        if ($q2 && mysqli_num_rows($q2) > 0) {
+            $out[] = "Recent Transactions:";
+            while ($r = mysqli_fetch_assoc($q2)) {
+                $st = (int)$r['status'] === 1 ? 'Successful' : ((int)$r['status'] === 2 ? 'Pending' : 'Failed');
+                $amt = (float)($r['discounted_amount'] ?: $r['amount']);
+                $out[] = "  - [{$r['reference']}] " . ($r['type_alternative'] ?: 'service') . " · NGN " . number_format($amt, 2) . " · {$st} · {$r['date']}" . (!empty($r['description']) ? " (" . substr((string)$r['description'], 0, 70) . ")" : "");
+            }
+        } else {
+            $out[] = "Recent Transactions: None yet.";
+        }
+
+        // 5. Recent manual/submitted payment orders (last 4)
+        $q3 = @mysqli_query($connection_server, "SELECT reference, amount, status, date FROM sas_submitted_payments WHERE vendor_id='$vendor_id' AND username='$uname' ORDER BY id DESC LIMIT 4");
+        if ($q3 && mysqli_num_rows($q3) > 0) {
+            $out[] = "Recent Payment / Funding Orders:";
+            while ($p = mysqli_fetch_assoc($q3)) {
+                $pst = (int)$p['status'] === 1 ? 'Approved' : ((int)$p['status'] === 2 ? 'Pending Review' : 'Rejected');
+                $out[] = "  - [{$p['reference']}] NGN " . number_format((float)$p['amount'], 2) . " · {$pst} · {$p['date']}";
+            }
+        }
+
+        // 6. Recent blocked KYC/KYB upload scan (if any) so AI can explain why an upload was rejected
+        $q4 = @mysqli_query($connection_server, "SELECT doc_key, verdict, reason, created_at FROM sas_kyc_av_logs WHERE vendor_id='$vendor_id' AND user_id='$user_id' AND verdict='blocked' ORDER BY id DESC LIMIT 2");
+        if ($q4 && mysqli_num_rows($q4) > 0) {
+            $out[] = "Recent Blocked Document Upload(s):";
+            while ($av = mysqli_fetch_assoc($q4)) {
+                $out[] = "  - {$av['doc_key']} blocked at {$av['created_at']}: " . substr((string)$av['reason'], 0, 120);
+            }
+        }
+
+        return implode("\n", $out);
     }
 }
 $GLOBALS['bc_chat_context_provider'] = 'bc_chat_user_context';

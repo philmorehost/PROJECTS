@@ -15,7 +15,7 @@
 
     var ENDPOINT     = cfg.endpoint;
     var CONSOLE_URL  = cfg.consoleUrl || "/bc-admin/SupportChat.php";
-    var SETTINGS_URL = cfg.settingsUrl || "/bc-admin/ChatSettings.php";
+    var SETTINGS_URL = cfg.settingsUrl || "/bc-admin/AISettings.php?tab=support";
     var ADMIN_NAME   = cfg.adminName || "Support Agent";
 
     var state = {

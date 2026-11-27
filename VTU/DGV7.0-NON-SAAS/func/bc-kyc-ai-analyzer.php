@@ -623,6 +623,31 @@ if (!function_exists('bc_kyc_ai_analyze_all')) {
      */
     function bc_kyc_ai_analyze_all($user, $enabled_checks)
     {
+        $conn = $GLOBALS['connection_server'] ?? null;
+        $vid = (int)($user['vendor_id'] ?? 0);
+        if ($conn instanceof mysqli && $vid > 0 && function_exists('bc_ai_platform_status')) {
+            $plat = bc_ai_platform_status($conn, $vid, 'kyc_report');
+            if (!$plat['available']) {
+                return [
+                    'status'            => 'ai_disabled',
+                    'decision'          => [
+                        'status'          => 'ai_disabled',
+                        'confidence'      => 0,
+                        'reason'          => $plat['reason'],
+                        'ratings'         => [],
+                        'overall_rating'  => ['score' => 0, 'grade' => 'N/A', 'label' => 'AI Paused / Unbilled'],
+                        'summary'         => $plat['reason'],
+                    ],
+                    'results'           => [],
+                    'errors'            => [$plat['reason']],
+                    'total_tokens'      => 0,
+                    'tokens_charged'    => 0,
+                    'total_duration_ms' => 0,
+                    'analyzed_at'       => date('Y-m-d H:i:s'),
+                ];
+            }
+        }
+
         $upload_dir = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyc/";
         $results = [];
         $total_tokens = 0;
@@ -696,12 +721,28 @@ if (!function_exists('bc_kyc_ai_analyze_all')) {
         // Generate overall decision + per-document ratings + admin report
         $decision = bc_kyc_ai_make_decision($results, $enabled_checks, $expected_name, $errors);
 
+        $tokens_charged = 0;
+        if (!empty($results) && $conn instanceof mysqli && $vid > 0 && function_exists('bc_ai_charge_vendor_tokens')) {
+            $uname = (string)($user['username'] ?? ('user#' . (int)($user['id'] ?? 0)));
+            $bill = bc_ai_charge_vendor_tokens(
+                $conn,
+                $vid,
+                'kyc_report',
+                $uname,
+                'KYC AI Compliance Report (' . implode(', ', array_keys($results)) . ')',
+                ai_engine()->getVisionModel(),
+                (int)$total_duration
+            );
+            $tokens_charged = (int)($bill['tokens_charged'] ?? 0);
+        }
+
         return [
             'status' => $decision['status'],
             'decision' => $decision,
             'results' => $results,
             'errors' => $errors,
             'total_tokens' => $total_tokens,
+            'tokens_charged' => $tokens_charged,
             'total_duration_ms' => $total_duration,
             'analyzed_at' => date('Y-m-d H:i:s'),
         ];
@@ -898,8 +939,26 @@ if (!function_exists('bc_kyb_ai_analyze_document')) {
      * @param array  $av_scan  Optional pre-upload AV scan metadata
      * @return array
      */
-    function bc_kyb_ai_analyze_document($filepath, $business_name, $reg_no, $category = '', $applicant_name = '', $av_scan = [])
+    function bc_kyb_ai_analyze_document($filepath, $business_name, $reg_no, $category = '', $applicant_name = '', $av_scan = [], $vendor_id = 0)
     {
+        $conn = $GLOBALS['connection_server'] ?? null;
+        $vid = (int)($vendor_id ?: ($GLOBALS['vendor_id'] ?? 0));
+        if ($conn instanceof mysqli && $vid > 0 && function_exists('bc_ai_platform_status')) {
+            $plat = bc_ai_platform_status($conn, $vid, 'kyb_report');
+            if (!$plat['available']) {
+                return [
+                    'status'         => 'error',
+                    'ai_status'      => 'kyb_ai_unavailable',
+                    'reason'         => $plat['reason'],
+                    'rating'         => 0,
+                    'grade'          => 'N/A',
+                    'confidence'     => 0,
+                    'tokens_charged' => 0,
+                    'av_scan'        => $av_scan,
+                ];
+            }
+        }
+
         $base64_doc = bc_kyc_ai_image_to_base64($filepath);
         if ($base64_doc === null) {
             return [
@@ -1001,6 +1060,20 @@ if (!function_exists('bc_kyb_ai_analyze_document')) {
             $reason = (string)($parsed['summary'] ?? 'Document uploaded; manual admin verification advised.');
         }
 
+        $tokens_charged = 0;
+        if ($conn instanceof mysqli && $vid > 0 && function_exists('bc_ai_charge_vendor_tokens')) {
+            $bill = bc_ai_charge_vendor_tokens(
+                $conn,
+                $vid,
+                'kyb_report',
+                $applicant_name !== '' ? $applicant_name : 'kyb_applicant',
+                'KYB AI Compliance Report (' . $business_name . ' / ' . $reg_no . ')',
+                $model,
+                (int)($result['duration_ms'] ?? 0)
+            );
+            $tokens_charged = (int)($bill['tokens_charged'] ?? 0);
+        }
+
         return [
             'status'          => 'success',
             'ai_status'       => $rec,
@@ -1017,6 +1090,7 @@ if (!function_exists('bc_kyb_ai_analyze_document')) {
             'provider'        => $provider,
             'model'           => $model,
             'tokens_used'     => (int)($result['tokens_used'] ?? bc_kyc_ai_token_cost($provider, $model, 1)),
+            'tokens_charged'  => $tokens_charged,
             'duration_ms'     => (int)($result['duration_ms'] ?? 0),
             'analyzed_at'     => date('Y-m-d H:i:s'),
         ];
@@ -1180,5 +1254,196 @@ if (!function_exists('bc_kyc_ai_billing_cost')) {
             'total_tokens' => $total_tokens,
             'billed' => $billed,
         ];
+    }
+}
+
+// ─── Vendor KYC/KYB Automated AI Screening (Advisory Only for Super Admin) ───────────────────────
+
+if (!function_exists('bc_vendor_kyc_ai_analyze_and_store')) {
+    /**
+     * Automatically analyze a vendor's uploaded KYC & KYB documents using Vision AI.
+     * Advisory only — Super Admin always retains final human review & approval.
+     */
+    function bc_vendor_kyc_ai_analyze_and_store($connection_server, int $vendor_id): array
+    {
+        if (!($connection_server instanceof mysqli) || $vendor_id <= 0) {
+            return ['status' => 'error', 'reason' => 'Database or vendor unavailable'];
+        }
+        if (function_exists('bc_kyc_ai_ensure_schema')) {
+            bc_kyc_ai_ensure_schema($connection_server);
+        }
+        if (function_exists('bc_ai_platform_status')) {
+            $plat = bc_ai_platform_status($connection_server);
+            if (empty($plat['global_ai_enabled']) || empty($plat['vision_key_configured'])) {
+                return ['status' => 'skipped', 'reason' => $plat['reason'] ?? 'Platform AI Vision is not active'];
+            }
+        }
+        if (!function_exists('ai_engine') || !ai_engine()->isAvailable()) {
+            return ['status' => 'skipped', 'reason' => 'AI provider is unavailable'];
+        }
+
+        $vq = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");
+        $vendor = $vq ? mysqli_fetch_assoc($vq) : null;
+        if (!$vendor) {
+            return ['status' => 'error', 'reason' => 'Vendor not found'];
+        }
+
+        $doc_root = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+        if ($doc_root === '') {
+            $doc_root = dirname(__DIR__);
+        }
+        $base_dir = $doc_root . '/uploads/kyc-vendor/';
+
+        $latest = [];
+        $dq = @mysqli_query($connection_server, "SELECT * FROM sas_vendor_kyc_documents WHERE vendor_id='$vendor_id' ORDER BY id DESC LIMIT 40");
+        while ($dq && ($dr = mysqli_fetch_assoc($dq))) {
+            $dt = (string)($dr['doc_type'] ?? '');
+            if ($dt !== '' && !isset($latest[$dt])) {
+                $p = $base_dir . basename((string)($dr['file_name'] ?? ''));
+                if (is_file($p)) {
+                    $latest[$dt] = $p;
+                }
+            }
+        }
+        if (empty($latest)) {
+            return ['status' => 'skipped', 'reason' => 'No vendor documents found on disk'];
+        }
+
+        $expected_name = trim((string)($vendor['firstname'] ?? '') . ' ' . (string)($vendor['lastname'] ?? ''));
+        $biz_name = trim((string)($vendor['business_name'] ?? ''));
+        $address = trim((string)($vendor['home_address'] ?? ($vendor['address'] ?? '')));
+        $results = [];
+        $ratings = [];
+        $tokens_used = 0;
+        $start = microtime(true);
+
+        if (!empty($latest['govt_id'])) {
+            $r = bc_kyc_ai_analyze_id($latest['govt_id'], '', $expected_name, (string)($vendor['nin'] ?? ($vendor['bvn'] ?? '')), $address);
+            $results['govt_id'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['govt_id'] = bc_kyc_ai_rate_document('govt_id', $r);
+        }
+        if (!empty($latest['selfie'])) {
+            $r = bc_kyc_ai_analyze_selfie($latest['selfie'], $latest['govt_id'] ?? null, $expected_name);
+            $results['selfie'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['selfie'] = bc_kyc_ai_rate_document('selfie', $r);
+        }
+        if (!empty($latest['proof_of_address'])) {
+            $r = bc_kyc_ai_analyze_poa($latest['proof_of_address'], $address, $expected_name);
+            $results['proof_of_address'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['proof_of_address'] = bc_kyc_ai_rate_document('proof_of_address', $r);
+        }
+        if (!empty($latest['liveliness_video'])) {
+            $r = bc_kyc_ai_analyze_video($latest['liveliness_video'], $latest['govt_id'] ?? null, $expected_name);
+            $results['liveliness_video'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['liveliness_video'] = bc_kyc_ai_rate_document('liveliness_video', $r);
+        }
+        if (!empty($latest['business_registration'])) {
+            $r = bc_kyb_ai_analyze_document($latest['business_registration'], $biz_name !== '' ? $biz_name : $expected_name, (string)($vendor['rc_number'] ?? ''), '', $expected_name);
+            $results['business_registration'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['business_registration'] = ['score' => (int)($r['rating'] ?? 0), 'grade' => (string)($r['grade'] ?? 'C'), 'verdict' => (string)($r['verdict'] ?? 'review'), 'highlights' => (array)($r['highlights'] ?? [])];
+        }
+        if (!empty($latest['beneficial_ownership'])) {
+            $r = bc_kyc_ai_analyze_id($latest['beneficial_ownership'], 'Beneficial Ownership / CAC Form', $expected_name, '', $address);
+            $results['beneficial_ownership'] = $r;
+            $tokens_used += (int)($r['tokens_used'] ?? 0);
+            $ratings['beneficial_ownership'] = bc_kyc_ai_rate_document('govt_id', $r);
+        }
+
+        $score_sum = 0;
+        $score_cnt = 0;
+        $fail_notes = [];
+        foreach ($ratings as $k => $rt) {
+            $score_sum += (int)($rt['score'] ?? 0);
+            $score_cnt++;
+            if (($rt['verdict'] ?? '') === 'fail') {
+                $fail_notes[] = ucwords(str_replace('_', ' ', $k)) . ': ' . implode('; ', (array)($rt['highlights'] ?? ['flagged']));
+            }
+        }
+        $overall_rating = $score_cnt > 0 ? (int)round($score_sum / $score_cnt) : 0;
+        $overall_grade = $overall_rating >= 85 ? 'A' : ($overall_rating >= 70 ? 'B' : ($overall_rating >= 50 ? 'C' : 'F'));
+        if (!empty($fail_notes)) {
+            $rec = 'vkyc_reject';
+            $reason = 'AI flagged issues: ' . implode(' | ', $fail_notes);
+        } elseif ($overall_rating >= 75 && $score_cnt > 0) {
+            $rec = 'vkyc_approve';
+            $reason = 'All screened vendor KYC/KYB documents passed AI quality & consistency checks.';
+        } else {
+            $rec = 'vkyc_review';
+            $reason = 'Vendor documents screened; manual Super Admin inspection advised.';
+        }
+
+        $duration_ms = (int)round((microtime(true) - $start) * 1000);
+        $report = [
+            'status'         => 'success',
+            'ai_status'      => $rec,
+            'overall_rating' => $overall_rating,
+            'overall_grade'  => $overall_grade,
+            'confidence'     => $overall_rating,
+            'reason'         => $reason,
+            'ratings'        => $ratings,
+            'results'        => $results,
+            'tokens_used'    => $tokens_used,
+            'duration_ms'    => $duration_ms,
+            'analyzed_at'    => date('Y-m-d H:i:s'),
+        ];
+
+        $payload = json_encode($report, JSON_UNESCAPED_UNICODE);
+        $ai = ai_engine();
+        @mysqli_query($connection_server, "INSERT INTO sas_kyc_ai_results (
+            vendor_id, user_id, username, ai_status, kyc_status, decision_reason, confidence,
+            ai_provider, ai_model, tokens_used, billing_markup, total_tokens, billed,
+            results_json, duration_ms
+        ) VALUES (
+            '$vendor_id', 0, 'vendor#$vendor_id',
+            '" . mysqli_real_escape_string($connection_server, $rec) . "',
+            '" . (int)($vendor['kyc_status'] ?? 0) . "',
+            '" . mysqli_real_escape_string($connection_server, $reason) . "',
+            '$overall_rating',
+            '" . mysqli_real_escape_string($connection_server, $ai->getVisionProvider()) . "',
+            '" . mysqli_real_escape_string($connection_server, $ai->getVisionModel()) . "',
+            '$tokens_used', 0, '$tokens_used', 0,
+            '" . mysqli_real_escape_string($connection_server, (string)$payload) . "',
+            '$duration_ms'
+        )");
+
+        return $report;
+    }
+}
+
+if (!function_exists('bc_vendor_kyc_ai_get_report')) {
+    function bc_vendor_kyc_ai_get_report($connection_server, int $vendor_id): ?array
+    {
+        if (!($connection_server instanceof mysqli) || $vendor_id <= 0) {
+            return null;
+        }
+        if (function_exists('bc_kyc_ai_ensure_schema')) {
+            bc_kyc_ai_ensure_schema($connection_server);
+        }
+        $q = @mysqli_query($connection_server, "SELECT ai_status, decision_reason, confidence, ai_provider, ai_model, results_json, created_at
+            FROM sas_kyc_ai_results
+            WHERE vendor_id='$vendor_id' AND user_id=0 AND ai_status LIKE 'vkyc_%'
+            ORDER BY id DESC LIMIT 1");
+        if (!$q) {
+            return null;
+        }
+        $row = mysqli_fetch_assoc($q);
+        if (!$row) {
+            return null;
+        }
+        $decoded = json_decode((string)($row['results_json'] ?? ''), true);
+        if (!is_array($decoded)) {
+            $decoded = [];
+        }
+        $decoded['ai_status'] = $decoded['ai_status'] ?? $row['ai_status'];
+        $decoded['reason'] = $decoded['reason'] ?? ($row['decision_reason'] ?? '');
+        $decoded['overall_rating'] = (int)($decoded['overall_rating'] ?? ($row['confidence'] ?? 0));
+        $decoded['overall_grade'] = (string)($decoded['overall_grade'] ?? 'C');
+        $decoded['analyzed_at'] = $decoded['analyzed_at'] ?? ($row['created_at'] ?? '');
+        return $decoded;
     }
 }

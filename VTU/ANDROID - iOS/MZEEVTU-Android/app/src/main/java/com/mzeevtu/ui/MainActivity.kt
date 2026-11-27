@@ -1,33 +1,53 @@
 package com.mzeevtu.ui
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.Bundle
+import android.view.View
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.mzeevtu.R
+import com.mzeevtu.api.RetrofitClient
 import com.mzeevtu.databinding.ActivityMainBinding
 import com.mzeevtu.ui.auth.LoginActivity
 import com.mzeevtu.util.AppUpdateChecker
 import com.mzeevtu.util.Constants
 import com.mzeevtu.util.PreferenceManager
+import com.mzeevtu.util.RequiredSetup
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: PreferenceManager
     private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var navController: NavController
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isCurrentlyOnline = true
+    private var kycGateLocked = false
+
+    private val complianceReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == RequiredSetup.ACTION_KYC_GATE_REQUIRED) {
+                applyKycGateLock(true)
+            }
+            refreshComplianceGate()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply dark mode preference before super.onCreate / setContentView
@@ -52,22 +72,88 @@ class MainActivity : AppCompatActivity() {
         }
 
         val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        val navController = navHostFragment.navController
+        navController = navHostFragment.navController
         binding.bottomNav.setupWithNavController(navController)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (kycGateLocked && navController.currentDestination?.id == R.id.nav_kyc) {
+                    // Keep confined to the compliance gate until verified or signed out.
+                    return
+                }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
+
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (kycGateLocked && destination.id != R.id.nav_kyc) {
+                navController.navigate(R.id.nav_kyc)
+            }
+        }
+
+        if (prefs.getBoolean("kyc_gate_locked", false)) {
+            applyKycGateLock(true)
+        }
 
         setupNetworkMonitoring()
 
-        // Weekly Play In-App Updates check, replacing the old sideloaded-APK flow: downloading and
-        // installing an APK from our own server is not allowed for a Play-distributed app, and the
-        // install step could never complete because REQUEST_INSTALL_PACKAGES is not declared.
-        // AppUpdateChecker asks Play instead, which is both compliant and actually works.
+        // Weekly Play In-App Updates check. No-ops while the 7-day window is open, and does
+        // nothing at all for APKs sideloaded from the website (Play has no record of them).
         AppUpdateChecker.check(this)
+        refreshComplianceGate()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction(RequiredSetup.ACTION_KYC_GATE_REQUIRED)
+            addAction(RequiredSetup.ACTION_COMPLIANCE_UPDATE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(complianceReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(complianceReceiver, filter)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        runCatching { unregisterReceiver(complianceReceiver) }
     }
 
     override fun onResume() {
         super.onResume()
         // Resume an IMMEDIATE update the user interrupted, so the old code cannot keep running.
         AppUpdateChecker.resumePendingImmediateUpdate(this)
+        refreshComplianceGate()
+    }
+
+    fun refreshComplianceGate() {
+        val apiKey = prefs.getApiKey()
+        if (apiKey.isBlank()) return
+        lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.getService().kycAction(mapOf("api_key" to apiKey, "action" to "status"))
+                val body = resp.body()
+                if (resp.isSuccessful && body?.get("status") == "success") {
+                    val locked = (body["kyc_gate_locked"] as? Boolean)
+                        ?: (((body["kyc_enforced"] as? Boolean) == true) && ((body["kyc_status"] as? Number)?.toInt() != 2))
+                    prefs.saveBoolean("kyc_gate_locked", locked)
+                    applyKycGateLock(locked)
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun applyKycGateLock(locked: Boolean) {
+        kycGateLocked = locked
+        binding.bottomNav.visibility = if (locked) View.GONE else View.VISIBLE
+        if (locked && ::navController.isInitialized && navController.currentDestination?.id != R.id.nav_kyc) {
+            runCatching { navController.navigate(R.id.nav_kyc) }
+        }
     }
 
     private fun setupNetworkMonitoring() {
@@ -88,13 +174,13 @@ class MainActivity : AppCompatActivity() {
             override fun onAvailable(network: Network) {
                 if (!isCurrentlyOnline) {
                     isCurrentlyOnline = true
-                    runOnUiThread { showNetworkSnack("\u2705  Internet connection restored", Color.parseColor("#2E7D32")) }
+                    runOnUiThread { showNetworkSnack("✅  Internet connection restored", Color.parseColor("#2E7D32")) }
                 }
             }
 
             override fun onLost(network: Network) {
                 isCurrentlyOnline = false
-                runOnUiThread { showNetworkSnack("\u26A0\uFE0F  No internet connection", Color.parseColor("#C62828"), indefinite = true) }
+                runOnUiThread { showNetworkSnack("⚠️  No internet connection", Color.parseColor("#C62828"), indefinite = true) }
             }
         }
         connectivityManager.registerNetworkCallback(request, networkCallback!!)

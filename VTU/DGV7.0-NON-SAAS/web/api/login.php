@@ -70,6 +70,24 @@ if (mysqli_num_rows($check_user) == 1) {
                 bc_fintech_send_app_denial($bc_app_decision);
             }
 
+            $kyc_enforced = false;
+            $kyc_gate_locked = false;
+            $pending_checks = [];
+            try {
+                if (function_exists('isKYCEnforced')) {
+                    $kyc_enforced = (bool)isKYCEnforced((int)$vendor_id);
+                }
+                if (function_exists('bc_kyc_app_confinement_required')) {
+                    $kyc_gate_locked = (bool)bc_kyc_app_confinement_required($user_detail);
+                }
+                if (function_exists('bc_kyc_enabled_checks') && function_exists('bc_kyc_checks_pending')) {
+                    $enabled_chk = bc_kyc_enabled_checks($connection_server, (int)$vendor_id);
+                    $pending_checks = array_values(bc_kyc_checks_pending($user_detail, $enabled_chk));
+                }
+            } catch (Throwable $e) {
+                $kyc_gate_locked = !$is_kyc_compliant && $kyc_enforced;
+            }
+
             $bc_login_payload = [
                 "status" => "success",
                 "message" => "Login successful",
@@ -86,6 +104,10 @@ if (mysqli_num_rows($check_user) == 1) {
                     "phone" => $user_detail['phone_number'],
                     "kyc_verified" => $is_kyc_compliant ? "Yes" : "No",
                     "kyc_status" => (int)$user_detail['kyc_status'],
+                    "kyc_enforced" => $kyc_enforced,
+                    "kyc_gate_locked" => $kyc_gate_locked,
+                    "kyc_reject_reason" => (string)($user_detail['kyc_reject_reason'] ?? ''),
+                    "pending_checks" => $pending_checks,
                     "security_pin_set" => $pin_set,
                     "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
                     "totp_enabled" => (($user_detail['two_factor_type'] ?? 'none') === 'totp') ? 1 : 0,

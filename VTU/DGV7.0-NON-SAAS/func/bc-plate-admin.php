@@ -377,9 +377,12 @@ if (!function_exists('bc_adm_menu')) {
                 array('label' => 'Dashboard',      'href' => 'Dashboard.php',    'icon' => 'grid',          'match' => array('Dashboard.php')),
                 array('label' => 'Platform Guide', 'href' => 'SiteMap.php',      'icon' => 'grid-3x3-gap',  'match' => array('SiteMap.php')),
                 array('label' => 'AI Business Suite', 'icon' => 'cpu-fill', 'service' => 'ai_suite',
-                      'match' => array('AISettings.php','AIMarketing.php'), 'children' => array(
-                    array('label' => 'AI Settings & Tokens', 'href' => 'AISettings.php',  'match' => array('AISettings.php')),
-                    array('label' => 'AI Marketing Studio',  'href' => 'AIMarketing.php', 'match' => array('AIMarketing.php')),
+                      'match' => array('AISettings.php','AIMarketing.php','ChatSettings.php'), 'children' => array(
+                    array('label' => 'AI Business Suite',       'href' => 'AISettings.php',              'match' => array('AISettings.php')),
+                    array('label' => 'AI Support Settings',     'href' => 'AISettings.php?tab=support',  'match' => array('AISettings.php','ChatSettings.php')),
+                    array('label' => 'Security Sentinel',       'href' => 'AISettings.php?tab=sentinel', 'match' => array('AISettings.php')),
+                    array('label' => 'Antivirus & AI Reports',  'href' => 'AISettings.php?tab=reports',  'match' => array('AISettings.php')),
+                    array('label' => 'AI Marketing Studio',     'href' => 'AIMarketing.php',             'match' => array('AIMarketing.php')),
                 )),
                 array('label' => 'USSD Channel', 'href' => 'USSDChannel.php',   'icon' => 'phone',         'match' => array('USSDChannel.php')),
             )),
@@ -427,7 +430,6 @@ if (!function_exists('bc_adm_menu')) {
                     array('label' => 'Service Reconciliation (read only)', 'href' => 'ServiceReconciliation.php', 'match' => array('ServiceReconciliation.php')),
                     array('label' => 'Business KYB',         'href' => 'BusinessKYB.php',         'match' => array('BusinessKYB.php')),
                     array('label' => 'Support Chat',         'href' => 'SupportChat.php',         'match' => array('SupportChat.php')),
-                    array('label' => 'Chat Settings',        'href' => 'ChatSettings.php',        'match' => array('ChatSettings.php')),
                     array('label' => 'Brute Force Security',  'href' => 'BruteForceSecurity.php',  'match' => array('BruteForceSecurity.php')),
                     array('label' => 'Service Control Center','href' => 'ServiceControl.php',      'match' => array('ServiceControl.php')),
                     ...($bc_menu_is_saas ? array() : array(array('label' => 'System Update', 'href' => 'UpdateSystem.php', 'match' => array('UpdateSystem.php')))),
@@ -756,6 +758,19 @@ if (!function_exists('bc_adm_topbar')) {
         // (NON-SAAS) install is a single business and has no portal to open.
         if (!function_exists("bc_is_saas_edition") && is_file(__DIR__ . "/bc-edition.php")) include_once(__DIR__ . "/bc-edition.php");
         $bc_top_saas = function_exists("bc_is_saas_edition") ? bc_is_saas_edition() : true;
+        $adm_notifs = array('unread' => 0, 'items' => array());
+        $adm_notif_lib = __DIR__ . '/bc-compliance-notifications.php';
+        if (is_file($adm_notif_lib)) {
+            include_once($adm_notif_lib);
+            $adm_conn = isset($GLOBALS['connection_server']) ? $GLOBALS['connection_server'] : null;
+            $adm_vid = ($area === 'spadmin') ? 0 : (int)($GLOBALS['get_logged_admin_details']['id'] ?? 0);
+            if ($adm_conn instanceof mysqli && ($area === 'spadmin' || $adm_vid > 0)) {
+                if (isset($_GET['bc_mark_adm_notifs']) && $_GET['bc_mark_adm_notifs'] === '1') {
+                    bc_compliance_mark_admin_notifications_read($adm_conn, $adm_vid, $area);
+                }
+                $adm_notifs = bc_compliance_fetch_admin_notifications($adm_conn, $adm_vid, $area, 10);
+            }
+        }
         ?><div class="pk-app__main">
 <header class="pk-app__top">
     <button class="pk-app__burger" type="button" id="pkAppBurger" aria-label="Open navigation" aria-expanded="false">
@@ -778,6 +793,36 @@ if (!function_exists('bc_adm_topbar')) {
                 </a>
             <?php endforeach; ?>
         <?php endif; ?>
+        <div class="pk-app__profile" style="position:relative;">
+            <button class="pk-app__action" type="button" id="pkAdmNotice" aria-expanded="false" aria-haspopup="true" title="Compliance & System Notifications">
+                <?php echo bc_adm_icon('bell'); ?>
+                <?php if ((int)$adm_notifs['unread'] > 0): ?>
+                    <span id="pkAdmNoticeBadge" style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 6px;font-size:.68rem;font-weight:700;margin-left:3px;"><?php echo (int)$adm_notifs['unread'] > 9 ? '9+' : (int)$adm_notifs['unread']; ?></span>
+                <?php endif; ?>
+            </button>
+            <div class="pk-app__menu" id="pkAdmNoticeMenu" role="dialog" aria-label="Notifications" style="max-width:360px;width:92vw;max-height:420px;overflow-y:auto;">
+                <div class="pk-app__menuhead"><strong>Compliance &amp; Alerts</strong><span><?php echo (int)$adm_notifs['unread']; ?> unread</span></div>
+                <?php if (!empty($adm_notifs['items'])): ?>
+                    <?php foreach ($adm_notifs['items'] as $ani):
+                        $ani_href = trim((string)($ani['link'] ?? ''));
+                        if ($ani_href !== '' && strpos($ani_href, '/') !== 0) $ani_href = bc_adm_url($ani_href, $area);
+                    ?>
+                        <div style="padding:8px 12px;border-bottom:1px solid rgba(0,0,0,.06);<?php echo empty($ani['is_read']) ? 'background:rgba(40,123,255,.06);' : ''; ?>">
+                            <div style="font-size:.82rem;font-weight:700;display:flex;justify-content:space-between;gap:6px;">
+                                <span><?php echo htmlspecialchars((string)$ani['title']); ?></span>
+                                <?php if (empty($ani['is_read'])): ?><span style="color:#287bff;font-size:.7rem;">NEW</span><?php endif; ?>
+                            </div>
+                            <div style="font-size:.78rem;line-height:1.45;color:var(--muted);margin-top:2px;"><?php echo htmlspecialchars((string)$ani['message']); ?></div>
+                            <?php if ($ani_href !== ''): ?>
+                                <a href="<?php echo htmlspecialchars($ani_href); ?>" style="font-size:.74rem;font-weight:600;display:inline-block;margin-top:4px;">Review now &rarr;</a>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div style="padding:12px;font-size:.82rem;color:var(--muted);">No alerts yet.</div>
+                <?php endif; ?>
+            </div>
+        </div>
         <div class="pk-app__profile">
             <button class="pk-adm__me" type="button" id="pkAppProfile" aria-expanded="false" aria-haspopup="true" aria-label="<?php echo htmlspecialchars($name . ' profile menu', ENT_QUOTES, 'UTF-8'); ?>" title="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>">
                 <span class="pk-app__avatar"><?php echo htmlspecialchars(strtoupper(substr($name, 0, 1))); ?></span>
@@ -914,7 +959,7 @@ if (!function_exists('bc_adm_widgets')) {
             $chat_cfg = array(
                 'endpoint'    => $adm_base . '/bc-admin/ajax-support-chat.php',
                 'consoleUrl'  => $adm_base . '/bc-admin/SupportChat.php',
-                'settingsUrl' => $adm_base . '/bc-admin/ChatSettings.php',
+                'settingsUrl' => $adm_base . '/bc-admin/AISettings.php?tab=support',
                 'adminName'   => $admin_name,
             );
             ?>
@@ -1265,22 +1310,43 @@ if (!function_exists('bc_adm_foot')) {
         });
     });
 
-    // Profile menu.
+    // Profile & notification menus.
+    var admNotice = document.getElementById('pkAdmNotice');
+    var admNoticeMenu = document.getElementById('pkAdmNoticeMenu');
     if (profile && profileMenu) {
         profile.addEventListener('click', function (e) {
             e.stopPropagation();
+            if (admNoticeMenu) admNoticeMenu.classList.remove('is-open');
             var open = profileMenu.classList.toggle('is-open');
             profile.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
         profileMenu.addEventListener('click', function (e) { e.stopPropagation(); });
     }
+    if (admNotice && admNoticeMenu) {
+        admNotice.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (profileMenu) profileMenu.classList.remove('is-open');
+            var open = admNoticeMenu.classList.toggle('is-open');
+            admNotice.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                var badge = document.getElementById('pkAdmNoticeBadge');
+                if (badge) {
+                    badge.style.display = 'none';
+                    try { fetch(window.location.pathname + '?bc_mark_adm_notifs=1', { credentials: 'same-origin' }).catch(function () {}); } catch (err) {}
+                }
+            }
+        });
+        admNoticeMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
     document.addEventListener('click', function () {
         if (profileMenu) { profileMenu.classList.remove('is-open'); if (profile) profile.setAttribute('aria-expanded', 'false'); }
+        if (admNoticeMenu) { admNoticeMenu.classList.remove('is-open'); if (admNotice) admNotice.setAttribute('aria-expanded', 'false'); }
     });
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' || e.key === 'Esc') {
             closeNav();
             if (profileMenu) profileMenu.classList.remove('is-open');
+            if (admNoticeMenu) admNoticeMenu.classList.remove('is-open');
         }
     });
 

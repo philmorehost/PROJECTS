@@ -18,8 +18,15 @@ class AppNetworkService {
 
     private func inspectRequiredSetup(_ data: Data) -> Bool {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let code = json["code"] as? String,
-              ["AUTHENTICATOR_SETUP_REQUIRED", "PASSWORD_CHANGE_REQUIRED"].contains(code) else { return false }
+              let code = json["code"] as? String else { return false }
+        if code == "KYC_REQUIRED" {
+            DispatchQueue.main.async {
+                ComplianceGateState.shared.activateLock()
+                ComplianceGateState.shared.refresh()
+            }
+            return false
+        }
+        guard ["AUTHENTICATOR_SETUP_REQUIRED", "PASSWORD_CHANGE_REQUIRED"].contains(code) else { return false }
         DispatchQueue.main.async { RequiredSetupState.shared.activate() }
         return true
     }
@@ -341,6 +348,150 @@ final class BrandTheme: ObservableObject {
             document=config
             if let encoded=try? JSONSerialization.data(withJSONObject: config) { UserDefaults.standard.set(encoded, forKey: cacheKey) }
         } catch { /* Last-known-good origin-scoped palette remains usable offline. */ }
+    }
+}
+
+@MainActor
+final class ComplianceGateState: ObservableObject {
+    static let shared = ComplianceGateState()
+    @Published var locked: Bool = false
+    @Published var kycStatus: Int = 0
+    @Published var kycName: String = "Unverified"
+    @Published var rejectReason: String = ""
+    @Published var stillNeeded: [String] = []
+    @Published var aiRating: Int = 0
+    @Published var aiGrade: String = ""
+    @Published var aiReason: String = ""
+    @Published var unreadNotifications: Int = 0
+    private var refreshing = false
+
+    func activateLock() {
+        locked = true
+    }
+
+    func reset() {
+        locked = false
+        kycStatus = 0
+        kycName = "Unverified"
+        rejectReason = ""
+        stillNeeded = []
+        aiRating = 0
+        aiGrade = ""
+        aiReason = ""
+        unreadNotifications = 0
+    }
+
+    func refresh() {
+        guard AppNetworkService.shared.apiKey != nil, !refreshing else { return }
+        refreshing = true
+        AppNetworkService.shared.requestObject("kyc.php", params: ["action": "status"]) { result in
+            self.refreshing = false
+            guard case .success(let json) = result,
+                  (json["status"] as? String) == "success" else { return }
+            let st = (json["kyc_status"] as? Int) ?? Int("\(json["kyc_status"] ?? 0)") ?? 0
+            let enforced = (json["kyc_enforced"] as? Bool) ?? false
+            let gateLocked = (json["kyc_gate_locked"] as? Bool) ?? (enforced && st != 2)
+            self.kycStatus = st
+            let kname = json["kyc_name"] as? String ?? ""
+            if !kname.isEmpty { self.kycName = kname }
+            self.rejectReason = json["kyc_reject_reason"] as? String ?? ""
+            self.stillNeeded = (json["still_needed"] as? [String]) ?? []
+            self.aiRating = (json["ai_rating"] as? Int) ?? 0
+            self.aiGrade = json["ai_grade"] as? String ?? ""
+            self.aiReason = json["ai_reason"] as? String ?? ""
+            if let notifs = json["notifications"] as? [String: Any] {
+                self.unreadNotifications = (notifs["unread"] as? Int) ?? 0
+            }
+            self.locked = gateLocked
+        }
+    }
+}
+
+private final class KYCComplianceRedirectGuard: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+}
+
+extension AppNetworkService {
+    func uploadKYCDocuments(
+        docType: String,
+        govtId: (data: Data, filename: String, mime: String)?,
+        proofOfAddress: (data: Data, filename: String, mime: String)?,
+        photo: Data?,
+        video: Data?,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let fail: (String) -> Void = { message in
+            DispatchQueue.main.async {
+                completion(.failure(NSError(domain: "KYCDocuments", code: 1, userInfo: [NSLocalizedDescriptionKey: message])))
+            }
+        }
+        guard let token = apiKey, !token.isEmpty else { fail("Your app session is missing. Sign in again."); return }
+        guard govtId != nil || proofOfAddress != nil || photo != nil || video != nil,
+              let url = URL(string: mobileOrigin + "web/api/kyc.php"), url.scheme == "https" else {
+            fail("Please select or capture at least one document.")
+            return
+        }
+        let boundary = "KYCDOC-" + UUID().uuidString
+        var body = Data()
+        func appendText(_ value: String) { body.append(Data(value.utf8)) }
+        appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"action\"\r\n\r\nupload_document\r\n")
+        appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"app_token\"\r\n\r\n\(token)\r\n")
+        if !docType.isEmpty {
+            appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"doc_type\"\r\n\r\n\(docType)\r\n")
+        }
+        if let gid = govtId {
+            appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"govt_id\"; filename=\"\(gid.filename)\"\r\nContent-Type: \(gid.mime)\r\n\r\n")
+            body.append(gid.data)
+            appendText("\r\n")
+        }
+        if let poa = proofOfAddress {
+            appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"proof_of_address\"; filename=\"\(poa.filename)\"\r\nContent-Type: \(poa.mime)\r\n\r\n")
+            body.append(poa.data)
+            appendText("\r\n")
+        }
+        if let photo = photo {
+            appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"selfie\"; filename=\"camera.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            body.append(photo)
+            appendText("\r\n")
+        }
+        if let video = video {
+            appendText("--\(boundary)\r\nContent-Disposition: form-data; name=\"liveliness_video\"; filename=\"camera.mp4\"\r\nContent-Type: video/mp4\r\n\r\n")
+            body.append(video)
+            appendText("\r\n")
+        }
+        appendText("--\(boundary)--\r\n")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.timeoutInterval = 90
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let session = URLSession(configuration: .ephemeral, delegate: KYCComplianceRedirectGuard(), delegateQueue: nil)
+        session.dataTask(with: request) { data, response, error in
+            defer { session.finishTasksAndInvalidate() }
+            guard error == nil, let data = data else {
+                fail("Submission result is uncertain. Check your KYC status before retrying.")
+                return
+            }
+            if self.inspectRequiredSetup(data) {
+                fail("Complete required security setup on the website, then sign in again.")
+                return
+            }
+            guard let http = response as? HTTPURLResponse,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                fail("Could not confirm the server response. Check your KYC status before retrying.")
+                return
+            }
+            guard (200..<300).contains(http.statusCode), json["status"] as? String == "success" else {
+                fail(json["desc"] as? String ?? json["message"] as? String ?? "Submission was refused.")
+                return
+            }
+            DispatchQueue.main.async {
+                ComplianceGateState.shared.refresh()
+                completion(.success(json["desc"] as? String ?? "Documents submitted for review."))
+            }
+        }.resume()
     }
 }
 

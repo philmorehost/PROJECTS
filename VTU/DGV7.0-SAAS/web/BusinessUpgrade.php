@@ -4,6 +4,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 include("../func/bc-config.php");
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 /**
  * DGV7: Personal -> Business upgrade request (KYB).
@@ -136,6 +137,7 @@ if (isset($_POST['submit_business_kyb'])) {
                 $ai_gate = bc_kyc_is_ai_enabled($connection_server, $bc_upgrade_vendor);
                 $kyb_stored_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyb/" . basename($doc_filename);
                 $applicant_name = trim((string)($bc_upgrade_user['firstname'] ?? '') . ' ' . (string)($bc_upgrade_user['lastname'] ?? ''));
+                $kyb_ai_report = [];
                 if (!empty($ai_gate['enabled']) && is_file($kyb_stored_path)) {
                     $kyb_ai_report = bc_kyb_ai_analyze_document(
                         $kyb_stored_path,
@@ -150,7 +152,7 @@ if (isset($_POST['submit_business_kyb'])) {
                     }
                 } elseif (function_exists('bc_kyb_ai_store_report')) {
                     // Record standard antivirus verification even when AI is disabled
-                    bc_kyb_ai_store_report($connection_server, $bc_upgrade_uid, $bc_upgrade_vendor, (string)($bc_upgrade_user['username'] ?? ''), [
+                    $kyb_ai_report = [
                         'status'         => 'standard_scan',
                         'ai_status'      => 'kyb_review',
                         'recommendation' => 'Standard Antivirus Passed (AI Disabled)',
@@ -160,8 +162,17 @@ if (isset($_POST['submit_business_kyb'])) {
                         'confidence'     => 0,
                         'av_scan'        => $av_scan ?? [],
                         'analyzed_at'    => date('Y-m-d H:i:s'),
-                    ]);
+                    ];
+                    bc_kyb_ai_store_report($connection_server, $bc_upgrade_uid, $bc_upgrade_vendor, (string)($bc_upgrade_user['username'] ?? ''), $kyb_ai_report);
                 }
+
+                bc_compliance_notify_event($connection_server, 'user_kyb_submitted', [
+                    'vendor_id'       => $bc_upgrade_vendor,
+                    'user'            => $bc_upgrade_user,
+                    'business_name'   => $bc_old['business_name'],
+                    'registration_no' => $bc_old['registration_no'],
+                    'ai_report'       => $kyb_ai_report,
+                ]);
 
                 // Re-read so the page shows the new state immediately.
                 $q_refresh = mysqli_query($connection_server, "SELECT account_type, kyb_status, kyb_business_name, kyb_registration_no,
@@ -286,45 +297,51 @@ bc_app_head("Business Upgrade | " . ($get_all_site_details["site_title"] ?? 'Acc
         <?php endif; ?>
 
         <?php if ($bc_show_form): ?>
-          <form method="post" action="" enctype="multipart/form-data" class="mt-2"><?php echo bc_csrf_field(); ?>
-            <div class="row g-3">
-              <div class="col-md-7">
-                <label class="form-label" for="business_name">REGISTERED BUSINESS NAME</label>
-                <input id="business_name" name="business_name" type="text" maxlength="200" required class="form-control"
-                       value="<?php echo htmlspecialchars($bc_old['business_name']); ?>" />
-              </div>
-              <div class="col-md-5">
-                <label class="form-label" for="registration_no">REGISTRATION NUMBER</label>
-                <input id="registration_no" name="registration_no" type="text" maxlength="80" required class="form-control"
-                       value="<?php echo htmlspecialchars($bc_old['registration_no']); ?>" />
-              </div>
-              <div class="col-md-6">
-                <label class="form-label" for="category">BUSINESS CATEGORY</label>
-                <select id="category" name="category" class="form-select" required>
-                  <option value="">— choose —</option>
-                  <?php foreach ($bc_categories as $cat_key => $cat_label): ?>
-                    <option value="<?php echo htmlspecialchars($cat_key); ?>"<?php echo ($bc_old['category'] === $cat_key) ? ' selected' : ''; ?>>
-                      <?php echo htmlspecialchars($cat_label); ?>
-                    </option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label" for="kyb_document">REGISTRATION DOCUMENT</label>
-                <input id="kyb_document" name="kyb_document" type="file" required
-                       accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control" />
-                <div class="form-text text-muted" style="font-size:0.75rem;">
-                  Certificate of incorporation or equivalent. PDF or image, 8MB max. Uploaded privately.
+          <form method="post" action="" enctype="multipart/form-data" class="mt-2" data-kyc-wizard="kyb"><?php echo bc_csrf_field(); ?>
+            <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="business_details" data-step-label="Business Details">
+              <div class="row g-3">
+                <div class="col-md-7">
+                  <label class="form-label" for="business_name">REGISTERED BUSINESS NAME</label>
+                  <input id="business_name" name="business_name" type="text" maxlength="200" required class="form-control"
+                         value="<?php echo htmlspecialchars($bc_old['business_name']); ?>" />
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label" for="registration_no">REGISTRATION NUMBER</label>
+                  <input id="registration_no" name="registration_no" type="text" maxlength="80" required class="form-control"
+                         value="<?php echo htmlspecialchars($bc_old['registration_no']); ?>" />
+                </div>
+                <div class="col-md-12">
+                  <label class="form-label" for="category">BUSINESS CATEGORY</label>
+                  <select id="category" name="category" class="form-select" required>
+                    <option value="">— choose —</option>
+                    <?php foreach ($bc_categories as $cat_key => $cat_label): ?>
+                      <option value="<?php echo htmlspecialchars($cat_key); ?>"<?php echo ($bc_old['category'] === $cat_key) ? ' selected' : ''; ?>>
+                        <?php echo htmlspecialchars($cat_label); ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
                 </div>
               </div>
+              <div class="mt-3 text-end">
+                <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-4 fw-bold" data-step-next>Continue to Document Upload &rarr;</button>
+              </div>
             </div>
-            <button name="submit_business_kyb" class="btn btn-primary rounded-pill px-4 fw-bold mt-4">
+            <div class="p-3 border rounded-4 mb-3" data-kyc-step data-step-key="kyb_document" data-step-label="Registration Document">
+              <label class="form-label" for="kyb_document">REGISTRATION DOCUMENT</label>
+              <input id="kyb_document" name="kyb_document" type="file" required
+                     accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control" />
+              <div class="form-text text-muted" style="font-size:0.75rem;">
+                Certificate of incorporation or equivalent. PDF or image, 8MB max. Selecting a valid file auto-submits when Guided Mode is active.
+              </div>
+            </div>
+            <button name="submit_business_kyb" class="btn btn-primary rounded-pill px-4 fw-bold mt-2">
               Submit for review
             </button>
             <p class="small text-muted mt-3 mb-0">
               Your account stays personal until a reviewer approves it. No fee is charged when you submit.
             </p>
           </form>
+          <script src="../asset/bc-kyc-wizard.js" defer></script>
         <?php endif; ?>
       </div>
     </div>

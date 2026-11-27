@@ -4,6 +4,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 include("../func/bc-admin-config.php");
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
 include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
+include_once(__DIR__ . "/../func/bc-compliance-notifications.php");
 
 /**
  * DGV7: business upgrade (KYB) review queue.
@@ -132,6 +133,14 @@ if (isset($_POST['kyb_decision'])) {
     }
 
     if ($result === true) {
+        if (is_array($target)) {
+            bc_compliance_notify_event($connection_server, 'user_kyb_decision', [
+                'vendor_id' => $vid,
+                'user'      => $target,
+                'decision'  => $decision,
+                'reason'    => $reason,
+            ]);
+        }
         $_SESSION['product_purchase_response'] = ($decision === 'approve')
             ? 'Business account approved. App sessions for that account were revoked.'
             : 'Business upgrade request rejected.';

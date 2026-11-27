@@ -691,7 +691,7 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                       <div class="ad2-ic ic-blue me-3"><i class="bi bi-cpu-fill"></i></div>
                       <div class="flex-grow-1">
                           <h6 class="mb-0 fw-bold text-dark d-flex align-items-center">AI Business Suite <span class="badge bg-danger rounded-pill ms-2" style="font-size: 0.6rem; animation: pulse-new 2s infinite;">NEW</span></h6>
-                          <span class="small text-muted" style="font-size: 0.75rem;">Automate support &amp; sales</span>
+                          <span class="small text-muted" style="font-size: 0.75rem;">Tokens/API, AI Support, Sentinel &amp; AV Reports</span>
                       </div>
                       <i class="bi bi-chevron-right text-muted"></i>
                   </a>

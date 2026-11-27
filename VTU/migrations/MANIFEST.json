@@ -121,11 +121,11 @@
     },
     {
       "name": "bc-fintech-webhook.php",
-      "sha256": "ea837f42cf7ea3d5e46c63ad50da48549cfa315d82a6c0b478a17f349f5e7388"
+      "sha256": "e99e013ae22826849951a32f4599c3020400d29bd7bbbcde1f08465899016843"
     },
     {
       "name": "bc-incident-wallet.php",
-      "sha256": "b3cb42bcff52569a74c43b52e53c830373485e16a039be18befe143487a72195"
+      "sha256": "96fff95a9ec540de69e81febac35f2f752c34e20de09266745e5e9290017553e"
     },
     {
       "name": "bc-giftcard-safety.php",

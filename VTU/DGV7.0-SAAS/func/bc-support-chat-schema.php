@@ -100,14 +100,15 @@ if (!function_exists('bc_chat_settings')) {
         $vendor_id = (int)$vendor_id;
 
         $defaults = [
-            'chat_enabled'     => '0',
-            'chat_ai_enabled'  => '0',
-            'chat_ai_provider' => 'gemini',
-            'chat_ai_model'    => '',
-            'chat_ai_key'      => '',
-            'chat_welcome'     => 'Hi! Ask us anything about your account, transfers or payments.',
-            'chat_handoff'     => 'A member of our team will continue from here.',
-            'chat_quick_replies' => '',
+            'chat_enabled'            => '0',
+            'chat_ai_enabled'         => '0',
+            'chat_ai_provider'        => 'gemini',
+            'chat_ai_model'           => '',
+            'chat_ai_key'             => '',
+            'chat_ai_context_enabled' => '1',
+            'chat_welcome'            => 'Hi! Ask us anything about your account, transfers or payments.',
+            'chat_handoff'            => 'A member of our team will continue from here.',
+            'chat_quick_replies'      => '',
         ];
         if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return $defaults;
 
@@ -138,7 +139,7 @@ if (!function_exists('bc_chat_setting_save')) {
         $vendor_id = (int)$vendor_id;
         if ($vendor_id <= 0 || !($connection_server instanceof mysqli)) return false;
 
-        $allowed = ['chat_enabled', 'chat_ai_enabled', 'chat_ai_provider', 'chat_ai_model', 'chat_ai_key', 'chat_welcome', 'chat_handoff', 'chat_quick_replies'];
+        $allowed = ['chat_enabled', 'chat_ai_enabled', 'chat_ai_provider', 'chat_ai_model', 'chat_ai_key', 'chat_ai_context_enabled', 'chat_welcome', 'chat_handoff', 'chat_quick_replies'];
         if (!in_array($name, $allowed, true)) return false;
 
         $name  = mysqli_real_escape_string($connection_server, $name);
