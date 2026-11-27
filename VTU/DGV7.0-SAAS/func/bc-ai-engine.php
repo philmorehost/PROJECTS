@@ -21,21 +21,27 @@ if (class_exists('AIEngine')) return; // Guard against double-include
 class AIEngine
 {
     // ─── Configuration ────────────────────────────────────────
-    private string $base_url;
-    private string $api_key          = '';
-    private string $provider         = 'gemini'; // Default to gemini
-    private int    $timeout_generate = 60;   
-    private bool   $debug            = false; 
+    /** @var string */
+    private $base_url;
+    /** @var string */
+    private $api_key          = '';
+    /** @var string */
+    private $provider         = 'gemini'; // Default to gemini
+    /** @var int */
+    private $timeout_generate = 60;
+    /** @var bool */
+    private $debug            = false;
 
     public function __construct()
     {
         // Load Global Configuration
-        $this->provider = getSuperAdminOption('ai_provider', 'gemini');
-        
+        $this->provider = strtolower(trim((string)(getSuperAdminOption('ai_provider', 'gemini') ?? 'gemini')));
+        if ($this->provider === '') $this->provider = 'gemini';
+
         // Load provider-specific key with fallback to global
         $key_name = "ai_{$this->provider}_api_key";
-        $this->api_key = getSuperAdminOption($key_name, '');
-        if (empty($this->api_key)) $this->api_key = getSuperAdminOption('ai_api_key', '');
+        $this->api_key = (string)(getSuperAdminOption($key_name, '') ?? '');
+        if ($this->api_key === '') $this->api_key = (string)(getSuperAdminOption('ai_api_key', '') ?? '');
 
         switch ($this->provider) {
             case 'gemini':
@@ -54,7 +60,8 @@ class AIEngine
                 $this->base_url = 'https://api.anthropic.com/v1';
                 break;
             case 'ollama':
-                $this->base_url = rtrim(getSuperAdminOption('ai_ollama_url', 'http://localhost:11434'), '/');
+                $ollama_url = (string)(getSuperAdminOption('ai_ollama_url', 'http://localhost:11434') ?? 'http://localhost:11434');
+                $this->base_url = rtrim($ollama_url !== '' ? $ollama_url : 'http://localhost:11434', '/');
                 break;
             case 'huggingface':
                 $this->base_url = 'https://api-inference.huggingface.co';
@@ -72,10 +79,10 @@ class AIEngine
     public function getProvider(): string { return $this->provider; }
 
     public function getApiKeyForProvider(string $provider): string {
-        $k = getSuperAdminOption("ai_{$provider}_api_key", '');
+        $k = (string)(getSuperAdminOption("ai_{$provider}_api_key", '') ?? '');
         if ($k !== '') return $k;
         if ($provider === $this->provider && $this->api_key !== '') return $this->api_key;
-        return getSuperAdminOption('ai_api_key', '');
+        return (string)(getSuperAdminOption('ai_api_key', '') ?? '');
     }
 
     public function getBaseUrlForProvider(string $provider): string {
@@ -85,7 +92,9 @@ class AIEngine
             case 'groq':        return 'https://api.groq.com/openai/v1';
             case 'openai':      return 'https://api.openai.com/v1';
             case 'anthropic':   return 'https://api.anthropic.com/v1';
-            case 'ollama':      return rtrim(getSuperAdminOption('ai_ollama_url', 'http://localhost:11434'), '/');
+            case 'ollama':
+                $ollama_url = (string)(getSuperAdminOption('ai_ollama_url', 'http://localhost:11434') ?? 'http://localhost:11434');
+                return rtrim($ollama_url !== '' ? $ollama_url : 'http://localhost:11434', '/');
             case 'huggingface': return 'https://api-inference.huggingface.co';
             default:            return $this->base_url;
         }
@@ -151,7 +160,7 @@ class AIEngine
      * use a cheap text AI for chat and a vision AI for document analysis).
      */
     public function getVisionProvider(): string {
-        $vision_provider = getSuperAdminOption('ai_vision_provider', '');
+        $vision_provider = (string)(getSuperAdminOption('ai_vision_provider', '') ?? '');
         if ($vision_provider !== '') return $vision_provider;
         return $this->provider; // Fall back to the main provider
     }
@@ -163,7 +172,7 @@ class AIEngine
         $vp = $this->getVisionProvider();
         $providers = self::getVisionProviders();
         if (isset($providers[$vp])) {
-            $configured = getSuperAdminOption('ai_vision_model', '');
+            $configured = (string)(getSuperAdminOption('ai_vision_model', '') ?? '');
             return $configured !== '' ? $configured : $providers[$vp]['default_model'];
         }
         return $this->getDefaultModel();
@@ -642,7 +651,8 @@ PROMPT;
 
     public function listModels(): array { return []; } // Cloud models are fixed
 
-    private function curlPost(string $url, string $body, int $timeout = 30, array $headers = []): string|false
+    /** @return string|false */
+    private function curlPost(string $url, string $body, int $timeout = 30, array $headers = [])
     {
         $ch = curl_init($url);
         $final_headers = array_merge(['Content-Type: application/json'], $headers);
@@ -660,7 +670,8 @@ PROMPT;
         return $result;
     }
 
-    private function curlGet(string $url, int $timeout = 10, array $headers = []): string|false
+    /** @return string|false */
+    private function curlGet(string $url, int $timeout = 10, array $headers = [])
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [

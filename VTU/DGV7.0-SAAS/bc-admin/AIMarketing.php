@@ -13,8 +13,8 @@ if (isset($_POST['send-campaign']) && bc_is_demo_mode($connection_server)) {
     bc_demo_block_feature('AI Marketing Email Campaign');
 }
 $ai_engine = ai_engine();
-$assigned_model_raw = $get_logged_admin_details['ai_model_assigned'] ?: getSuperAdminOption('ai_default_model', '');
-$assigned_model = $ai_engine->isModelCompatible($assigned_model_raw) ? $assigned_model_raw : $ai_engine->getDefaultModel();
+$assigned_model_raw = (string)(($get_logged_admin_details['ai_model_assigned'] ?? '') ?: (getSuperAdminOption('ai_default_model', '') ?? ''));
+$assigned_model = ($assigned_model_raw !== '' && $ai_engine->isModelCompatible($assigned_model_raw)) ? $assigned_model_raw : $ai_engine->getDefaultModel();
 
 // Business Name Fallback Logic
 $site_q = @mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
