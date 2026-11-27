@@ -16,7 +16,7 @@ if (!function_exists('bc_chat_ensure_schema')) {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return false;
 
-        mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_threads (
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_threads (
             id INT NOT NULL AUTO_INCREMENT,
             vendor_id INT UNSIGNED NOT NULL,
             user_id INT UNSIGNED NOT NULL,
@@ -37,7 +37,7 @@ if (!function_exists('bc_chat_ensure_schema')) {
             KEY idx_vendor_user (vendor_id, user_id)
         )");
 
-        mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_messages (
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_messages (
             id INT NOT NULL AUTO_INCREMENT,
             thread_id INT UNSIGNED NOT NULL,
             vendor_id INT UNSIGNED NOT NULL,
@@ -55,7 +55,7 @@ if (!function_exists('bc_chat_ensure_schema')) {
 
         // Audit trail. Separate from messages because events are operational (claimed, closed,
         // escalated) and must not appear in the customer's transcript.
-        mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_events (
+        @mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_chat_events (
             id INT NOT NULL AUTO_INCREMENT,
             thread_id INT UNSIGNED NOT NULL,
             vendor_id INT UNSIGNED NOT NULL,
@@ -80,7 +80,7 @@ if (!function_exists('bc_chat_schema_ready')) {
         global $connection_server;
         if (!($connection_server instanceof mysqli)) return false;
         foreach (['sas_chat_threads', 'sas_chat_messages', 'sas_chat_events'] as $table) {
-            $q = mysqli_query($connection_server, "SHOW TABLES LIKE '$table'");
+            $q = @mysqli_query($connection_server, "SHOW TABLES LIKE '$table'");
             if (!$q || mysqli_num_rows($q) !== 1) return false;
         }
         return true;
@@ -117,7 +117,7 @@ if (!function_exists('bc_chat_settings')) {
             return mysqli_real_escape_string($connection_server, $n);
         }, $names)) . "'";
 
-        $q = mysqli_query($connection_server, "SELECT setting_name, setting_value FROM sas_settings
+        $q = @mysqli_query($connection_server, "SELECT setting_name, setting_value FROM sas_settings
             WHERE vendor_id='$vendor_id' AND setting_name IN ($in)");
         if (!$q) return $defaults;
 
@@ -145,14 +145,14 @@ if (!function_exists('bc_chat_setting_save')) {
         $name  = mysqli_real_escape_string($connection_server, $name);
         $value = mysqli_real_escape_string($connection_server, substr((string)$value, 0, 225));
 
-        $exists = mysqli_query($connection_server, "SELECT id FROM sas_settings
+        $exists = @mysqli_query($connection_server, "SELECT id FROM sas_settings
             WHERE vendor_id='$vendor_id' AND setting_name='$name' LIMIT 1");
 
         if ($exists && mysqli_num_rows($exists) > 0) {
-            return (bool)mysqli_query($connection_server, "UPDATE sas_settings SET setting_value='$value'
+            return (bool)@mysqli_query($connection_server, "UPDATE sas_settings SET setting_value='$value'
                 WHERE vendor_id='$vendor_id' AND setting_name='$name'");
         }
-        return (bool)mysqli_query($connection_server, "INSERT INTO sas_settings (vendor_id, setting_name, setting_value)
+        return (bool)@mysqli_query($connection_server, "INSERT INTO sas_settings (vendor_id, setting_name, setting_value)
             VALUES ('$vendor_id', '$name', '$value')");
     }
 }

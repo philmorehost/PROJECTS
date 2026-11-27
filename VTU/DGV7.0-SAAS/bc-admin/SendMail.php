@@ -15,9 +15,9 @@ $ai_engine = ai_engine();
 $assigned_model_raw = $get_logged_admin_details['ai_model_assigned'] ?: getSuperAdminOption('ai_default_model', '');
 $assigned_model = $ai_engine->isModelCompatible($assigned_model_raw) ? $assigned_model_raw : $ai_engine->getDefaultModel();
 
-$site_q = mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vid' LIMIT 1");
-$site_data = mysqli_fetch_assoc($site_q);
-$biz_name = $get_logged_admin_details['company_name'] ?? ($site_data['site_title'] ?? 'Our VTU Platform');
+$site_q = @mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vid' LIMIT 1");
+$site_data = ($site_q && ($sr = mysqli_fetch_assoc($site_q))) ? $sr : null;
+$biz_name = !empty($get_logged_admin_details['company_name']) ? $get_logged_admin_details['company_name'] : ($site_data['site_title'] ?? 'Our VTU Platform');
 $is_saas_mode = bc_ai_is_saas();
 $copilot_cost_display = $is_saas_mode ? bc_ai_get_action_cost('marketing_copilot') : 0;
 
@@ -38,18 +38,18 @@ if (isset($_GET['action'])) {
         $body_html = mysqli_real_escape_string($connection_server, $data['body_html']);
         $body_json = mysqli_real_escape_string($connection_server, $data['body_json']);
 
-        $check = mysqli_query($connection_server, "SELECT id FROM sas_mail_drafts WHERE is_super_admin=0 AND vendor_id='$vid' LIMIT 1");
-        if (mysqli_num_rows($check) > 0) {
-            mysqli_query($connection_server, "UPDATE sas_mail_drafts SET subject='$subject', mailto='$mailto', body_html='$body_html', body_json='$body_json' WHERE is_super_admin=0 AND vendor_id='$vid'");
+        $check = @mysqli_query($connection_server, "SELECT id FROM sas_mail_drafts WHERE is_super_admin=0 AND vendor_id='$vid' LIMIT 1");
+        if ($check && mysqli_num_rows($check) > 0) {
+            @mysqli_query($connection_server, "UPDATE sas_mail_drafts SET subject='$subject', mailto='$mailto', body_html='$body_html', body_json='$body_json' WHERE is_super_admin=0 AND vendor_id='$vid'");
         } else {
-            mysqli_query($connection_server, "INSERT INTO sas_mail_drafts (vendor_id, subject, mailto, body_html, body_json, is_super_admin) VALUES ('$vid', '$subject', '$mailto', '$body_html', '$body_json', 0)");
+            @mysqli_query($connection_server, "INSERT INTO sas_mail_drafts (vendor_id, subject, mailto, body_html, body_json, is_super_admin) VALUES ('$vid', '$subject', '$mailto', '$body_html', '$body_json', 0)");
         }
         echo json_encode(['status' => 'success']);
         exit;
     }
     if ($_GET['action'] == 'load_draft') {
-        $res = mysqli_query($connection_server, "SELECT * FROM sas_mail_drafts WHERE is_super_admin=0 AND vendor_id='$vid' LIMIT 1");
-        if ($row = mysqli_fetch_assoc($res)) {
+        $res = @mysqli_query($connection_server, "SELECT * FROM sas_mail_drafts WHERE is_super_admin=0 AND vendor_id='$vid' LIMIT 1");
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
             echo json_encode($row);
         } else {
             echo json_encode(['status' => 'empty']);
@@ -142,17 +142,16 @@ $safe_input";
                 'marketing_copilot',
                 'admin_' . ($get_logged_admin_details['email'] ?? 'admin'),
                 ($ai_action === 'ai_write' ? 'SendMail Write' : 'SendMail Refine') . ': ' . substr($safe_input, 0, 150),
-                substr($generated, 0, 500),
                 (string)$assigned_model,
                 (int)$duration,
                 $per_tx_cost
             );
-            if (!$billing['ok']) {
-                $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
-                echo json_encode(['status' => 'error', 'message' => $billing['error'] ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
+            if (empty($billing['ok'])) {
+                $get_logged_admin_details['ai_token_balance'] = (int)($billing['tokens_remaining'] ?? $token_bal);
+                echo json_encode(['status' => 'error', 'message' => ($billing['reason'] ?? '') ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
                 exit;
             }
-            $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
+            $get_logged_admin_details['ai_token_balance'] = (int)($billing['tokens_remaining'] ?? $token_bal);
 
             $subject_out = '';
             $body_out = $generated;

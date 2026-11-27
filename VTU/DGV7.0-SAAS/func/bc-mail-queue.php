@@ -238,7 +238,8 @@ function bc_get_mail_campaign_progress($connection_server, $campaign_id, $vendor
     $campaign_id_esc = (int)$campaign_id;
     $vendor_id_esc = (int)$vendor_id;
 
-    $campaign = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT * FROM sas_mail_campaigns WHERE id='$campaign_id_esc' AND vendor_id='$vendor_id_esc' LIMIT 1"));
+    $cq = @mysqli_query($connection_server, "SELECT * FROM sas_mail_campaigns WHERE id='$campaign_id_esc' AND vendor_id='$vendor_id_esc' LIMIT 1");
+    $campaign = $cq ? mysqli_fetch_assoc($cq) : null;
     if (!$campaign) return null;
 
     $counts = ['pending' => 0, 'processing' => 0, 'sent' => 0, 'failed' => 0, 'cancelled' => 0];
@@ -307,7 +308,8 @@ function bc_cancel_mail_campaign($connection_server, $campaign_id, $vendor_id, $
         return ['success' => false, 'message' => 'Invalid campaign.'];
     }
 
-    $campaign = mysqli_fetch_assoc(mysqli_query($connection_server, "SELECT id, vendor_id, status, sent_count, total_count FROM sas_mail_campaigns WHERE id='$campaign_id_esc' $scope_sql LIMIT 1"));
+    $cq = @mysqli_query($connection_server, "SELECT id, vendor_id, status, sent_count, total_count FROM sas_mail_campaigns WHERE id='$campaign_id_esc' $scope_sql LIMIT 1");
+    $campaign = $cq ? mysqli_fetch_assoc($cq) : null;
     if (!$campaign) {
         return ['success' => false, 'message' => 'Campaign not found or not accessible.'];
     }

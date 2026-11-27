@@ -186,7 +186,8 @@ if ($connection_server) {
                             $config_kyc_verification_status_array_value = array();
                             $forced_kyc_configs = ["bvn", "nin", "liveliness_video", "liveliness_picture", "govt_id", "proof_of_address"];
                             foreach ($forced_kyc_configs as $config_verification_name) {
-                                $config_get_verification_details = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM sas_kyc_verifications WHERE vendor_id='$vid' AND verification_name='$config_verification_name'"));
+                                $config_get_verification_details_q = @mysqli_query($connection_server, "SELECT * FROM sas_kyc_verifications WHERE vendor_id='$vid' AND verification_name='$config_verification_name'");
+                                $config_get_verification_details = $config_get_verification_details_q ? mysqli_fetch_array($config_get_verification_details_q) : null;
                                 if ($config_get_verification_details && $config_get_verification_details["status"] == 1) {
                                     $config_kyc_verification_status_array_value[] = ucwords(str_replace("_", " ", $config_verification_name));
                                 }
@@ -206,9 +207,9 @@ if ($connection_server) {
                         }
                     }
                     alterVendor($get_logged_admin_details["id"], "last_login", date('Y-m-d H:i:s'));
-                    $create_select_sas_daily_purchase_tracker = mysqli_query($connection_server, "SELECT * FROM sas_daily_purchase_limit WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
-                    if (mysqli_num_rows($create_select_sas_daily_purchase_tracker) == 0) {
-                        mysqli_query($connection_server, "INSERT INTO sas_daily_purchase_limit (vendor_id, `limit`) VALUES ('" . $get_logged_admin_details["id"] . "', '5')");
+                    $create_select_sas_daily_purchase_tracker = @mysqli_query($connection_server, "SELECT * FROM sas_daily_purchase_limit WHERE vendor_id='" . $get_logged_admin_details["id"] . "'");
+                    if ($create_select_sas_daily_purchase_tracker && mysqli_num_rows($create_select_sas_daily_purchase_tracker) == 0) {
+                        @mysqli_query($connection_server, "INSERT INTO sas_daily_purchase_limit (vendor_id, `limit`) VALUES ('" . $get_logged_admin_details["id"] . "', '5')");
                     }
                 } else {
                     header("Location: /admin-logout.php");
