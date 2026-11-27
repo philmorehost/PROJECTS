@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
 include("../func/bc-config.php");
+include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
 
 /**
  * DGV7: Personal -> Business upgrade request (KYB).
@@ -96,12 +98,24 @@ if (isset($_POST['submit_business_kyb'])) {
                 $bc_message = 'That file is not a valid image.';
                 $bc_message_type = 'danger';
             } else {
-                $doc_filename = 'kyb_' . $bc_upgrade_uid . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
-                if (move_uploaded_file($tmp, $upload_dir . $doc_filename)) {
-                    $upload_ok = true;
-                } else {
-                    $bc_message = 'Could not store the document. Please contact support.';
+                // Pre-upload Antivirus, Trojan & Blank-File Scanner BEFORE storing onto server
+                $av_scan = bc_kyc_av_scan_upload($tmp, (string)$_FILES['kyb_document']['name'], $ext, [
+                    'connection' => $connection_server,
+                    'vendor_id'  => $bc_upgrade_vendor,
+                    'user_id'    => $bc_upgrade_uid,
+                    'doc_kind'   => 'kyb_document',
+                ]);
+                if (empty($av_scan['allowed'])) {
+                    $bc_message = 'Security Scanner blocked this upload: ' . ($av_scan['reason'] ?? 'Invalid or blank file.');
                     $bc_message_type = 'danger';
+                } else {
+                    $doc_filename = 'kyb_' . $bc_upgrade_uid . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                    if (move_uploaded_file($tmp, $upload_dir . $doc_filename)) {
+                        $upload_ok = true;
+                    } else {
+                        $bc_message = 'Could not store the document. Please contact support.';
+                        $bc_message_type = 'danger';
+                    }
                 }
             }
         } else {
@@ -118,6 +132,37 @@ if (isset($_POST['submit_business_kyb'])) {
             ]);
 
             if ($result === true) {
+                // Run AI KYB Compliance Review & Document Rating for Admin Report (when AI is enabled)
+                $ai_gate = bc_kyc_is_ai_enabled($connection_server, $bc_upgrade_vendor);
+                $kyb_stored_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . "/uploads/kyb/" . basename($doc_filename);
+                $applicant_name = trim((string)($bc_upgrade_user['firstname'] ?? '') . ' ' . (string)($bc_upgrade_user['lastname'] ?? ''));
+                if (!empty($ai_gate['enabled']) && is_file($kyb_stored_path)) {
+                    $kyb_ai_report = bc_kyb_ai_analyze_document(
+                        $kyb_stored_path,
+                        $bc_old['business_name'],
+                        $bc_old['registration_no'],
+                        $bc_old['category'],
+                        $applicant_name,
+                        $av_scan ?? []
+                    );
+                    if (function_exists('bc_kyb_ai_store_report')) {
+                        bc_kyb_ai_store_report($connection_server, $bc_upgrade_uid, $bc_upgrade_vendor, (string)($bc_upgrade_user['username'] ?? ''), $kyb_ai_report);
+                    }
+                } elseif (function_exists('bc_kyb_ai_store_report')) {
+                    // Record standard antivirus verification even when AI is disabled
+                    bc_kyb_ai_store_report($connection_server, $bc_upgrade_uid, $bc_upgrade_vendor, (string)($bc_upgrade_user['username'] ?? ''), [
+                        'status'         => 'standard_scan',
+                        'ai_status'      => 'kyb_review',
+                        'recommendation' => 'Standard Antivirus Passed (AI Disabled)',
+                        'reason'         => 'Document passed pre-upload antivirus & blank-file checks. Manual admin review required.',
+                        'rating'         => (int)($av_scan['security_score'] ?? 90),
+                        'grade'          => 'B',
+                        'confidence'     => 0,
+                        'av_scan'        => $av_scan ?? [],
+                        'analyzed_at'    => date('Y-m-d H:i:s'),
+                    ]);
+                }
+
                 // Re-read so the page shows the new state immediately.
                 $q_refresh = mysqli_query($connection_server, "SELECT account_type, kyb_status, kyb_business_name, kyb_registration_no,
                         kyb_category, kyb_document, kyb_reference, kyb_note, kyb_submitted_at, kyb_reviewed_at
@@ -125,7 +170,7 @@ if (isset($_POST['submit_business_kyb'])) {
                 if ($q_refresh) $bc_kyb_row = mysqli_fetch_assoc($q_refresh) ?: $bc_kyb_row;
                 $bc_kyb_status = (int)($bc_kyb_row['kyb_status'] ?? 1);
                 $bc_old = ['business_name' => '', 'registration_no' => '', 'category' => ''];
-                $bc_message = 'Your business upgrade request has been submitted for review.';
+                $bc_message = 'Your business upgrade request has passed security scanning and been submitted for review.';
                 $bc_message_type = 'success';
             } else {
                 // Validation failed: remove the orphaned file so retries do not litter the folder.
@@ -287,5 +332,55 @@ bc_app_head("Business Upgrade | " . ($get_all_site_details["site_title"] ?? 'Acc
   </div>
 </section>
 
+
+<script>
+(function(){
+  var inp = document.getElementById('kyb_document');
+  if (!inp) return;
+  inp.addEventListener('change', function(){
+    var f = inp.files && inp.files[0];
+    if (!f) return;
+    if (f.size < 256) {
+      alert('Blank or empty file detected (' + f.size + ' bytes). Please select a valid registration document.');
+      inp.value = '';
+      return;
+    }
+    if (/\.(php\d*|phtml|exe|dll|bat|cmd|sh|js|vbs|ps1|scr)\./i.test(f.name)) {
+      alert('Suspicious filename detected. Upload blocked.');
+      inp.value = '';
+      return;
+    }
+    if (/^image\//i.test(f.type)) {
+      var img = new Image();
+      var url = URL.createObjectURL(f);
+      img.onload = function(){
+        try {
+          var c = document.createElement('canvas');
+          c.width = 24; c.height = 24;
+          var ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, 24, 24);
+          var d = ctx.getImageData(0, 0, 24, 24).data;
+          var lums = [], minL = 255, maxL = 0;
+          for (var i = 0; i < d.length; i += 4) {
+            var l = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+            lums.push(l);
+            if (l < minL) minL = l;
+            if (l > maxL) maxL = l;
+          }
+          var mean = lums.reduce(function(a,b){return a+b;},0) / lums.length;
+          var variance = lums.reduce(function(a,b){return a + (b-mean)*(b-mean);},0) / lums.length;
+          if (Math.sqrt(variance) < 4.0 || (maxL - minL) < 12) {
+            alert('Blank or solid-color image detected. Please upload a clear, readable registration certificate.');
+            inp.value = '';
+          }
+        } catch(e) {}
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); };
+      img.src = url;
+    }
+  });
+})();
+</script>
 
 	<?php bc_app_foot(); ?>

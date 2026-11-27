@@ -4,8 +4,9 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
 include("../func/bc-admin-config.php");
 require_once __DIR__.'/../func/bc-admin-inline-otp.php';
 bc_admin_inline_otp_dispatch($get_logged_admin_details,false,'kyc_decision');
-// AI KYC Compliance Engine: show AI analysis results in the review console
+// AI KYC Compliance Engine + Pre-Upload Antivirus Scanner
 include_once(__DIR__ . "/../func/bc-kyc-ai-analyzer.php");
+include_once(__DIR__ . "/../func/bc-kyc-av-scanner.php");
 
 $vid = (int)$get_logged_admin_details['id'];
 
@@ -47,6 +48,47 @@ if (isset($_POST['sec33_send_code'])) {
         : 'Verification is unavailable.';
     $_SESSION['product_purchase_response'] = $sec33_send_err === '' ? 'Verification code sent to your email.' : 'Error: ' . $sec33_send_err;
     header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1));
+    exit();
+}
+
+if (isset($_POST['toggle_kyc_ai'])) {
+    bc_validate_csrf();
+    if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema($connection_server);
+    $new_kyc_ai = (int)($_POST['kyc_ai_enabled'] ?? 0) === 1 ? 1 : 0;
+    mysqli_query($connection_server, "UPDATE sas_vendors SET kyc_ai_enabled='$new_kyc_ai' WHERE id='$vid'");
+    $gate_after = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+    if ($new_kyc_ai === 1 && empty($gate_after['enabled'])) {
+        $_SESSION['product_purchase_response'] = 'KYC/KYB AI preference enabled, but note: ' . ($gate_after['reason'] ?? 'Global AI or Vision key is not active yet. Standard antivirus remains active.');
+    } else {
+        $_SESSION['product_purchase_response'] = $new_kyc_ai === 1
+            ? 'AI Compliance & AI Antivirus Scanning enabled for KYC/KYB.'
+            : 'KYC/KYB AI disabled. Standard deterministic antivirus & blank-file scanner remains active.';
+    }
+    header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1)
+        . (!empty($_POST['return_view']) ? "&view=" . (int)$_POST['return_view'] : ''));
+    exit();
+}
+
+if (isset($_POST['run_kyc_ai_report'])) {
+    bc_validate_csrf();
+    $uid = (int)($_POST['uid'] ?? 0);
+    $ai_gate = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+    $q_target = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$uid' AND vendor_id='$vid' LIMIT 1");
+    $target_user = $q_target ? mysqli_fetch_assoc($q_target) : null;
+    if (!$target_user) {
+        $_SESSION['product_purchase_response'] = 'Error: account not found for this vendor.';
+    } elseif (empty($ai_gate['enabled'])) {
+        $_SESSION['product_purchase_response'] = 'Error: ' . ($ai_gate['reason'] ?? 'AI KYC analysis is not enabled.');
+    } else {
+        $analysis = bc_kyc_ai_analyze_all($target_user, $vendor_kyc_checks);
+        $analysis['username'] = $target_user['username'] ?? '';
+        $store_result = bc_kyc_ai_store_result($connection_server, $uid, $vid, $analysis, false);
+        $_SESSION['product_purchase_response'] = 'AI Compliance Report generated. Overall Rating: '
+            . (int)($store_result['decision']['overall_rating'] ?? 0) . '/100 ('
+            . ($store_result['decision']['overall_grade'] ?? 'C') . ') — '
+            . ($store_result['decision']['reason'] ?? 'Complete.');
+    }
+    header("Location: KYCManagement.php?status=" . (int)($_POST['return_status'] ?? 1) . "&view=" . $uid);
     exit();
 }
 
@@ -373,9 +415,25 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
                     </p>
                   <?php endif; ?>
 
-                  <!-- AI Analysis Results -->
+                  <!-- AI Analysis Results & Document Rating Report -->
                   <?php
                   $ai_decision = bc_kyc_ai_get_decision($connection_server, (int)$review_user['id']);
+                  $ai_gate_review = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+                  ?>
+                  <div class="d-flex justify-content-between align-items-center mt-4 mb-2 flex-wrap gap-2">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-cpu me-1 text-primary"></i>AI Compliance &amp; Document Rating Report</h6>
+                    <?php if (!empty($ai_gate_review['enabled']) && !empty($ru_evidence)): ?>
+                      <form method="post" action="KYCManagement.php" class="d-inline">
+                        <?php echo bc_csrf_field(); ?>
+                        <input type="hidden" name="uid" value="<?php echo (int)$review_user['id']; ?>">
+                        <input type="hidden" name="return_status" value="<?php echo (int)$status_filter; ?>">
+                        <button type="submit" name="run_kyc_ai_report" value="1" class="btn btn-sm btn-outline-primary rounded-pill">
+                          <i class="bi bi-arrow-repeat me-1"></i><?php echo ($ai_decision && $ai_decision['status'] !== '') ? 'Refresh AI Report' : 'Run AI Report'; ?>
+                        </button>
+                      </form>
+                    <?php endif; ?>
+                  </div>
+                  <?php
                   if ($ai_decision && $ai_decision['status'] !== ''):
                       $ai_status_badge = [
                           'approve' => 'success',
@@ -384,63 +442,135 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
                           'error'   => 'secondary',
                       ];
                       $ai_status_label = [
-                          'approve' => 'AI Approved',
-                          'reject'  => 'AI Rejected',
+                          'approve' => 'AI Recommends Approval',
+                          'reject'  => 'AI Recommends Rejection',
                           'review'  => 'AI: Needs Review',
                           'error'   => 'AI: Analysis Error',
                       ];
                       $ai_badge = $ai_status_badge[$ai_decision['status']] ?? 'secondary';
                       $ai_label = $ai_status_label[$ai_decision['status']] ?? 'AI: Unknown';
                       $ai_results = $ai_decision['results'] ?? [];
+                      $ai_dec_meta = $ai_decision['decision'] ?? [];
+                      $ai_ratings = $ai_dec_meta['ratings'] ?? [];
+                      $overall_rating = (int)($ai_dec_meta['overall_rating'] ?? 0);
+                      $overall_grade = (string)($ai_dec_meta['overall_grade'] ?? '');
+                      $av_scans = $ai_dec_meta['av_scans'] ?? [];
                   ?>
-                      <h6 class="fw-bold mt-4 mb-2">AI Analysis</h6>
-                      <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="badge bg-<?php echo $ai_badge; ?> px-3 py-2">
-                          <i class="bi bi-cpu me-1"></i><?php echo $ai_label; ?>
-                        </span>
-                        <?php if ($ai_decision['confidence'] > 0): ?>
-                          <span class="small text-muted">Confidence: <?php echo (int)$ai_decision['confidence']; ?>%</span>
+                      <div class="border rounded-4 p-3 bg-light mb-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-<?php echo $ai_badge; ?> px-3 py-2">
+                              <i class="bi bi-cpu me-1"></i><?php echo $ai_label; ?>
+                            </span>
+                            <?php if ($overall_rating > 0): ?>
+                              <span class="badge bg-dark px-3 py-2">
+                                Rating: <?php echo $overall_rating; ?>/100<?php echo $overall_grade !== '' ? ' (Grade ' . htmlspecialchars($overall_grade) . ')' : ''; ?>
+                              </span>
+                            <?php endif; ?>
+                            <?php if ($ai_decision['confidence'] > 0): ?>
+                              <span class="small text-muted">Confidence: <?php echo (int)$ai_decision['confidence']; ?>%</span>
+                            <?php endif; ?>
+                          </div>
+                          <?php if ($ai_decision['analyzed_at']): ?>
+                            <span class="small text-muted"><?php echo date('M d, Y H:i', strtotime($ai_decision['analyzed_at'])); ?></span>
+                          <?php endif; ?>
+                        </div>
+                        <?php if ($ai_decision['reason']): ?>
+                          <div class="alert alert-<?php echo $ai_badge === 'danger' ? 'danger' : ($ai_badge === 'warning' ? 'warning' : 'info'); ?> small mb-2 py-2">
+                            <strong>AI Summary:</strong> <?php echo nl2br(htmlspecialchars($ai_decision['reason'])); ?>
+                          </div>
                         <?php endif; ?>
-                        <?php if ($ai_decision['analyzed_at']): ?>
-                          <span class="small text-muted">&middot; <?php echo date('M d, Y H:i', strtotime($ai_decision['analyzed_at'])); ?></span>
+                        <?php if (!empty($av_scans)): ?>
+                          <div class="small text-success mb-2">
+                            <i class="bi bi-shield-check me-1"></i>
+                            <strong>Pre-Upload Antivirus &amp; Blank-File Scan:</strong> Passed for <?php echo count($av_scans); ?> file(s)
+                            (<?php
+                              $modes = array_unique(array_map(function ($x) { return $x['scan_mode'] ?? 'standard'; }, $av_scans));
+                              echo htmlspecialchars(implode(', ', $modes));
+                            ?>).
+                          </div>
+                        <?php endif; ?>
+                        <?php if (!empty($ai_results)): ?>
+                          <div class="table-responsive mt-2">
+                            <table class="table table-sm table-bordered bg-white mb-0 small align-middle">
+                              <thead class="table-light">
+                                <tr>
+                                  <th>Document</th>
+                                  <th>Rating</th>
+                                  <th>AI Findings &amp; Accuracy Checks</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <?php
+                                  $ai_check_labels = [
+                                      'govt_id'          => 'Government ID',
+                                      'selfie'           => 'Live Selfie vs ID',
+                                      'proof_of_address' => 'Proof of Address (< 3 Months)',
+                                      'liveliness_video' => 'Liveliness Video vs ID',
+                                  ];
+                                  foreach ($ai_check_labels as $key => $label_title):
+                                      if (!isset($ai_results[$key])) continue;
+                                      $r = $ai_results[$key];
+                                      $rat = $ai_ratings[$key] ?? (function_exists('bc_kyc_ai_rate_document') ? bc_kyc_ai_rate_document($key, $r) : ['score' => 0, 'grade' => 'N/A', 'verdict' => 'review', 'highlights' => []]);
+                                      $v_badge = $rat['verdict'] === 'pass' ? 'success' : ($rat['verdict'] === 'fail' ? 'danger' : 'warning');
+                                      $details = [];
+                                      if ($key === 'govt_id' && ($r['status'] ?? '') === 'success') {
+                                          if (!empty($r['document_type'])) $details[] = 'Type: ' . $r['document_type'];
+                                          if (!empty($r['full_name'])) $details[] = 'Name: ' . $r['full_name'] . (($r['name_matches'] ?? null) === false ? ' (MISMATCH)' : (($r['name_matches'] ?? null) === true ? ' (Matched)' : ''));
+                                          if (!empty($r['id_number'])) $details[] = 'ID#: ' . $r['id_number'];
+                                          if (!empty($r['expiry_date'])) $details[] = 'Exp: ' . $r['expiry_date'] . (!empty($r['is_expired']) ? ' (EXPIRED)' : '');
+                                      } elseif ($key === 'selfie' && ($r['status'] ?? '') === 'success') {
+                                          $details[] = 'Face detected: ' . (!empty($r['face_detected']) ? 'Yes' : 'No');
+                                          $details[] = 'Live photo: ' . (!empty($r['is_live_photo']) ? 'Yes' : 'No');
+                                          if (($r['face_matches_id'] ?? null) !== null) {
+                                              $details[] = 'Matches ID: ' . ($r['face_matches_id'] ? 'Yes' : 'NO') . (isset($r['face_similarity']) ? ' (' . (int)$r['face_similarity'] . '%)' : '');
+                                          }
+                                      } elseif ($key === 'proof_of_address' && ($r['status'] ?? '') === 'success') {
+                                          if (!empty($r['service_provider'])) $details[] = 'Issuer: ' . $r['service_provider'];
+                                          if (!empty($r['bill_date'])) {
+                                              $ageStr = isset($r['bill_age_days']) && is_numeric($r['bill_age_days']) ? ' (' . (int)$r['bill_age_days'] . 'd)' : '';
+                                              $details[] = 'Date: ' . $r['bill_date'] . $ageStr . ' · <3m: ' . (!empty($r['is_under_3_months']) ? 'Yes' : 'NO');
+                                          }
+                                          if (!empty($r['address_on_document'])) {
+                                              $details[] = 'Addr: ' . $r['address_on_document'] . (($r['address_matches'] ?? null) === false ? ' (MISMATCH)' : (($r['address_matches'] ?? null) === true ? ' (Matched)' : ''));
+                                          }
+                                      } elseif ($key === 'liveliness_video' && ($r['status'] ?? '') === 'success') {
+                                          $details[] = 'Face detected: ' . (!empty($r['face_detected']) ? 'Yes' : 'No');
+                                          $details[] = 'Live motion: ' . (!empty($r['is_live_video']) ? 'Yes' : 'No');
+                                          if (($r['face_matches_id'] ?? null) !== null) {
+                                              $details[] = 'Matches ID: ' . ($r['face_matches_id'] ? 'Yes' : 'NO') . (!empty($r['face_match_score']) ? ' (' . (int)$r['face_match_score'] . '%)' : '');
+                                          }
+                                      }
+                                      if (!empty($rat['highlights'])) {
+                                          foreach ($rat['highlights'] as $hl) {
+                                              if (!in_array($hl, $details, true)) $details[] = $hl;
+                                          }
+                                      }
+                                ?>
+                                  <tr>
+                                    <td class="fw-bold"><?php echo htmlspecialchars($label_title); ?></td>
+                                    <td>
+                                      <span class="badge bg-<?php echo $v_badge; ?>">
+                                        <?php echo (int)$rat['score']; ?>/100 (<?php echo htmlspecialchars($rat['grade']); ?>)
+                                      </span>
+                                    </td>
+                                    <td><?php echo htmlspecialchars(implode(' · ', $details) ?: ($r['reason'] ?? 'Checked')); ?></td>
+                                  </tr>
+                                <?php endforeach; ?>
+                              </tbody>
+                            </table>
+                          </div>
                         <?php endif; ?>
                       </div>
-                      <?php if ($ai_decision['reason']): ?>
-                        <div class="alert alert-<?php echo $ai_badge === 'danger' ? 'danger' : ($ai_badge === 'warning' ? 'warning' : 'info'); ?> small mb-2">
-                          <strong>AI says:</strong> <?php echo nl2br(htmlspecialchars($ai_decision['reason'])); ?>
-                        </div>
-                      <?php endif; ?>
-                      <?php if (!empty($ai_results)): ?>
-                        <div class="row g-2 mb-2">
-                          <?php
-                            $ai_check_labels = [
-                                'govt_id' => ['Government ID', 'id'],
-                                'selfie' => ['Selfie vs ID', 'selfie'],
-                                'proof_of_address' => ['Proof of Address', 'poa'],
-                                'liveliness_video' => ['Liveliness Video', 'video'],
-                            ];
-                            foreach ($ai_check_labels as $key => $label_info) {
-                                if (isset($ai_results[$key]) && ($ai_results[$key]['status'] ?? '') === 'success') {
-                                    $r = $ai_results[$key];
-                                    $check_ok = true;
-                                    // Determine if this check passed based on the AI result
-                                    if ($key === 'govt_id') {
-                                        $check_ok = ($r['is_valid'] ?? true) && ($r['is_expired'] ?? false) === false && ($r['name_matches'] ?? true) !== false;
-                                    } elseif ($key === 'selfie') {
-                                        $check_ok = ($r['face_detected'] ?? false) && ($r['is_live_photo'] ?? false) && ($r['face_matches_id'] ?? true) !== false;
-                                    } elseif ($key === 'proof_of_address') {
-                                        $check_ok = ($r['is_valid_utility_bill'] ?? false) && ($r['is_under_3_months'] ?? false) && ($r['address_matches'] ?? true) !== false;
-                                    } elseif ($key === 'liveliness_video') {
-                                        $check_ok = ($r['face_detected'] ?? false) && ($r['is_live_video'] ?? false);
-                                    }
-                                    $check_badge = $check_ok ? 'success' : 'danger';
-                                    $check_icon = $check_ok ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
-                                    echo '<div class="col-md-6"><span class="badge bg-' . $check_badge . ' text-white d-block mb-1"><i class="bi ' . $check_icon . ' me-1"></i>' . htmlspecialchars($label_info[0]) . '</span></div>';
-                                }
-                            }
-                          ?>
-                        </div>
-                      <?php endif; ?>
+                  <?php else: ?>
+                      <div class="alert alert-light border small mb-3">
+                        <?php if (!empty($ai_gate_review['enabled'])): ?>
+                          No AI report recorded yet for this submission. Click <strong>Run AI Report</strong> above to generate document ratings and face/address checks.
+                        <?php else: ?>
+                          <i class="bi bi-shield-check text-success me-1"></i>
+                          <?php echo htmlspecialchars($ai_gate_review['reason'] ?? 'AI Compliance is currently disabled; standard antivirus upload scanner protected this submission.'); ?>
+                        <?php endif; ?>
+                      </div>
                   <?php endif; ?>
 
                   <h6 class="fw-bold mt-4 mb-2">Identity number</h6>
@@ -541,11 +671,34 @@ bc_adm_head("KYC Management | " . ($get_all_super_admin_site_details["site_title
         <?php endif; ?>
 
             <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
-                <div class="card-header bg-white py-4 border-0">
-                    <h5 class="fw-bold mb-1 text-primary">Identity Verifications</h5>
-                    <p class="text-muted small mb-0">
-                        Manual (non-API) KYC: review the ID document and live photo a user uploaded, then approve or reject.
-                    </p>
+                <div class="card-header bg-white py-4 border-0 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h5 class="fw-bold mb-1 text-primary">Identity Verifications</h5>
+                        <p class="text-muted small mb-0">
+                            Manual (non-API) KYC: review the ID document, live photo/video, AI ratings, and antivirus checks, then approve or reject.
+                        </p>
+                    </div>
+                    <?php
+                      if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema($connection_server);
+                      $q_vai = @mysqli_query($connection_server, "SELECT kyc_ai_enabled FROM sas_vendors WHERE id='$vid' LIMIT 1");
+                      $vai_row = $q_vai ? mysqli_fetch_assoc($q_vai) : null;
+                      $kyc_ai_pref = (int)($vai_row['kyc_ai_enabled'] ?? 0) === 1;
+                      $ai_gate_hdr = bc_kyc_is_ai_enabled($connection_server, (int)$vid);
+                    ?>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge bg-<?php echo !empty($ai_gate_hdr['enabled']) ? 'success' : 'secondary'; ?> bg-opacity-10 text-<?php echo !empty($ai_gate_hdr['enabled']) ? 'success' : 'secondary'; ?>">
+                            <i class="bi <?php echo !empty($ai_gate_hdr['enabled']) ? 'bi-robot' : 'bi-shield-check'; ?> me-1"></i>
+                            <?php echo !empty($ai_gate_hdr['enabled']) ? 'AI + Antivirus Active' : 'Standard Antivirus Active'; ?>
+                        </span>
+                        <form method="post" action="KYCManagement.php" class="d-inline">
+                            <?php echo bc_csrf_field(); ?>
+                            <input type="hidden" name="return_status" value="<?php echo (int)$status_filter; ?>">
+                            <input type="hidden" name="kyc_ai_enabled" value="<?php echo $kyc_ai_pref ? 0 : 1; ?>">
+                            <button type="submit" name="toggle_kyc_ai" value="1" class="btn btn-sm btn-<?php echo $kyc_ai_pref ? 'outline-danger' : 'outline-primary'; ?> rounded-pill">
+                                <?php echo $kyc_ai_pref ? 'Disable KYC/KYB AI' : 'Enable KYC/KYB AI'; ?>
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 <div class="card-body border-bottom">
                     <ul class="nav nav-pills gap-2 mb-3">

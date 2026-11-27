@@ -197,4 +197,24 @@
         android:label="Points History"
         tools:layout="@layout/fragment_points_history" />
 
+    <fragment android:id="@+id/nav_intl_transfer"
+        android:name="com.datagifting.app.ui.services.IntlTransferFragment"
+        android:label="Send Money Abroad"
+        tools:layout="@layout/fragment_intl_transfer" />
+
+    <fragment android:id="@+id/nav_tuition"
+        android:name="com.datagifting.app.ui.services.TuitionFragment"
+        android:label="Pay Tuition Worldwide"
+        tools:layout="@layout/fragment_tuition" />
+
+    <fragment android:id="@+id/nav_esim"
+        android:name="com.datagifting.app.ui.services.EsimFragment"
+        android:label="Travel eSIM"
+        tools:layout="@layout/fragment_esim" />
+
+    <fragment android:id="@+id/nav_pos_request"
+        android:name="com.datagifting.app.ui.services.PosRequestFragment"
+        android:label="Request POS Device"
+        tools:layout="@layout/fragment_pos_request" />
+
 </navigation>

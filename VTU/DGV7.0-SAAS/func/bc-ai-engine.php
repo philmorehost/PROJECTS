@@ -71,6 +71,39 @@ class AIEngine
     public function getApiKey(): string { return $this->api_key; }
     public function getProvider(): string { return $this->provider; }
 
+    public function getApiKeyForProvider(string $provider): string {
+        $k = getSuperAdminOption("ai_{$provider}_api_key", '');
+        if ($k !== '') return $k;
+        if ($provider === $this->provider && $this->api_key !== '') return $this->api_key;
+        return getSuperAdminOption('ai_api_key', '');
+    }
+
+    public function getBaseUrlForProvider(string $provider): string {
+        switch ($provider) {
+            case 'gemini':      return 'https://generativelanguage.googleapis.com/v1beta';
+            case 'deepseek':    return 'https://api.deepseek.com/v1';
+            case 'groq':        return 'https://api.groq.com/openai/v1';
+            case 'openai':      return 'https://api.openai.com/v1';
+            case 'anthropic':   return 'https://api.anthropic.com/v1';
+            case 'ollama':      return rtrim(getSuperAdminOption('ai_ollama_url', 'http://localhost:11434'), '/');
+            case 'huggingface': return 'https://api-inference.huggingface.co';
+            default:            return $this->base_url;
+        }
+    }
+
+    public function isVisionConfigured(): bool {
+        $vp = $this->getVisionProvider();
+        if ($vp === 'ollama') return true;
+        return $this->getApiKeyForProvider($vp) !== '';
+    }
+
+    private function extractMediaPart(string $data_url): array {
+        if (preg_match('/^data:([^;]+);base64,(.+)$/s', $data_url, $m)) {
+            return ['mime' => strtolower(trim($m[1])), 'data' => $m[2]];
+        }
+        return ['mime' => 'image/jpeg', 'data' => $data_url];
+    }
+
     /**
      * Get the recommended default model for the current provider
      */
@@ -159,16 +192,18 @@ class AIEngine
     private function chatGemini(string $model, string $prompt, array $options, array $images = []): array
     {
         if (strpos($model, 'gemini') === false) $model = 'gemini-1.5-flash';
-        
-        $url = "{$this->base_url}/models/{$model}:generateContent?key={$this->api_key}";
+        $api_key = $this->getApiKeyForProvider('gemini');
+        $base_url = $this->getBaseUrlForProvider('gemini');
+
+        $url = "{$base_url}/models/{$model}:generateContent?key={$api_key}";
         
         $contents_parts = [['text' => $prompt]];
         foreach ($images as $img_base64) {
-            $clean_img = preg_replace('/^data:image\/[a-z]+;base64,/', '', $img_base64);
+            $part = $this->extractMediaPart($img_base64);
             $contents_parts[] = [
                 'inline_data' => [
-                    'mime_type' => 'image/jpeg',
-                    'data' => $clean_img
+                    'mime_type' => $part['mime'],
+                    'data' => $part['data']
                 ]
             ];
         }
@@ -222,16 +257,28 @@ class AIEngine
      */
     private function chatOpenAI(string $model, string $prompt, array $options, array $images = []): array
     {
-        $url = "{$this->base_url}/chat/completions";
+        $api_key = $this->getApiKeyForProvider('openai');
+        $base_url = $this->getBaseUrlForProvider('openai');
+        $url = "{$base_url}/chat/completions";
 
-        // Build content array: text + images
+        // Build content array: text + images/documents
         $content = [['type' => 'text', 'text' => $prompt]];
         foreach ($images as $img_base64) {
-            $clean_img = preg_replace('/^data:image\/[a-z]+;base64,/', '', $img_base64);
-            $content[] = [
-                'type' => 'image_url',
-                'image_url' => ['url' => "data:image/jpeg;base64,{$clean_img}"]
-            ];
+            $part = $this->extractMediaPart($img_base64);
+            if ($part['mime'] === 'application/pdf') {
+                $content[] = [
+                    'type' => 'file',
+                    'file' => [
+                        'filename' => 'document.pdf',
+                        'file_data' => "data:application/pdf;base64,{$part['data']}",
+                    ]
+                ];
+            } else {
+                $content[] = [
+                    'type' => 'image_url',
+                    'image_url' => ['url' => "data:{$part['mime']};base64,{$part['data']}"]
+                ];
+            }
         }
 
         $payload = json_encode([
@@ -243,7 +290,7 @@ class AIEngine
 
         $headers = [
             'Content-Type: application/json',
-            "Authorization: Bearer {$this->api_key}"
+            "Authorization: Bearer {$api_key}"
         ];
 
         $start = microtime(true);
@@ -278,20 +325,33 @@ class AIEngine
      */
     private function chatAnthropic(string $model, string $prompt, array $options, array $images = []): array
     {
-        $url = "{$this->base_url}/messages";
+        $api_key = $this->getApiKeyForProvider('anthropic');
+        $base_url = $this->getBaseUrlForProvider('anthropic');
+        $url = "{$base_url}/messages";
 
-        // Build content array: text + image blocks
+        // Build content array: text + image/document blocks
         $content = [['type' => 'text', 'text' => $prompt]];
         foreach ($images as $img_base64) {
-            $clean_img = preg_replace('/^data:image\/[a-z]+;base64,/', '', $img_base64);
-            $content[] = [
-                'type' => 'image',
-                'source' => [
-                    'type' => 'base64',
-                    'media_type' => 'image/jpeg',
-                    'data' => $clean_img
-                ]
-            ];
+            $part = $this->extractMediaPart($img_base64);
+            if ($part['mime'] === 'application/pdf') {
+                $content[] = [
+                    'type' => 'document',
+                    'source' => [
+                        'type' => 'base64',
+                        'media_type' => 'application/pdf',
+                        'data' => $part['data']
+                    ]
+                ];
+            } else {
+                $content[] = [
+                    'type' => 'image',
+                    'source' => [
+                        'type' => 'base64',
+                        'media_type' => $part['mime'],
+                        'data' => $part['data']
+                    ]
+                ];
+            }
         }
 
         $payload = json_encode([
@@ -303,7 +363,7 @@ class AIEngine
 
         $headers = [
             'Content-Type: application/json',
-            "x-api-key: {$this->api_key}",
+            "x-api-key: {$api_key}",
             'anthropic-version: 2023-06-01',
         ];
 
@@ -346,7 +406,8 @@ class AIEngine
      */
     private function chatOllama(string $model, string $prompt, array $options, array $images = []): array
     {
-        $url = "{$this->base_url}/api/chat";
+        $base_url = $this->getBaseUrlForProvider('ollama');
+        $url = "{$base_url}/api/chat";
 
         $payload_data = [
             'model' => $model,
@@ -359,8 +420,8 @@ class AIEngine
 
         // Add images as base64 (Ollama accepts raw base64 strings)
         foreach ($images as $img_base64) {
-            $clean_img = preg_replace('/^data:image\/[a-z]+;base64,/', '', $img_base64);
-            $payload_data['images'][] = $clean_img;
+            $part = $this->extractMediaPart($img_base64);
+            $payload_data['images'][] = $part['data'];
         }
 
         $payload = json_encode($payload_data);
@@ -399,18 +460,19 @@ class AIEngine
     {
         // HuggingFace uses a different API for vision - text+image via the feature extraction pipeline
         $url = "https://api-inference.huggingface.co/models/{$model}";
+        $api_key = $this->getApiKeyForProvider('huggingface');
 
         $headers = [
             'Content-Type: application/json',
-            "Authorization: Bearer {$this->api_key}",
+            "Authorization: Bearer {$api_key}",
         ];
 
         // For vision tasks, we send images with a text prompt
         $payload_data = [];
         foreach ($images as $img_base64) {
-            $clean_img = preg_replace('/^data:image\/[a-z]+;base64,/', '', $img_base64);
+            $part = $this->extractMediaPart($img_base64);
             $payload_data['inputs'] = [
-                'image' => $clean_img,
+                'image' => $part['data'],
                 'text' => $prompt,
             ];
             // Use the first image for HuggingFace (it doesn't support multi-image in the same call)

@@ -224,5 +224,18 @@ interface VtuApiService {
      */
     @POST("web/api/coin-conversion.php")
     suspend fun coinConversion(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
+    // ── Global & Business Services ────────────────────────────────────────
+    @POST("web/api/intl-transfer.php")
+    suspend fun intlTransfer(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
+    @POST("web/api/tuition.php")
+    suspend fun tuition(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
+    @POST("web/api/esim.php")
+    suspend fun esim(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
+    @POST("web/api/pos-request.php")
+    suspend fun posRequest(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 }
 

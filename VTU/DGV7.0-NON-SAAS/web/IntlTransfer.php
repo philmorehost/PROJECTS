@@ -104,6 +104,10 @@ foreach ($my_requests as $r) {
 }
 $active_service_count = count($services);
 $first_service_slug = $active_service_count > 0 ? (string)array_key_first($services) : '';
+$vendor_brand = trim((string)($get_all_site_details['site_title'] ?? ''));
+if ($vendor_brand === '') {
+    $vendor_brand = 'Platform';
+}
 
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Send Money Abroad | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -237,14 +241,14 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
             <div class="col-lg-8">
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     <span class="ft-pill"><span class="ft-dot"></span> International Transfers</span>
-                    <span class="ft-pill">Rail: <?php echo htmlspecialchars($provider !== '' ? $provider_label : 'Unavailable'); ?></span>
+                    <span class="ft-pill">Desk: <?php echo htmlspecialchars($provider !== '' ? $vendor_brand : 'Unavailable'); ?></span>
                     <span class="ft-pill">Indicative Live FX</span>
                 </div>
                 <h3 class="fw-bold mb-2">Send money across borders with transparent FX</h3>
                 <p class="opacity-75 mb-0" style="max-width:62ch">Submit verified cross-border payout requests across supported global corridors and China settlement rails. Every option shown mirrors live platform routing.</p>
             </div>
             <div class="col-lg-4 text-lg-end">
-                <a href="#new-transfer-form" class="btn btn-light rounded-pill px-4 fw-bold">New Transfer Request</a>
+                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold" onclick="var f=document.getElementById('new-transfer-form');if(f){f.scrollIntoView({behavior:'smooth',block:'start'});}return false;">New Transfer Request</button>
             </div>
         </div>
     </div>
@@ -275,8 +279,8 @@ bc_app_topbar(array("title" => "SEND MONEY ABROAD", "crumb" => "Home / Send Mone
         <div class="col-6 col-xl-3">
             <div class="ft-stat">
                 <div class="ft-stat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>
-                <div class="ft-stat-val"><?php echo htmlspecialchars($provider !== '' ? $provider_label : 'Paused'); ?></div>
-                <div class="ft-stat-lbl">Active settlement rail · <?php echo (int)$completed_count; ?> settled</div>
+                <div class="ft-stat-val"><?php echo htmlspecialchars($provider !== '' ? $vendor_brand : 'Paused'); ?></div>
+                <div class="ft-stat-lbl">Verified settlement desk · <?php echo (int)$completed_count; ?> settled</div>
             </div>
         </div>
     </div>

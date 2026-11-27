@@ -368,9 +368,11 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
                 }
 
                 govtIdUri?.let { uriToFile(it, "govt_id")?.let { f ->
+                    if (f.length() < 256L) throw IllegalStateException("Government ID file is blank or empty.")
                     builder.addFormDataPart("govt_id", f.name, f.asRequestBody("image/jpeg".toMediaType()))
                 }}
                 selfieUri?.let { uriToFile(it, "selfie")?.let { f ->
+                    if (f.length() < 256L) throw IllegalStateException("Live photo is blank or empty.")
                     builder.addFormDataPart("selfie", f.name, f.asRequestBody("image/jpeg".toMediaType()))
                 }}
 
@@ -380,13 +382,24 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
                     builder.addFormDataPart("liveliness_video", video.name, video.asRequestBody("video/mp4".toMediaType()))
                 }
                 val resp = api.kycUpload(builder.build())
-                val desc = resp.body()?.get("desc") as? String ?: ""
+                val bodyMap = resp.body()
+                val errDesc = if (!resp.isSuccessful) {
+                    try {
+                        val rawErr = resp.errorBody()?.string().orEmpty()
+                        org.json.JSONObject(rawErr).optString("desc", "")
+                    } catch (_: Exception) { "" }
+                } else ""
+                val warnings = (bodyMap?.get("av_warnings") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                val baseDesc = (bodyMap?.get("desc") as? String)?.takeIf { it.isNotBlank() }
+                    ?: errDesc.takeIf { it.isNotBlank() }
+                    ?: if (resp.isSuccessful) "Submitted." else "Upload rejected by security check."
+                val desc = if (warnings.isNotEmpty()) "$baseDesc (${warnings.joinToString("; ")})" else baseDesc
                 activity?.runOnUiThread {
                     if (_binding == null) return@runOnUiThread
                     binding.progressBar.visibility = View.GONE
                     binding.btnUploadDocuments.isEnabled = true
                     snack(desc)
-                    if (resp.body()?.get("status") == "success") loadKYCStatus()
+                    if (bodyMap?.get("status") == "success") loadKYCStatus()
                 }
             } catch (e: Exception) {
                 activity?.runOnUiThread {

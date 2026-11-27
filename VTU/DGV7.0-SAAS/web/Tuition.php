@@ -76,6 +76,10 @@ foreach ($my_requests as $r) {
         $settled_tuition++;
     }
 }
+$vendor_brand = trim((string)($get_all_site_details['site_title'] ?? ''));
+if ($vendor_brand === '') {
+    $vendor_brand = 'Platform';
+}
 
 include_once(__DIR__ . "/../func/bc-plate-app.php");
 bc_app_head("Pay Tuition Worldwide | " . ($get_all_site_details["site_title"] ?? 'Platform'));
@@ -158,7 +162,7 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
                 <p class="opacity-75 mb-0" style="max-width:62ch">Search your institution, validate the student ID, and settle tuition or accommodation fees in the school's expected currency without correspondent-bank delays.</p>
             </div>
             <div class="col-lg-4 text-lg-end">
-                <a href="#tuition-request-form" class="btn btn-light rounded-pill px-4 fw-bold">Start Tuition Payment</a>
+                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold" onclick="var f=document.getElementById('tuition-request-form');if(f){f.scrollIntoView({behavior:'smooth',block:'start'});}var u=document.getElementById('tuitionUniInput');if(u){setTimeout(function(){u.focus({preventScroll:true});},350);}return false;">Start Tuition Payment</button>
             </div>
         </div>
     </div>
@@ -189,8 +193,8 @@ bc_app_topbar(array("title" => "PAY TUITION WORLDWIDE", "crumb" => "Home / Tuiti
         <div class="col-6 col-xl-3">
             <div class="ft-stat">
                 <div class="ft-stat-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 9 8 10c4.5-1 8-5 8-10V6z"/></svg></div>
-                <div class="ft-stat-val"><?php echo htmlspecialchars($route_provider !== '' ? ucfirst($route_provider) : 'Paused'); ?></div>
-                <div class="ft-stat-lbl">Active institutional rail</div>
+                <div class="ft-stat-val"><?php echo htmlspecialchars($route_provider !== '' ? $vendor_brand : 'Paused'); ?></div>
+                <div class="ft-stat-lbl">Verified institutional rail</div>
             </div>
         </div>
     </div>
