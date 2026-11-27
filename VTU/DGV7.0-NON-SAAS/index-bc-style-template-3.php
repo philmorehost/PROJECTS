@@ -28,18 +28,21 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
             $custom_footer    = $cachedStyle['custom_footer_code'] ?? '';
             $template_primary = $cachedStyle['primary_color'] ?? '';
         } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
+            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.site_title, sd.apk_download_url, sd.meta_keywords, sd.custom_head_code, sd.custom_footer_code, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.date DESC LIMIT 1");
+            if (!$stmt_site) {
+                $stmt_site = mysqli_prepare($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id = ? LIMIT 1");
+            }
             if ($stmt_site) {
                 mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
                 mysqli_stmt_execute($stmt_site);
                 $result_site = mysqli_stmt_get_result($stmt_site);
                 if ($site_row = mysqli_fetch_assoc($result_site)) {
-                    $site_title       = $site_row['site_title'] ?: $site_title;
-                    $apk_download_url = $site_row['apk_download_url'] ?: $apk_download_url;
-                    $header_image_url = $site_row['header_image'] ?: $header_image_url;
-                    $meta_keywords    = $site_row['meta_keywords'] ?: '';
-                    $custom_header    = $site_row['custom_head_code'] ?: '';
-                    $custom_footer    = $site_row['custom_footer_code'] ?: '';
+                    $site_title       = !empty($site_row['site_title']) ? $site_row['site_title'] : $site_title;
+                    $apk_download_url = !empty($site_row['apk_download_url']) ? $site_row['apk_download_url'] : $apk_download_url;
+                    $header_image_url = !empty($site_row['header_image']) ? $site_row['header_image'] : $header_image_url;
+                    $meta_keywords    = !empty($site_row['meta_keywords']) ? $site_row['meta_keywords'] : '';
+                    $custom_header    = !empty($site_row['custom_head_code']) ? $site_row['custom_head_code'] : '';
+                    $custom_footer    = !empty($site_row['custom_footer_code']) ? $site_row['custom_footer_code'] : '';
                     $template_primary = $site_row['primary_color'] ?? '';
 
                     if (function_exists('bc_cache_set')) {

@@ -24,20 +24,22 @@ if (isset($vendor_account_details) && is_array($vendor_account_details)) {
         } else {
             $template_name_pattern = '%template-1%';
             $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id AND vst.template_name LIKE ? WHERE sd.vendor_id = ? LIMIT 1");
-            mysqli_stmt_bind_param($stmt_site, "si", $template_name_pattern, $vendor_account_details["id"]);
-            mysqli_stmt_execute($stmt_site);
-            $result_site = mysqli_stmt_get_result($stmt_site);
-            if ($site_row = mysqli_fetch_assoc($result_site)) {
-                $site_details     = $site_row;
-                $site_title       = $site_row['site_title'] ?: $site_title;
-                $apk_download_url = $site_row['apk_download_url'] ?: $apk_download_url;
-                $header_image_url = $site_row['header_image'] ?: $header_image_url;
+            if ($stmt_site) {
+                mysqli_stmt_bind_param($stmt_site, "si", $template_name_pattern, $vendor_account_details["id"]);
+                mysqli_stmt_execute($stmt_site);
+                $result_site = mysqli_stmt_get_result($stmt_site);
+                if ($result_site && ($site_row = mysqli_fetch_assoc($result_site))) {
+                    $site_details     = $site_row;
+                    $site_title       = !empty($site_row['site_title']) ? $site_row['site_title'] : $site_title;
+                    $apk_download_url = !empty($site_row['apk_download_url']) ? $site_row['apk_download_url'] : $apk_download_url;
+                    $header_image_url = !empty($site_row['header_image']) ? $site_row['header_image'] : $header_image_url;
 
-                if (function_exists('bc_cache_set')) {
-                    bc_cache_set($cacheKey, $site_row);
+                    if (function_exists('bc_cache_set')) {
+                        bc_cache_set($cacheKey, $site_row);
+                    }
                 }
+                mysqli_stmt_close($stmt_site);
             }
-            mysqli_stmt_close($stmt_site);
         }
     }
 }
