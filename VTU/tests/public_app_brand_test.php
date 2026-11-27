@@ -17,4 +17,9 @@ foreach(['DGV7.0-SAAS','DGV7.0-NON-SAAS'] as $ed){
  foreach(['home','2','3','6'] as $t){$s=file_get_contents($base.'index-bc-style-template-'.$t.'.php');check(strpos($s,'bc_public_app_badge_html')!==false,'badge wired '.$ed.$t);check(stripos($s,'mzeevtu')===false,'no hardcoded tenant '.$ed.$t);}
  $s=file_get_contents($base.'index-bc-style-template-home.php');check(substr_count($s,'class="bc-card-brand"')===2,'both cards branded');check(strpos($s,'bc_landing_e($home_short_brand)')!==false,'escaped brand');
 }
+$_SESSION = ['admin_session' => 'vendor@example.test'];
+check(bc_public_dashboard_url() === '', 'public landing dashboard url never leaks admin backoffice');
+$_SESSION['user_session'] = 'alice';
+check(bc_public_dashboard_url() === '/web/Dashboard.php', 'public landing dashboard url routes logged-in users to /web/Dashboard.php even when admin_session is set');
+$_SESSION = [];
 echo "PASS $n public app and short-brand checks\n";

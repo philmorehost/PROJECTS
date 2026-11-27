@@ -9,9 +9,6 @@ function bc_public_dashboard_url() {
             }
         }
     }
-    if (!empty($_SESSION['admin_session'])) {
-        return '/bc-admin/Dashboard.php';
-    }
     if (!empty($_SESSION['user_session'])) {
         return '/web/Dashboard.php';
     }
