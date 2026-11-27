@@ -1,763 +1,1841 @@
 <?php
 require_once __DIR__ . '/func/bc-public-app-brand.php';
-// Initialize SEO engine and variables
-include_once(__DIR__ . "/func/bc-seo.php");
+require_once __DIR__ . '/func/bc-public-meridian.php';
+require_once __DIR__ . '/func/bc-public-pages.php';
+require_once __DIR__ . '/func/bc-theme.php';
+include_once(__DIR__ . '/func/bc-seo.php');
 
-// §46: default to this site's own host; the vendor's saved Site Name overwrites it below.
-$site_title       = (string)($_SERVER['HTTP_HOST'] ?? '');
-$site_logo        = '';
+$ctx = bc_meridian_context($vendor_account_details ?? null);
+$vid = (int)($ctx['vendor_id'] ?? 0);
+$site_name = $ctx['site_name'];
+$short_brand = $ctx['short_brand'];
+$site_e = bc_meridian_e($site_name);
+$short_e = bc_meridian_e($short_brand);
+$personal_vars = bc_meridian_personal_style_vars($ctx['primary_color']);
+
+// Fetch site details for SEO engine & optional uploaded hero image
+$site_details = array(
+    'site_title' => $site_name,
+    'site_desc' => $ctx['site_desc'],
+    'apk_download_url' => $ctx['app_url'],
+);
 $header_image_url = '';
-$apk_download_url = '';
-$site_details     = [];
-
-// Check if vendor details are available from index.php
-if (isset($vendor_account_details) && is_array($vendor_account_details)) {
-    // Fetch Site Details
-    if (isset($connection_server)) {
-        $cacheKey = 'vendor_site_style_' . md5((int)$vendor_account_details['id']);
-        $cachedStyle = function_exists('bc_cache_get') ? bc_cache_get($cacheKey, 300) : null;
-
-        if (is_array($cachedStyle)) {
-            $site_details     = $cachedStyle;
-            $site_title       = $cachedStyle['site_title'] ?? $site_title;
-            $apk_download_url = $cachedStyle['apk_download_url'] ?? $apk_download_url;
-            $header_image_url = $cachedStyle['header_image'] ?? $header_image_url;
-        } else {
-            $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.date DESC LIMIT 1");
-            if (!$stmt_site) {
-                $stmt_site = mysqli_prepare($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id = ? LIMIT 1");
-            }
-            if ($stmt_site) {
-                mysqli_stmt_bind_param($stmt_site, "i", $vendor_account_details["id"]);
-                mysqli_stmt_execute($stmt_site);
-                $result_site = mysqli_stmt_get_result($stmt_site);
-                if ($result_site && ($site_row = mysqli_fetch_assoc($result_site))) {
-                    $site_details     = $site_row;
-                    $site_title       = !empty($site_row['site_title']) ? $site_row['site_title'] : $site_title;
-                    $apk_download_url = !empty($site_row['apk_download_url']) ? $site_row['apk_download_url'] : $apk_download_url;
-                    $header_image_url = !empty($site_row['header_image']) ? $site_row['header_image'] : $header_image_url;
-
-                    if (function_exists('bc_cache_set')) {
-                        bc_cache_set($cacheKey, $site_row);
-                    }
-                }
-                mysqli_stmt_close($stmt_site);
+if ($vid > 0 && ($connection_server ?? null) instanceof mysqli) {
+    $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.date DESC LIMIT 1");
+    if (!$stmt_site) {
+        $stmt_site = mysqli_prepare($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id = ? LIMIT 1");
+    }
+    if ($stmt_site) {
+        mysqli_stmt_bind_param($stmt_site, "i", $vid);
+        mysqli_stmt_execute($stmt_site);
+        $result_site = mysqli_stmt_get_result($stmt_site);
+        if ($result_site && ($site_row = mysqli_fetch_assoc($result_site))) {
+            $site_details = $site_row;
+            if (!empty($site_row['header_image']) && is_file(__DIR__ . '/uploaded-image/' . $site_row['header_image'])) {
+                $header_image_url = '/uploaded-image/' . $site_row['header_image'];
             }
         }
+        mysqli_stmt_close($stmt_site);
     }
 }
 
-// Start Output Buffer for dynamic Alt Tags insertion
-seo_start_ob_auto_alt($site_title);
-
-// Logo path
-$logo_filename = str_replace([".", ":"], "-", $_SERVER["HTTP_HOST"]) . "_logo.png";
-if (file_exists("uploaded-image/" . $logo_filename)) {
-    $site_logo = "uploaded-image/" . $logo_filename;
-} else {
-    // Default logo or placeholder (light logo for dark theme)
-    $site_logo = "https://via.placeholder.com/150x44/111827/00f5ff?text=" . urlencode($site_title);
+if (function_exists('seo_start_ob_auto_alt')) {
+    seo_start_ob_auto_alt($site_name);
 }
 
-// Header Image
-if (!empty($header_image_url) && file_exists("uploaded-image/" . $header_image_url)) {
-    $hero_image = "uploaded-image/" . $header_image_url;
-} else {
-    $hero_image = "asset/vtu-fintech.jpg"; // Use an existing asset
-    if (!file_exists($hero_image)) {
-        $hero_image = "https://via.placeholder.com/600x400/111827/00f5ff?text=" . urlencode($site_title);
-    }
-}
-
-// Social Share URLs
-$current_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
-$share_text = urlencode("Check out " . $site_title . " for automated billing services!");
-require_once __DIR__ . '/func/bc-theme.php';
-$t3_primary = '#00f5ff';
-if (!empty($site_details['primary_color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $site_details['primary_color'])) {
-    $t3_primary = $site_details['primary_color'];
-}
-$t3_dark = bc_theme_palette($t3_primary)['modes']['dark'];
-$t3_rgb = '0, 245, 255';
-$t3_secondary = '#bd00ff';
+$t3_primary = bc_theme_hex($ctx['primary_color']) ?: '#287BFF';
+$t3_palette = bc_theme_palette($t3_primary);
+$t3_light_mode = $t3_palette['modes']['light'];
+$t3_dark_mode = $t3_palette['modes']['dark'];
+$t3_rgb = '40, 123, 255';
 if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
     $t3_rgb = "$r3, $g3, $b3";
-    if (strtolower($t3_primary) !== '#00f5ff') {
-        $t3_secondary = sprintf('#%02x%02x%02x', max(0, (int)($r3 * 0.72)), max(0, (int)($g3 * 0.72)), max(0, (int)($b3 * 0.72)));
-    }
 }
-?>
-<!DOCTYPE html>
-<html lang="en">
+$t3_sky = bc_meridian_mix_hex($t3_primary, '#06B6D4', 0.42);
+$t3_violet = bc_meridian_mix_hex($t3_primary, '#7C3AED', 0.48);
+$t3_emerald = '#10B981';
+$t3_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : '';
+$t3_app_badge = bc_public_app_badge_html($ctx['app_url']);
+
+// Service Control Center helper
+$t3_enabled = function ($key) use ($vid) {
+    if ($key === null || $key === '') return true;
+    return bc_meridian_service_enabled($key, $vid);
+};
+
+// Build Personal Features synced to Service Control Center
+$personal_pillars = array();
+$coming_soon_items = array();
+
+$add_feature = function (&$pillar, $title, $desc, $href, $service_key = null, $badge = '', $pending_note = '') use ($t3_enabled, &$coming_soon_items) {
+    if ($service_key === null || $t3_enabled($service_key)) {
+        $pillar['items'][] = array(
+            'title' => $title,
+            'desc' => $desc,
+            'href' => $href,
+            'badge' => $badge,
+            'key' => $service_key ?: 'core',
+        );
+    } else {
+        $coming_soon_items[] = array(
+            'title' => $title,
+            'category' => $pillar['_cat_title'],
+            'desc' => $desc,
+            'href' => $href,
+            'reason' => $pending_note !== '' ? $pending_note : 'Paused in Service Control Center',
+        );
+    }
+};
+
+// 1. Accounts & Payments
+$pillar_accounts = array(
+    'id' => 'accounts',
+    'eyebrow' => '01 · Accounts & Payments',
+    'title' => 'Accounts & Payments',
+    'subtitle' => 'Central personal wallet, virtual bank accounts, local & global transfers, receipts and FX conversion.',
+    'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19"/><circle cx="17" cy="14.5" r="1.2"/></svg>',
+    'items' => array(),
+    '_cat_title' => 'Accounts & Payments',
+);
+$add_feature($pillar_accounts, 'Personal wallet and account dashboard', 'Monitor live balances, recent activity and quick-pay controls in one command view.', '/web/Dashboard.php', null, 'Dashboard');
+$add_feature($pillar_accounts, 'Wallet funding and payment receipts', 'Add funds via card or transfer and open downloadable receipts for every top-up.', '/web/Fund.php', null, 'Receipts');
+
+$local_bank_on = $t3_enabled('bank_transfer');
+$local_wallet_on = $t3_enabled('share_fund');
+if ($local_bank_on || $local_wallet_on) {
+    $local_href = $local_bank_on ? '/services/bank-transfer.php' : '/services/share-fund.php';
+    $local_badge = ($local_bank_on && $local_wallet_on) ? 'Bank + Wallet' : ($local_bank_on ? 'Bank' : 'Wallet');
+    $pillar_accounts['items'][] = array(
+        'title' => 'Local transfers and wallet-to-wallet transfers',
+        'desc' => 'Instant payouts to local bank accounts and zero-friction transfers between users.',
+        'href' => $local_href,
+        'badge' => $local_badge,
+        'key' => 'local_transfer',
+    );
+} else {
+    $coming_soon_items[] = array(
+        'title' => 'Local transfers and wallet-to-wallet transfers',
+        'category' => 'Accounts & Payments',
+        'desc' => 'Send funds to local banks or peer wallets directly from your balance.',
+        'href' => '/services/bank-transfer.php',
+        'reason' => 'Paused in Service Control Center',
+    );
+}
+$add_feature($pillar_accounts, 'International transfer requests', 'Submit cross-border remittance requests with clear destination fee breakdowns.', '/services/international-transfer.php', 'intl_transfer', 'Global');
+$add_feature($pillar_accounts, 'Virtual bank accounts', 'Dedicated virtual account numbers to receive deposits straight into your wallet.', '/web/VirtualBanks.php', 'virtual_bank_display', 'Auto-fund');
+$add_feature($pillar_accounts, 'Transaction history and payment tracking', 'Filter completed, pending and reversed orders with instant reference lookup.', '/web/Transactions.php', null, 'Ledger');
+$add_feature($pillar_accounts, 'Live currency conversion and indicative FX rates', 'Check NGN, USD, GBP and EUR indicative rates and convert balances seamlessly.', '/MultiCurrencyWallet.php', 'currency_conversion', 'FX Live');
+$personal_pillars[] = $pillar_accounts;
+
+// 2. Everyday Services
+$pillar_everyday = array(
+    'id' => 'everyday',
+    'eyebrow' => '02 · Everyday Services',
+    'title' => 'Everyday Services',
+    'subtitle' => 'High-speed telecom, electricity tokens, TV renewals, exams, eSIMs and tuition requests.',
+    'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.5 13.5H12L11 22l8.5-11.5H12L13 2z"/></svg>',
+    'items' => array(),
+    '_cat_title' => 'Everyday Services',
+);
+$add_feature($pillar_everyday, 'Airtime purchase', 'Instant airtime recharge for MTN, Airtel, Glo and 9mobile lines.', '/services/airtime.php', 'airtime', 'Instant');
+$add_feature($pillar_everyday, 'Mobile data purchase', 'SME, corporate gifting and direct mobile data bundles delivered in seconds.', '/services/data.php', 'data', 'Bundles');
+$add_feature($pillar_everyday, 'Electricity bill payments', 'Prepaid meter tokens and postpaid settlement across major electricity DisCos.', '/services/electricity.php', 'electric', 'Token');
+$add_feature($pillar_everyday, 'Cable TV subscriptions', 'Instant DStv, GOtv, StarTimes and Showmax bouquet renewals.', '/services/cable-tv.php', 'cable', 'TV');
+$add_feature($pillar_everyday, 'Betting account funding', 'Fast wallet funding for supported sports and gaming platforms.', '/services/betting.php', 'betting', 'Top-up');
+$add_feature($pillar_everyday, 'Examination PINs', 'WAEC, NECO and JAMB result-checker and registration PINs on demand.', '/services/exam-pins.php', 'exam', 'PINs');
+$add_feature($pillar_everyday, 'Travel eSIM services', 'Activate international travel data eSIM plans without swapping physical SIMs.', '/services/esim.php', 'esim', 'eSIM');
+$add_feature($pillar_everyday, 'Tuition payment requests', 'Submit verified local and international education fee payment requests.', '/Tuition.php', 'tuition', 'Education');
+$personal_pillars[] = $pillar_everyday;
+
+// 3. Cards & Digital Assets
+$pillar_cards = array(
+    'id' => 'cards-assets',
+    'eyebrow' => '03 · Cards & Digital Assets',
+    'title' => 'Cards & Digital Assets',
+    'subtitle' => 'Virtual USD cards for global checkout, digital gift cards and digital asset access.',
+    'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20M7 15h4"/></svg>',
+    'items' => array(),
+    '_cat_title' => 'Cards & Digital Assets',
+);
+$add_feature($pillar_cards, 'Virtual dollar cards', 'Create, fund and freeze USD virtual cards for subscriptions and global merchants.', '/services/virtual-cards.php', 'virtual_card', 'USD Card');
+$add_feature($pillar_cards, 'Gift card services', 'Purchase and redeem popular global and digital brand gift cards.', '/services/gift-cards.php', 'gift_card', 'Cards');
+$add_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Buy, sell and manage stablecoins and supported digital assets.', '/services/crypto.php', 'crypto_hub', 'Assets', 'Pending replacement integration');
+$personal_pillars[] = $pillar_cards;
+
+// 4. Rewards & Tools
+$pillar_rewards = array(
+    'id' => 'rewards-tools',
+    'eyebrow' => '04 · Rewards & Tools',
+    'title' => 'Rewards & Tools',
+    'subtitle' => 'Earn commissions and loyalty coins, calculate fees ahead of time and plan with AI.',
+    'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4l-5.3 2.7 1-5.8-4.2-4.1 5.9-.9L12 3z"/></svg>',
+    'items' => array(),
+    '_cat_title' => 'Rewards & Tools',
+);
+$add_feature($pillar_rewards, 'Referral programme', 'Share your personal invite link and earn ongoing rewards when friends transact.', '/ReferAndEarn.php', 'referral', 'Invite');
+$add_feature($pillar_rewards, 'Loyalty points and rewards', 'Accumulate coins on eligible bills and convert loyalty points to wallet value.', '/services/CoinConversion.php', 'vtu_coins', 'Points');
+$add_feature($pillar_rewards, 'Transaction calculator', 'Estimate service charges, margins and net wallet amounts before paying.', '/web/TransactionCalculator.php', null, 'Calc');
+$add_feature($pillar_rewards, 'AI assistant and budgeting tools', 'Smart bill planning, spend insights and guided assistant workflows.', '/web/AI-Assistant.php', 'ai_suite', 'AI');
+$personal_pillars[] = $pillar_rewards;
+
+// 5. Security & Support
+$pillar_security = array(
+    'id' => 'security-support',
+    'eyebrow' => '05 · Security & Support',
+    'title' => 'Security & Support',
+    'subtitle' => 'Multi-layered identity verification, transaction PINs, 2FA/OTP and dedicated care.',
+    'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3.5v5.5c0 5.1-3.4 9.5-8 10.9-4.6-1.4-8-5.8-8-10.9V6l8-3.5z"/><path d="M9.5 12l1.8 1.8 3.7-3.8"/></svg>',
+    'items' => array(),
+    '_cat_title' => 'Security & Support',
+);
+$add_feature($pillar_security, 'Identity verification—KYC', 'Complete KYC tiers to protect your profile and unlock expanded wallet limits.', '/web/KYCVerification.php', null, 'KYC');
+$add_feature($pillar_security, 'Security PIN', 'Enforce a personal PIN before releasing transfers, cards or utility orders.', '/web/SecurityPIN.php', null, 'PIN');
+$add_feature($pillar_security, 'Google Authenticator and email OTP options', 'Protect sign-ins with TOTP authenticator apps or verified email OTP codes.', '/web/SecuritySetup.php', null, '2FA');
+if ($t3_enabled('password_reset')) {
+    $pillar_security['items'][] = array(
+        'title' => 'Account recovery and security settings',
+        'desc' => 'Self-service password recovery, active session controls and security preferences.',
+        'href' => '/web/PasswordRecovery.php',
+        'badge' => 'Recovery',
+        'key' => 'password_reset',
+    );
+} else {
+    $pillar_security['items'][] = array(
+        'title' => 'Security settings and session controls',
+        'desc' => 'Review account security preferences and active sessions from your dashboard.',
+        'href' => '/web/AccountSettings.php',
+        'badge' => 'Console',
+        'key' => 'account_settings',
+    );
+    $coming_soon_items[] = array(
+        'title' => 'Self-service password reset recovery',
+        'category' => 'Security & Support',
+        'desc' => 'Automated self-service account password recovery.',
+        'href' => '/web/PasswordRecovery.php',
+        'reason' => 'Paused in Service Control Center',
+    );
+}
+$add_feature($pillar_security, 'Customer support and dispute assistance', 'Open support tickets, trace transaction receipts and resolve disputes quickly.', '/Contact.php', null, 'Support');
+$personal_pillars[] = $pillar_security;
+
+$active_feature_count = 0;
+foreach ($personal_pillars as $p) {
+    $active_feature_count += count($p['items']);
+}
+$paused_feature_count = count($coming_soon_items);
+
+// Quick dock shortcuts from active personal items
+$quick_dock = array();
+if ($t3_enabled('airtime')) $quick_dock[] = array('label' => 'Airtime', 'href' => '/services/airtime.php', 'tag' => 'Instant');
+if ($t3_enabled('data')) $quick_dock[] = array('label' => 'Mobile Data', 'href' => '/services/data.php', 'tag' => 'Bundles');
+if ($t3_enabled('electric')) $quick_dock[] = array('label' => 'Electricity', 'href' => '/services/electricity.php', 'tag' => 'Meter');
+if ($t3_enabled('bank_transfer')) $quick_dock[] = array('label' => 'Transfers', 'href' => '/services/bank-transfer.php', 'tag' => 'Payouts');
+if ($t3_enabled('virtual_card')) $quick_dock[] = array('label' => 'USD Cards', 'href' => '/services/virtual-cards.php', 'tag' => 'Virtual');
+if ($t3_enabled('currency_conversion')) $quick_dock[] = array('label' => 'FX Rates', 'href' => '/MultiCurrencyWallet.php', 'tag' => 'Multi-CCY');
+
+$js_config = array(
+    'siteName' => $site_name,
+    'appUrl' => $ctx['app_url'],
+    'downloadPageUrl' => '/DownloadApp.php',
+    'businessUrl' => '/Business.php',
+    'personalUrl' => '/',
+    'registerUrl' => '/web/Register.php',
+    'loginUrl' => '/web/Login.php',
+    'rates' => $ctx['rates'],
+);
+?><!DOCTYPE html>
+<html lang="en" data-theme="light" data-world="personal" style="<?php echo bc_meridian_e($personal_vars); ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <?php seo_render_head_tags($site_details, $vendor_account_details); ?>
-    
-    <!-- Outfit Typography & CSS Preconnects -->
+    <?php
+    if (function_exists('seo_render_head_tags')) {
+        seo_render_head_tags($site_details, $site_name, $header_image_url);
+    } else {
+        echo '<title>' . $site_e . ' — Modern Frosted Glass Financial &amp; VTU Hub</title>';
+    }
+    ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    
-    <!-- Deferred FontAwesome for PageSpeed Optimization -->
-    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
-    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* ── Dark Premium Cyberpunk Design System ───────────────────────── */
         :root {
-            --primary: <?php echo $t3_primary; ?>;
-            --primary-rgb: <?php echo $t3_rgb; ?>;
-            --primary-ink: <?php echo $t3_dark['primary_text']; ?>;
-            --on-primary: <?php echo $t3_dark['on_primary']; ?>;
-            --primary-glow: rgba(<?php echo $t3_rgb; ?>, 0.15);
-            --secondary: <?php echo $t3_secondary; ?>;
-            --secondary-glow: rgba(<?php echo $t3_rgb; ?>, 0.15);
-            --dark: #0b0f19;
-            --card-bg: #131926;
-            --light-text: #f3f4f6;
-            --gray-text: #9ca3af;
-            --border-color: rgba(255, 255, 255, 0.05);
-            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            --t3-primary: <?php echo bc_meridian_e($t3_primary); ?>;
+            --t3-rgb: <?php echo bc_meridian_e($t3_rgb); ?>;
+            --t3-sky: <?php echo bc_meridian_e($t3_sky); ?>;
+            --t3-violet: <?php echo bc_meridian_e($t3_violet); ?>;
+            --t3-emerald: #10B981;
+
+            /* Luminous Frost Light (default for Template 3) */
+            --t3-bg: #F3F6FC;
+            --t3-bg-2: #EBF1FB;
+            --t3-ink: #0F172A;
+            --t3-ink-2: #334155;
+            --t3-ink-3: #64748B;
+            --t3-glass: rgba(255, 255, 255, 0.72);
+            --t3-glass-strong: rgba(255, 255, 255, 0.88);
+            --t3-glass-soft: rgba(255, 255, 255, 0.52);
+            --t3-border: rgba(15, 23, 42, 0.09);
+            --t3-border-hi: rgba(255, 255, 255, 0.92);
+            --t3-shadow: 0 22px 60px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --t3-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+            --t3-nav-bg: rgba(248, 250, 255, 0.76);
+            --t3-input-bg: rgba(255, 255, 255, 0.78);
+            --t3-pill-bg: rgba(var(--t3-rgb), 0.10);
+            --t3-pill-ink: var(--t3-primary);
+            --t3-on-primary: <?php echo bc_meridian_e($t3_light_mode['on_primary']); ?>;
+
+            --accent: var(--t3-primary);
+            --on-accent: var(--t3-on-primary);
+            --radius: 22px;
+            --radius-sm: 14px;
+            --ease: cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html[data-theme="dark"] {
+            --t3-bg: #080E1D;
+            --t3-bg-2: #0D162B;
+            --t3-ink: #F1F5F9;
+            --t3-ink-2: #CBD5E1;
+            --t3-ink-3: #94A3B8;
+            --t3-glass: rgba(15, 24, 46, 0.66);
+            --t3-glass-strong: rgba(18, 29, 54, 0.84);
+            --t3-glass-soft: rgba(255, 255, 255, 0.05);
+            --t3-border: rgba(255, 255, 255, 0.14);
+            --t3-border-hi: rgba(255, 255, 255, 0.24);
+            --t3-shadow: 0 24px 64px rgba(2, 6, 23, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+            --t3-shadow-sm: 0 10px 28px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+            --t3-nav-bg: rgba(9, 15, 31, 0.76);
+            --t3-input-bg: rgba(9, 15, 30, 0.62);
+            --t3-pill-bg: rgba(var(--t3-rgb), 0.20);
+            --t3-pill-ink: #E2E8F0;
+            --t3-on-primary: <?php echo bc_meridian_e($t3_dark_mode['on_primary']); ?>;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
         html { scroll-behavior: smooth; }
         body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--dark);
-            color: var(--light-text);
-            line-height: 1.6;
+            margin: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--t3-bg);
+            color: var(--t3-ink);
+            line-height: 1.58;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            transition: background .3s ease, color .3s ease;
         }
+        a { color: inherit; text-decoration: none; }
+        button, input, select { font: inherit; color: inherit; }
+        img { max-width: 100%; display: block; }
 
-        .container {
-            width: 100%;
-            max-width: 1240px;
-            margin: 0 auto;
-            padding: 0 24px;
-        }
-
-        /* ── Header Cyberpunk Nav ───────────────────────────────────────── */
-        #siteHeader {
+        /* ── Prismatic Frost Mesh Canvas ─────────────────────────────── */
+        .t3-mesh {
             position: fixed;
-            top: 0;
-            left: 0;
+            inset: 0;
+            z-index: -2;
+            pointer-events: none;
+            overflow: hidden;
+            background:
+                radial-gradient(1200px 640px at 8% -6%, rgba(var(--t3-rgb), 0.18), transparent 60%),
+                radial-gradient(960px 620px at 94% 12%, color-mix(in srgb, var(--t3-sky) 22%, transparent), transparent 58%),
+                radial-gradient(900px 580px at 65% 88%, color-mix(in srgb, var(--t3-violet) 16%, transparent), transparent 60%),
+                linear-gradient(180deg, var(--t3-bg) 0%, var(--t3-bg-2) 100%);
+        }
+        .t3-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(78px);
+            opacity: .55;
+            animation: t3Float 20s ease-in-out infinite alternate;
+        }
+        .t3-orb.a { width: 460px; height: 460px; top: -120px; left: -90px; background: rgba(var(--t3-rgb), 0.34); }
+        .t3-orb.b { width: 420px; height: 420px; top: 18%; right: -110px; background: color-mix(in srgb, var(--t3-sky) 46%, transparent); animation-delay: -6s; }
+        .t3-orb.c { width: 380px; height: 380px; bottom: -100px; left: 32%; background: color-mix(in srgb, var(--t3-violet) 36%, transparent); animation-delay: -11s; }
+        @keyframes t3Float {
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            100% { transform: translate3d(34px, -24px, 0) scale(1.07); }
+        }
+        .t3-dots {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+            background-size: 26px 26px;
+            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 85%);
+        }
+        html[data-theme="dark"] .t3-dots {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        }
+
+        .t3-wrap {
             width: 100%;
-            z-index: 1000;
-            background: rgba(11, 15, 25, 0.85);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border-bottom: 1px solid var(--border-color);
-            transition: all 0.3s ease;
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 0 22px;
         }
-        #siteHeader.scrolled {
-            box-shadow: var(--shadow);
-            border-bottom-color: rgba(var(--primary-rgb), 0.2);
+
+        /* ── Frosted Glass Primitives ────────────────────────────────── */
+        .t3-glass {
+            background: var(--t3-glass);
+            backdrop-filter: blur(24px) saturate(185%);
+            -webkit-backdrop-filter: blur(24px) saturate(185%);
+            border: 1px solid var(--t3-border);
+            box-shadow: var(--t3-shadow);
+            border-radius: var(--radius);
+            position: relative;
         }
-        .header-inner {
+        .t3-glass::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(140deg, var(--t3-border-hi), transparent 45%, rgba(var(--t3-rgb), 0.22));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .t3-glass-sm {
+            background: var(--t3-glass-soft);
+            backdrop-filter: blur(16px) saturate(165%);
+            -webkit-backdrop-filter: blur(16px) saturate(165%);
+            border: 1px solid var(--t3-border);
+            box-shadow: var(--t3-shadow-sm);
+            border-radius: var(--radius-sm);
+        }
+
+        /* ── Meridian-1 Compatible Floating Glass Header ─────────────── */
+        #nav {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(1220px, calc(100% - 28px));
+            z-index: 60;
+            border-radius: 20px;
+            background: var(--t3-nav-bg);
+            backdrop-filter: blur(22px) saturate(190%);
+            -webkit-backdrop-filter: blur(22px) saturate(190%);
+            border: 1px solid var(--t3-border);
+            box-shadow: var(--t3-shadow-sm);
+            transition: background .25s ease, box-shadow .25s ease;
+        }
+        #nav.stuck {
+            background: var(--t3-glass-strong);
+            box-shadow: var(--t3-shadow);
+        }
+        .nav-in {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 18px 0;
+            gap: 14px;
+            padding: 10px 16px;
         }
-        .logo img {
-            height: 38px;
-            width: auto;
-            display: block;
-        }
-        nav {
-            display: flex;
-            align-items: center;
-            gap: 32px;
-        }
-        nav a {
-            font-weight: 600;
-            color: var(--gray-text);
-            text-decoration: none;
-            font-size: 0.95rem;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-        nav a:hover { color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
-        
-        .nav-cta {
-            background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
-            color: var(--on-primary) !important;
-            padding: 12px 28px;
-            border-radius: 50px;
-            font-weight: 800 !important;
-            box-shadow: 0 8px 20px var(--primary-glow);
-            transition: all 0.3s ease !important;
-        }
-        .nav-cta:hover { 
-            transform: translateY(-2px); 
-            box-shadow: 0 15px 30px var(--primary-glow), 0 0 20px var(--secondary-glow);
-        }
-
-        .nav-toggle {
-            display: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--primary);
-        }
-
-        /* ── Hero Cyberpunk Banner ──────────────────────────────────────── */
-        .hero-wrap {
-            position: relative;
-            padding: 200px 0 130px;
-            overflow: hidden;
-        }
-        
-        .glow-sphere-1 {
-            position: absolute;
-            width: 500px; height: 500px;
-            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
-            top: -100px; left: -100px;
-            pointer-events: none;
-        }
-        .glow-sphere-2 {
-            position: absolute;
-            width: 600px; height: 600px;
-            background: radial-gradient(circle, var(--secondary-glow) 0%, transparent 70%);
-            bottom: -150px; right: -50px;
-            pointer-events: none;
-        }
-
-        .hero {
-            display: flex;
-            align-items: center;
-            gap: 60px;
-            flex-wrap: wrap;
-            position: relative;
-            z-index: 2;
-        }
-        .hero-content {
-            flex: 1.2;
-            min-width: 320px;
-        }
-        .hero-badge {
+        .brand {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(var(--primary-rgb), 0.08);
-            color: var(--primary-ink);
-            padding: 8px 18px;
-            border-radius: 50px;
-            font-size: 0.85rem;
+            gap: 10px;
+            font-family: 'Space Grotesk', sans-serif;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 24px;
-            border: 1px solid rgba(var(--primary-rgb), 0.18);
+            font-size: 15px;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
         }
-        .hero-badge .dot {
-            width: 8px; height: 8px;
-            background: #10b981;
-            border-radius: 50%;
-            animation: pulse-dot 2s infinite;
+        .brand-mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            display: inline-grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--t3-primary), var(--t3-sky));
+            color: var(--t3-on-primary);
+            box-shadow: 0 8px 20px rgba(var(--t3-rgb), 0.34);
         }
-        @keyframes pulse-dot {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.4); opacity: 0.5; }
+        .brand-mark svg { width: 18px; height: 18px; }
+        .brand-img { width: 34px; height: 34px; border-radius: 11px; object-fit: cover; }
+
+        .pswitch {
+            position: relative;
+            display: inline-grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 3px;
+            border-radius: 999px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            min-width: 176px;
+        }
+        .pthumb {
+            position: absolute;
+            top: 3px;
+            bottom: 3px;
+            left: 3px;
+            border-radius: 999px;
+            background: var(--t3-primary);
+            box-shadow: 0 4px 14px rgba(var(--t3-rgb), 0.36);
+            transition: transform .28s var(--ease);
+            z-index: 0;
+        }
+        :root[data-world="business"] .pthumb { transform: translateX(100%); }
+        .pbtn {
+            position: relative;
+            z-index: 1;
+            border: 0;
+            background: transparent;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            color: var(--t3-ink-3);
+            transition: color .2s ease;
+        }
+        .pbtn[aria-pressed="true"] { color: var(--t3-on-primary); }
+
+        .links {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .links a {
+            padding: 8px 11px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--t3-ink-2);
+            transition: background .18s ease, color .18s ease;
+            white-space: nowrap;
+        }
+        .links a:hover, .links a.on {
+            color: var(--t3-ink);
+            background: var(--t3-pill-bg);
         }
 
-        .hero h1 {
-            font-size: clamp(2.6rem, 5.5vw, 4.4rem);
-            font-weight: 900;
-            line-height: 1.05;
-            margin-bottom: 24px;
-            letter-spacing: -0.03em;
-            background: linear-gradient(135deg, white 40%, var(--primary) 75%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .hero p {
-            font-size: 1.18rem;
-            color: var(--gray-text);
-            margin-bottom: 38px;
-            max-width: 540px;
-        }
-        .hero-buttons {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
+        .nav-r { display: flex; align-items: center; gap: 8px; }
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            padding: 16px 36px;
-            border-radius: 50px;
+            gap: 8px;
+            border-radius: 12px;
             font-weight: 700;
-            text-decoration: none;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            font-size: 1rem;
+            font-size: 13.5px;
+            padding: 10px 16px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: transform .18s var(--ease), box-shadow .18s ease, background .18s ease;
+            white-space: nowrap;
         }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: var(--on-primary);
-            box-shadow: 0 8px 20px var(--primary-glow);
+        .btn:hover { transform: translateY(-1px); }
+        .btn.sm { padding: 8px 13px; font-size: 12.5px; border-radius: 10px; }
+        .btn.lg { padding: 13px 22px; font-size: 15px; border-radius: 14px; }
+        .btn.primary {
+            background: linear-gradient(135deg, var(--t3-primary), color-mix(in srgb, var(--t3-primary) 72%, var(--t3-sky)));
+            color: var(--t3-on-primary);
+            box-shadow: 0 10px 26px rgba(var(--t3-rgb), 0.30);
         }
-        .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 20px 35px var(--primary-glow), 0 0 15px var(--secondary-glow);
+        .btn.ghost {
+            background: var(--t3-glass-soft);
+            border-color: var(--t3-border);
+            color: var(--t3-ink);
         }
-        .btn-secondary {
-            background: transparent;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.03);
-            border-color: var(--primary);
-            transform: translateY(-2px);
-        }
-
-        .hero-image {
-            flex: 0.8;
-            min-width: 300px;
-            display: flex;
+        .btn.ghost:hover { background: var(--t3-glass-strong); }
+        .iconbtn {
+            width: 38px;
+            height: 38px;
+            border-radius: 11px;
+            border: 1px solid var(--t3-border);
+            background: var(--t3-glass-soft);
+            display: none;
+            align-items: center;
             justify-content: center;
-            position: relative;
+            cursor: pointer;
         }
-        .hero-image::after {
-            content: '';
-            position: absolute;
-            top: 20px; left: 20px;
-            right: 20px; bottom: 20px;
-            box-shadow: 0 0 50px var(--primary-glow);
-            border-radius: 36px;
-            pointer-events: none;
-            z-index: 0;
+        .iconbtn svg, .btn svg { width: 17px; height: 17px; flex: 0 0 auto; }
+
+        @media (max-width: 1020px) {
+            .links, .nav-r .hide-m { display: none; }
+            .iconbtn { display: inline-flex; }
         }
-        .hero-image img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 36px;
-            border: 1px solid var(--border-color);
-            position: relative;
-            z-index: 1;
+        @media (max-width: 560px) {
+            .pswitch { min-width: 144px; }
+            .pbtn { padding: 6px 8px; font-size: 11.5px; }
         }
 
-        /* ── Cyber Service Grid ────────────────────────────────────────── */
-        .section-wrap { padding: 100px 0; }
-        .section-header { text-align: center; margin-bottom: 60px; }
-        .section-eyebrow {
+        /* ── Meridian-1 Sheet & Get-App Modal ────────────────────────── */
+        .sheet {
+            position: fixed;
+            inset: 0;
+            z-index: 90;
+            background: rgba(15, 23, 42, 0.52);
+            backdrop-filter: blur(12px);
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 16px;
+        }
+        .sheet.open { display: flex; }
+        .sheet-card {
+            width: min(540px, 100%);
+            max-height: 88vh;
+            overflow: auto;
+            background: var(--t3-glass-strong);
+            backdrop-filter: blur(28px) saturate(190%);
+            border: 1px solid var(--t3-border);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: var(--t3-shadow);
+            color: var(--t3-ink);
+        }
+        .sheet-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .sheet-head .iconbtn { display: inline-flex; }
+        .sheet-links {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .sheet-links a {
+            padding: 11px 12px;
+            border-radius: 12px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            font-size: 13.5px;
+            font-weight: 600;
+        }
+        .sheet-cta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media (max-width: 440px) {
+            .sheet-links, .sheet-cta { grid-template-columns: 1fr; }
+        }
+
+        /* ── Hero: Asymmetric Luminous Bento ─────────────────────────── */
+        .t3-hero {
+            padding: 116px 0 46px;
+        }
+        .t3-hero-top {
+            display: grid;
+            grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+            gap: 28px;
+            align-items: end;
+            margin-bottom: 26px;
+        }
+        @media (max-width: 920px) {
+            .t3-hero { padding-top: 98px; }
+            .t3-hero-top { grid-template-columns: 1fr; align-items: start; }
+        }
+        .t3-kicker-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .t3-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 13px;
+            border-radius: 999px;
+            background: var(--t3-glass);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--t3-border);
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--t3-ink-2);
+            box-shadow: var(--t3-shadow-sm);
+        }
+        .t3-dot-live {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--t3-emerald);
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+        }
+        .t3-theme-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--t3-border);
+            background: var(--t3-glass);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            color: var(--t3-ink-2);
+        }
+        .t3-hero h1 {
+            margin: 0 0 14px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(36px, 5.2vw, 60px);
+            line-height: 1.03;
+            letter-spacing: -0.04em;
+            font-weight: 700;
+        }
+        .t3-grad {
+            background: linear-gradient(125deg, var(--t3-primary) 10%, var(--t3-sky) 55%, var(--t3-violet) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .t3-hero-copy {
+            margin: 0;
+            font-size: 16.5px;
+            color: var(--t3-ink-2);
+            max-width: 58ch;
+        }
+        .t3-hero-cta-box {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .t3-cta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .t3-kpi-strip {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            padding-top: 12px;
+            border-top: 1px solid var(--t3-border);
+        }
+        .t3-kpi strong {
+            display: block;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 19px;
+            font-weight: 700;
+        }
+        .t3-kpi span {
+            font-size: 12px;
+            color: var(--t3-ink-3);
+        }
+
+        /* ── 3-Card Bento Mosaic ─────────────────────────────────────── */
+        .t3-bento {
+            display: grid;
+            grid-template-columns: 1.05fr 1.15fr 0.85fr;
+            gap: 18px;
+            align-items: stretch;
+        }
+        @media (max-width: 1040px) {
+            .t3-bento { grid-template-columns: 1fr 1fr; }
+            .t3-bento-trust { grid-column: 1 / -1; }
+        }
+        @media (max-width: 680px) {
+            .t3-bento { grid-template-columns: 1fr; }
+        }
+        .t3-bento-card {
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .t3-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .t3-card-top h2, .t3-card-top h3 {
+            margin: 0;
+            font-size: 15.5px;
+            font-weight: 800;
+        }
+        .t3-badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            background: var(--t3-pill-bg);
+            color: var(--t3-pill-ink);
+            border: 1px solid rgba(var(--t3-rgb), 0.18);
+            white-space: nowrap;
+        }
+        .t3-dock-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+        }
+        .t3-dock-tile {
+            padding: 11px 12px;
+            border-radius: 13px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            transition: transform .18s var(--ease), border-color .18s ease, background .18s ease;
+        }
+        .t3-dock-tile:hover {
+            transform: translateY(-2px);
+            background: var(--t3-glass-strong);
+            border-color: rgba(var(--t3-rgb), 0.36);
+        }
+        .t3-dock-tile strong { display: block; font-size: 13px; font-weight: 700; }
+        .t3-dock-tile span { font-size: 11px; color: var(--t3-ink-3); }
+        .t3-hero-banner-img {
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--t3-border);
+            margin-top: auto;
+        }
+        .t3-hero-banner-img img { width: 100%; height: 112px; object-fit: cover; }
+
+        /* Tabbed Wallet & FX Bento Terminal */
+        .t3-seg {
+            display: inline-grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            padding: 4px;
+            border-radius: 12px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+        }
+        .t3-seg button {
+            border: 0;
+            background: transparent;
+            padding: 7px 11px;
+            border-radius: 9px;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            color: var(--t3-ink-3);
+        }
+        .t3-seg button.is-on {
+            background: var(--t3-primary);
+            color: var(--t3-on-primary);
+            box-shadow: 0 6px 16px rgba(var(--t3-rgb), 0.28);
+        }
+        .t3-pane { display: none; flex-direction: column; gap: 11px; }
+        .t3-pane.is-on { display: flex; }
+        .t3-net-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .t3-net-btn {
+            padding: 8px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--t3-border);
+            background: var(--t3-glass-soft);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .t3-net-btn.is-on {
+            background: var(--t3-pill-bg);
+            border-color: var(--t3-primary);
+            color: var(--t3-pill-ink);
+        }
+        .t3-field { display: flex; flex-direction: column; gap: 5px; }
+        .t3-field label { font-size: 11.5px; font-weight: 700; color: var(--t3-ink-3); }
+        .t3-field input, .t3-field select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 11px;
+            border: 1px solid var(--t3-border);
+            background: var(--t3-input-bg);
+            font-size: 14px;
+            font-weight: 600;
+            outline: none;
+        }
+        .t3-field input:focus, .t3-field select:focus {
+            border-color: var(--t3-primary);
+            box-shadow: 0 0 0 3px rgba(var(--t3-rgb), 0.16);
+        }
+        .t3-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .t3-out-box {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .t3-out-box strong { font-family: 'Space Grotesk', sans-serif; font-size: 18px; }
+        .t3-trust-list {
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+        .t3-trust-row {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .t3-trust-row span:last-child {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--t3-emerald);
+        }
+
+        /* ── Sections ────────────────────────────────────────────────── */
+        .t3-sec { padding: 54px 0; }
+        .t3-sec-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 26px;
+        }
+        .t3-eyebrow {
             display: inline-block;
-            font-size: 0.82rem;
+            font-size: 11.5px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--t3-primary);
+            margin-bottom: 6px;
+        }
+        .t3-sec-head h2 {
+            margin: 0 0 6px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(26px, 3.6vw, 38px);
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+        }
+        .t3-sec-head p {
+            margin: 0;
+            color: var(--t3-ink-2);
+            max-width: 62ch;
+            font-size: 15px;
+        }
+
+        /* ── Split-Rail Personal Features Explorer ───────────────────── */
+        .t3-explorer {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+            gap: 22px;
+            align-items: start;
+        }
+        @media (max-width: 960px) {
+            .t3-explorer { grid-template-columns: 1fr; }
+        }
+        .t3-rail {
+            position: sticky;
+            top: 86px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        @media (max-width: 960px) {
+            .t3-rail { position: static; }
+        }
+        .t3-search {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--t3-border);
+            background: var(--t3-input-bg);
+            font-size: 13.5px;
+            outline: none;
+        }
+        .t3-search:focus { border-color: var(--t3-primary); }
+        .t3-rail-btn {
+            width: 100%;
+            text-align: left;
+            padding: 11px 12px;
+            border-radius: 13px;
+            border: 1px solid transparent;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            color: var(--t3-ink-2);
+            font-weight: 700;
+            font-size: 13.5px;
+            transition: background .18s ease, border-color .18s ease, color .18s ease;
+        }
+        .t3-rail-btn:hover {
+            background: var(--t3-glass-soft);
+            border-color: var(--t3-border);
+            color: var(--t3-ink);
+        }
+        .t3-rail-btn.is-on {
+            background: var(--t3-pill-bg);
+            border-color: rgba(var(--t3-rgb), 0.35);
+            color: var(--t3-ink);
+        }
+        .t3-rail-count {
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--t3-glass-strong);
+            border: 1px solid var(--t3-border);
+        }
+
+        .t3-workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .t3-cat-panel {
+            padding: 24px;
+        }
+        .t3-cat-panel.is-hidden { display: none; }
+        .t3-cat-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--t3-border);
+        }
+        .t3-cat-title {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+        .t3-cat-ico {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: inline-grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(var(--t3-rgb), 0.16), color-mix(in srgb, var(--t3-sky) 16%, transparent));
+            border: 1px solid rgba(var(--t3-rgb), 0.25);
+            color: var(--t3-primary);
+            flex: 0 0 auto;
+        }
+        .t3-cat-ico svg { width: 21px; height: 21px; }
+        .t3-cat-head h3 { margin: 0 0 3px; font-size: 20px; font-weight: 800; }
+        .t3-cat-head p { margin: 0; font-size: 13.5px; color: var(--t3-ink-3); }
+
+        .t3-feat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        @media (max-width: 640px) {
+            .t3-feat-grid { grid-template-columns: 1fr; }
+        }
+        .t3-feat-tile {
+            padding: 15px 16px;
+            border-radius: 15px;
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+            transition: transform .18s var(--ease), border-color .18s ease, background .18s ease;
+        }
+        .t3-feat-tile:hover {
+            transform: translateY(-2px);
+            background: var(--t3-glass-strong);
+            border-color: rgba(var(--t3-rgb), 0.36);
+        }
+        .t3-feat-tile.is-filtered-out { display: none; }
+        .t3-feat-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .t3-feat-top strong {
+            font-size: 14.5px;
+            font-weight: 700;
+            line-height: 1.32;
+        }
+        .t3-feat-tile p {
+            margin: 0;
+            font-size: 12.8px;
+            color: var(--t3-ink-3);
+            line-height: 1.48;
+        }
+        .t3-feat-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--t3-primary);
+        }
+        .t3-feat-foot svg { width: 14px; height: 14px; }
+
+        /* ── Coming Soon Glass Strip ─────────────────────────────────── */
+        .t3-cs-wrap {
+            margin-top: 24px;
+            padding: 22px;
+            border-radius: var(--radius);
+            background: var(--t3-glass-soft);
+            border: 1px dashed rgba(var(--t3-rgb), 0.36);
+            backdrop-filter: blur(18px);
+        }
+        .t3-cs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .t3-cs-card {
+            padding: 14px 15px;
+            border-radius: 14px;
+            background: var(--t3-glass);
+            border: 1px solid var(--t3-border);
+        }
+        .t3-cs-tag {
+            display: inline-block;
+            font-size: 10.5px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--primary-ink);
-            background: rgba(var(--primary-rgb), 0.08);
-            padding: 6px 16px;
-            border-radius: 50px;
-            margin-bottom: 16px;
-            border: 1px solid rgba(var(--primary-rgb), 0.15);
+            letter-spacing: .06em;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(245, 158, 11, 0.14);
+            color: #B45309;
+            margin-bottom: 6px;
         }
-        .section-header h2 { font-size: clamp(2rem, 3.5vw, 2.8rem); font-weight: 800; color: white; margin-bottom: 16px; letter-spacing: -0.01em; }
-        .section-header p { color: var(--gray-text); font-size: 1.08rem; max-width: 600px; margin: 0 auto; }
+        html[data-theme="dark"] .t3-cs-tag { color: #FBBF24; }
+        .t3-cs-card h4 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+        .t3-cs-card p { margin: 0; font-size: 12.5px; color: var(--t3-ink-3); }
 
-        .service-grid {
+        /* ── 3-Step Glass Flow & 4-Tile Security Band ────────────────── */
+        .t3-steps {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
         }
-        .service-card {
-            background: var(--card-bg);
-            padding: 36px 24px;
-            border-radius: 28px;
-            text-align: center;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
+        @media (max-width: 820px) { .t3-steps { grid-template-columns: 1fr; } }
+        .t3-step {
+            padding: 22px;
         }
-        .service-card:hover {
-            transform: translateY(-8px);
-            border-color: var(--primary);
-            box-shadow: 0 15px 30px var(--primary-glow);
-        }
-        .service-icon-wrap {
-            width: 70px; height: 70px;
-            margin: 0 auto 24px;
-            background: rgba(var(--primary-rgb), 0.08);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.85rem; color: var(--primary-ink);
-            border: 1px solid rgba(var(--primary-rgb), 0.15);
-        }
-        .service-card h3 { font-size: 1.15rem; font-weight: 700; color: white; margin-bottom: 8px; }
-        .service-card p { color: var(--gray-text); font-size: 0.88rem; }
-
-        /* ── Dynamic Stats Bar ──────────────────────────────────────────── */
-        .stats-bar {
-            background: #111827;
-            padding: 48px 0;
-            border-top: 1px solid var(--border-color);
-            border-bottom: 1px solid var(--border-color);
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 32px;
-            text-align: center;
-        }
-        .stat-item { color: white; }
-        .stat-number { font-size: 2.6rem; font-weight: 900; display: block; line-height: 1; margin-bottom: 8px; color: var(--primary); text-shadow: 0 0 10px var(--primary-glow); }
-        .stat-label { font-size: 0.95rem; color: var(--gray-text); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
-
-        /* ── Cyber Accordion ── */
-        .accordion-block {
-            background: var(--card-bg);
-            border-radius: 36px;
-            padding: 40px;
-            border: 1px solid var(--border-color);
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        .accordion-item {
-            border-bottom: 1px solid var(--border-color);
-        }
-        .accordion-item:last-child { border-bottom: none; }
-        .accordion-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 0;
+        .t3-step-num {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: inline-grid;
+            place-items: center;
+            font-family: 'Space Grotesk', sans-serif;
             font-weight: 700;
-            font-size: 1.18rem;
+            background: var(--t3-pill-bg);
+            color: var(--t3-primary);
+            margin-bottom: 12px;
+        }
+        .t3-step h3 { margin: 0 0 6px; font-size: 17px; }
+        .t3-step p { margin: 0; font-size: 13.8px; color: var(--t3-ink-2); }
+
+        .t3-sec-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+        @media (max-width: 980px) { .t3-sec-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 560px) { .t3-sec-grid { grid-template-columns: 1fr; } }
+        .t3-sec-card { padding: 20px; }
+        .t3-sec-card h3 { margin: 0 0 6px; font-size: 16px; }
+        .t3-sec-card p { margin: 0 0 12px; font-size: 13.5px; color: var(--t3-ink-2); }
+        .t3-sec-card a { font-size: 13px; font-weight: 700; color: var(--t3-primary); }
+
+        /* ── 2-Column Glass FAQ + CTA + Footer ───────────────────────── */
+        .t3-faq-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        @media (max-width: 780px) { .t3-faq-grid { grid-template-columns: 1fr; } }
+        .t3-faq-card { overflow: hidden; }
+        .t3-faq-btn {
+            width: 100%;
+            text-align: left;
+            padding: 18px 20px;
+            border: 0;
+            background: transparent;
+            font-size: 15px;
+            font-weight: 700;
             cursor: pointer;
-            color: white;
-            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
-        .accordion-header:hover { color: var(--primary); }
-        .accordion-header i {
-            transition: transform 0.3s;
-            color: var(--primary);
+        .t3-faq-btn span:last-child { font-size: 19px; color: var(--t3-primary); transition: transform .2s ease; }
+        .t3-faq-card.open .t3-faq-btn span:last-child { transform: rotate(45deg); }
+        .t3-faq-body {
+            display: none;
+            padding: 0 20px 18px;
+            font-size: 13.8px;
+            color: var(--t3-ink-2);
         }
-        .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), padding 0.2s;
-            color: var(--gray-text);
-            font-size: 0.98rem;
-            line-height: 1.7;
-        }
-        .accordion-item.active .accordion-content {
-            max-height: 400px;
-            padding-bottom: 24px;
-        }
-        .accordion-item.active .accordion-header i {
-            transform: rotate(45deg);
-        }
-        .about-text {
-            column-count: 2;
-            column-gap: 40px;
-            line-height: 1.75;
-        }
-        .about-text p { margin-bottom: 16px; }
+        .t3-faq-card.open .t3-faq-body { display: block; }
 
-
-        /* ── Responsive Styling ── */
-        @media (max-width: 991px) {
-            nav { display: none; }
-            .nav-toggle { display: block; }
-            .hero { gap: 40px; text-align: center; }
-            .hero-content { display: flex; flex-direction: column; align-items: center; }
-            .hero p { margin: 0 auto 32px; }
-            .hero-buttons { justify-content: center; }
-            .about-text { column-count: 1; }
+        .t3-cta-banner {
+            padding: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
         }
+        .t3-cta-banner h2 {
+            margin: 0 0 6px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(24px, 3vw, 32px);
+        }
+        .t3-cta-banner p { margin: 0; color: var(--t3-ink-2); max-width: 54ch; }
+
+        .t3-footer {
+            margin-top: 28px;
+            padding: 38px 0 46px;
+            border-top: 1px solid var(--t3-border);
+        }
+        .t3-foot-top {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .t3-foot-meta {
+            margin-top: 20px;
+            padding-top: 18px;
+            border-top: 1px solid var(--t3-border);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 12.5px;
+            color: var(--t3-ink-3);
+        }
+        /* Style canonical bc_public_directory_html() inside Template 3 frost */
+        .bc-public-directory {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 14px;
+            padding: 20px;
+            border-radius: var(--radius-sm);
+            background: var(--t3-glass-soft);
+            border: 1px solid var(--t3-border);
+            backdrop-filter: blur(16px);
+        }
+        .bc-public-directory h3 {
+            margin: 0 0 10px;
+            font-size: 11.5px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--t3-primary);
+        }
+        .bc-public-directory ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+        .bc-public-directory a { font-size: 13px; color: var(--t3-ink-2); }
+        .bc-public-directory a:hover { color: var(--t3-ink); text-decoration: underline; }
+        .bc-app-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 10px 16px;
+            border-radius: 13px;
+            background: var(--t3-glass-strong);
+            border: 1px solid var(--t3-border);
+            font-size: 13.5px;
+            font-weight: 700;
+            color: var(--t3-ink);
+        }
+        .bc-app-badge svg { width: 18px; height: 18px; }
+
+        [data-rv] { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s var(--ease); }
+        [data-rv].in { opacity: 1; transform: none; }
     </style>
 </head>
 <body>
+    <div class="t3-mesh" aria-hidden="true">
+        <div class="t3-orb a"></div>
+        <div class="t3-orb b"></div>
+        <div class="t3-orb c"></div>
+    </div>
+    <div class="t3-dots" aria-hidden="true"></div>
 
-    <!-- Header Navigation -->
-    <header id="siteHeader">
-        <div class="container">
-            <div class="header-inner">
-                <a href="/" class="logo">
-                    <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>" style="filter: brightness(0.9);">
-                </a>
-                <?php $t3_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : ''; ?>
-                <nav id="siteNav">
-                    <a href="Services.php">Services</a>
-                    <a href="ReferAndEarn.php">Refer &amp; Earn</a>
-                    <a href="#about">About</a>
-                    <a href="#faq">FAQ</a>
-                    <a href="<?php echo htmlspecialchars($t3_dash !== '' ? $t3_dash : '/web/Login.php'); ?>" class="nav-cta"><?php echo $t3_dash !== '' ? 'Dashboard' : 'Get Started'; ?></a>
-                </nav>
-                <div class="nav-toggle" id="navToggle"><i class="fas fa-bars"></i></div>
-            </div>
-        </div>
-    </header>
+    <?php echo bc_meridian_header_and_menu($ctx, 'personal', '/'); ?>
 
-    <!-- Hero Banner -->
-    <section class="hero-wrap">
-        <div class="glow-sphere-1"></div>
-        <div class="glow-sphere-2"></div>
-        <div class="container">
-            <div class="hero">
-                <div class="hero-content">
-                    <div class="hero-badge">
-                        <span class="dot"></span> Fully Automated Infrastructure
+    <!-- Hero: Asymmetric Luminous Bento -->
+    <section class="t3-hero">
+        <div class="t3-wrap">
+            <div class="t3-hero-top">
+                <div data-rv class="in">
+                    <div class="t3-kicker-row">
+                        <span class="t3-pill"><span class="t3-dot-live"></span> <?php echo $short_e; ?> · Luminous Glass Personal Hub</span>
+                        <button type="button" class="t3-theme-btn" id="t3ThemeToggle" aria-label="Switch glass surface mode">Switch to Midnight Frost</button>
                     </div>
-                    <h1>Digital Utility Payments, Re-imagined</h1>
-                    <p>Recharge airtime, buy cheap mobile data, pay electricity bills and renew cable TV subscriptions instantly using our highly secured next-generation automation gateway.</p>
-                    <div class="hero-buttons">
+                    <h1>Every payment, bill and <span class="t3-grad">digital card</span> in clear glass.</h1>
+                    <p class="t3-hero-copy"><?php echo bc_meridian_e($ctx['site_desc']); ?> Every personal feature on this landing page stays live-synced with your Service Control Center.</p>
+                </div>
+
+                <div class="t3-glass t3-hero-cta-box" data-rv>
+                    <div class="t3-cta-row">
                         <?php if ($t3_dash !== ''): ?>
-                            <a href="<?php echo htmlspecialchars($t3_dash); ?>" class="btn btn-primary"><i class="fas fa-th-large"></i> Dashboard</a>
+                            <a class="btn primary lg" href="<?php echo bc_meridian_e($t3_dash); ?>">Open your dashboard</a>
                         <?php else: ?>
-                            <a href="/web/Register.php" class="btn btn-primary"><i class="fas fa-rocket"></i> Get Started</a>
-                            <a href="/web/Login.php" class="btn btn-secondary"><i class="fas fa-sign-in-alt"></i> Access Portal</a>
+                            <a class="btn primary lg" href="/web/Register.php">Create personal account</a>
+                            <a class="btn ghost lg" href="/web/Login.php">Sign in</a>
+                        <?php endif; ?>
+                        <?php if ($t3_app_badge !== ''): ?>
+                            <?php echo $t3_app_badge; ?>
                         <?php endif; ?>
                     </div>
-                </div>
-                <div class="hero-image">
-                    <img src="<?php echo $hero_image; ?>" alt="<?php echo htmlspecialchars($site_title); ?> Interface Mockup" width="600" height="400" loading="eager">
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Stats Bar -->
-    <section class="stats-bar">
-        <div class="container">
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-number">99.99%</span>
-                    <span class="stat-label">Automation Success</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">24/7</span>
-                    <span class="stat-label">Live Operation</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">3 Secs</span>
-                    <span class="stat-label">Avg. Delivery Speed</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number">Secured</span>
-                    <span class="stat-label">End-to-End Encryption</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Services Section -->
-    <section class="section-wrap" id="services">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-eyebrow">Our Products</span>
-                <h2>What We Offer</h2>
-                <p>Fully automated and cheap services with instant status responses and callbacks.</p>
-            </div>
-            <div class="service-grid">
-                <?php if(isServiceEnabled('airtime')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-phone-alt"></i></div>
-                    <h3>Buy Airtime</h3>
-                    <p>MTN, Glo, Airtel, 9mobile & discounts</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('data')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-wifi"></i></div>
-                    <h3>Buy Data</h3>
-                    <p>Fast bundles, all networks</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('electric')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-bolt"></i></div>
-                    <h3>Electricity</h3>
-                    <p>Prepaid/postpaid token instantly</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('cable')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-tv"></i></div>
-                    <h3>Cable TV</h3>
-                    <p>DSTV, GOtv, StarTimes renewal</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('bank_transfer')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-university"></i></div>
-                    <h3>Wallet to Bank</h3>
-                    <p>Instant withdrawal to any bank</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('bulk_sms')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-comment-dots"></i></div>
-                    <h3>Bulk SMS</h3>
-                    <p>Customized, high delivery</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('exam')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-graduation-cap"></i></div>
-                    <h3>Exam Pin</h3>
-                    <p>WAEC, NECO, NABTEB e-pins</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('recharge_card')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-print"></i></div>
-                    <h3>Recharge Card Printing</h3>
-                    <p>Print & sell e-pins</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('data_card')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-database"></i></div>
-                    <h3>Data Card Printing</h3>
-                    <p>Generate data bundle pins</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('gift_card')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-gift"></i></div>
-                    <h3>Gift Cards</h3>
-                    <p>Trade local & international</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('virtual_card')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-credit-card"></i></div>
-                    <h3>Virtual Cards</h3>
-                    <p>Dollar & Naira for online payments</p>
-                </div>
-                <?php endif; ?>
-                <?php if(isServiceEnabled('crypto_hub')): ?>
-                <div class="service-card">
-                    <div class="service-icon-wrap"><i class="fas fa-coins"></i></div>
-                    <h3>Crypto Hub</h3>
-                    <p>Send, Swap, Hold Stable Coins</p>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </section>
-
-    <!-- About Section Accordion -->
-    <section class="section-wrap" style="background:#0c111e;" id="about">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-eyebrow">Who We Are</span>
-                <h2>About Our Technology</h2>
-                <p>Advanced VTU systems designed to make payments robust and effortless.</p>
-            </div>
-            <div class="accordion-block">
-                <div class="accordion-item active">
-                    <div class="accordion-header">Our Mission & Objective <i class="fas fa-plus"></i></div>
-                    <div class="accordion-content">
-                        <div class="about-text">
-                            <p>We provide standard digital utility transaction channels for end-consumers and resellers alike. We are committed to rendering top-notch services with an automation standard that never sleeps.</p>
-                            <p>Our dynamic system keeps track of provider uptimes, automatically switching channels to guarantee a 100% transaction completion rate.</p>
+                    <div class="t3-kpi-strip">
+                        <div class="t3-kpi">
+                            <strong><?php echo (int)$active_feature_count; ?></strong>
+                            <span>Active features</span>
+                        </div>
+                        <div class="t3-kpi">
+                            <strong>5</strong>
+                            <span>Service pillars</span>
+                        </div>
+                        <div class="t3-kpi">
+                            <strong>2FA + KYC</strong>
+                            <span>Protected wallet</span>
                         </div>
                     </div>
                 </div>
-                <div class="accordion-item">
-                    <div class="accordion-header">Bulletproof Security Standards <i class="fas fa-plus"></i></div>
-                    <div class="accordion-content">
-                        <p>We use SSL encryption protocols, double-hash password storage, and rigorous API authentication methodologies to keep your funds, logs, and account records fully protected at all times.</p>
+            </div>
+
+            <!-- 3-Card Bento Mosaic -->
+            <div class="t3-bento">
+                <!-- Bento 1: Quick Launch Dock + Brand Media -->
+                <div class="t3-glass t3-bento-card" data-rv>
+                    <div class="t3-card-top">
+                        <h2>Quick Launch Dock</h2>
+                        <span class="t3-badge">Live Service Control</span>
+                    </div>
+                    <div class="t3-dock-grid">
+                        <?php if (!empty($quick_dock)): ?>
+                            <?php foreach ($quick_dock as $qd): ?>
+                            <a class="t3-dock-tile" href="<?php echo bc_meridian_e($qd['href']); ?>">
+                                <span>
+                                    <strong><?php echo bc_meridian_e($qd['label']); ?></strong>
+                                    <span><?php echo bc_meridian_e($qd['tag']); ?></span>
+                                </span>
+                                <span aria-hidden="true">→</span>
+                            </a>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <a class="t3-dock-tile" href="/web/Dashboard.php"><span><strong>Dashboard</strong><span>Wallet</span></span><span>→</span></a>
+                            <a class="t3-dock-tile" href="/web/Transactions.php"><span><strong>Ledger</strong><span>Receipts</span></span><span>→</span></a>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($header_image_url !== ''): ?>
+                    <div class="t3-hero-banner-img">
+                        <img src="<?php echo bc_meridian_e($header_image_url); ?>" alt="<?php echo $site_e; ?> hero preview">
+                    </div>
+                    <?php else: ?>
+                    <div class="t3-out-box" style="margin-top:auto">
+                        <div>
+                            <div style="font-size:11.5px;color:var(--t3-ink-3)">Personal Directory</div>
+                            <strong style="font-size:14.5px">Explore all <?php echo (int)$active_feature_count; ?> active services</strong>
+                        </div>
+                        <a class="btn sm ghost" href="#personal-features">Browse</a>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Bento 2: Tabbed Recharge + FX Terminal -->
+                <div class="t3-glass t3-bento-card" data-rv>
+                    <div class="t3-card-top">
+                        <h2>Interactive Estimator</h2>
+                        <div class="t3-seg" role="tablist" aria-label="Estimator mode">
+                            <button type="button" class="is-on" data-t3tab="topup" role="tab" aria-selected="true">Top-Up</button>
+                            <button type="button" data-t3tab="fx" role="tab" aria-selected="false">FX Rates</button>
+                        </div>
+                    </div>
+
+                    <div class="t3-pane is-on" id="t3PaneTopup">
+                        <div class="t3-net-row" id="t3NetRow">
+                            <button type="button" class="t3-net-btn is-on" data-net="MTN">MTN</button>
+                            <button type="button" class="t3-net-btn" data-net="Airtel">Airtel</button>
+                            <button type="button" class="t3-net-btn" data-net="Glo">Glo</button>
+                            <button type="button" class="t3-net-btn" data-net="9mobile">9mobile</button>
+                        </div>
+                        <div class="t3-row2">
+                            <div class="t3-field">
+                                <label for="t3TopupType">Service</label>
+                                <select id="t3TopupType">
+                                    <option value="airtime">Airtime</option>
+                                    <option value="data">Data Bundle</option>
+                                </select>
+                            </div>
+                            <div class="t3-field">
+                                <label for="t3TopupAmt">Amount (NGN)</label>
+                                <input id="t3TopupAmt" type="number" min="100" step="100" value="2000">
+                            </div>
+                        </div>
+                        <div class="t3-out-box">
+                            <div>
+                                <div style="font-size:11.5px;color:var(--t3-ink-3)" id="t3TopupMeta">MTN Airtime estimate</div>
+                                <strong id="t3TopupPay">₦1,960</strong>
+                            </div>
+                            <a class="btn sm primary" id="t3TopupGo" href="<?php echo $t3_enabled('airtime') ? '/services/airtime.php' : '/services/data.php'; ?>">Continue</a>
+                        </div>
+                    </div>
+
+                    <div class="t3-pane" id="t3PaneFx">
+                        <div class="t3-row2">
+                            <div class="t3-field">
+                                <label for="t3FxAmt">Amount</label>
+                                <input id="t3FxAmt" type="number" min="1" step="1" value="100">
+                            </div>
+                            <div class="t3-field">
+                                <label for="t3FxFrom">From</label>
+                                <select id="t3FxFrom">
+                                    <option value="USD" selected>USD</option>
+                                    <option value="GBP">GBP</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="NGN">NGN</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="t3-field">
+                            <label for="t3FxTo">Convert to</label>
+                            <select id="t3FxTo">
+                                <option value="NGN" selected>NGN — Nigerian Naira</option>
+                                <option value="USD">USD — US Dollar</option>
+                                <option value="GBP">GBP — British Pound</option>
+                                <option value="EUR">EUR — Euro</option>
+                            </select>
+                        </div>
+                        <div class="t3-out-box">
+                            <div>
+                                <div style="font-size:11.5px;color:var(--t3-ink-3)" id="t3FxNote">Indicative conversion</div>
+                                <strong id="t3FxResult">₦155,000.00</strong>
+                            </div>
+                            <?php if ($t3_enabled('currency_conversion')): ?>
+                                <a class="btn sm primary" href="/MultiCurrencyWallet.php">Convert</a>
+                            <?php else: ?>
+                                <span class="t3-badge">Paused</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bento 3: Security & Trust Status -->
+                <div class="t3-glass t3-bento-card t3-bento-trust" data-rv>
+                    <div class="t3-card-top">
+                        <h2>Account Protection</h2>
+                        <span class="t3-badge">Verified</span>
+                    </div>
+                    <div class="t3-trust-list">
+                        <a class="t3-trust-row" href="/web/KYCVerification.php"><span>Identity KYC</span><span>Ready</span></a>
+                        <a class="t3-trust-row" href="/web/SecurityPIN.php"><span>Transaction PIN</span><span>Active</span></a>
+                        <a class="t3-trust-row" href="/web/SecuritySetup.php"><span>Google Auth &amp; OTP</span><span>2FA</span></a>
+                        <a class="t3-trust-row" href="<?php echo $t3_enabled('password_reset') ? '/web/PasswordRecovery.php' : '/web/AccountSettings.php'; ?>"><span>Recovery &amp; Sessions</span><span>Protected</span></a>
+                        <a class="t3-trust-row" href="/Contact.php"><span>Dispute Support</span><span>24/7</span></a>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- FAQ Section -->
-    <section class="section-wrap" id="faq">
-        <div class="container">
-            <div class="section-header">
-                <span class="section-eyebrow">Got Questions?</span>
-                <h2>Frequently Asked Questions</h2>
-                <p>Quick answers to some common inquiries about our payment operations.</p>
+    <!-- Personal Features: Split-Rail Explorer -->
+    <section class="t3-sec" id="personal-features">
+        <div class="t3-wrap">
+            <div class="t3-sec-head">
+                <div>
+                    <span class="t3-eyebrow">Service Control Synced</span>
+                    <h2>Personal Features</h2>
+                    <p>Browse every capability across all five personal pillars. Each item checks your Service Control Center in real time—disabled or pending integrations appear cleanly under Coming Soon.</p>
+                </div>
+                <a class="btn ghost" href="/Services.php">Open Services Directory</a>
             </div>
-            <div class="accordion-block" style="background:transparent; box-shadow:none; padding:0; border:none;">
-                <div class="accordion-item">
-                    <div class="accordion-header">Are transactions automated? <i class="fas fa-plus"></i></div>
-                    <div class="accordion-content">
-                        <p>Yes, all transactions are processed automatically via secure API channels and delivered in under 3 seconds.</p>
-                    </div>
+
+            <div class="t3-explorer">
+                <!-- Left Sticky Glass Rail -->
+                <aside class="t3-glass t3-rail" aria-label="Personal Features navigation rail">
+                    <input type="search" class="t3-search" id="t3FeatureSearch" placeholder="Search personal features..." aria-label="Search personal features">
+                    <button type="button" class="t3-rail-btn is-on" data-t3cat="all">
+                        <span>All Categories</span>
+                        <span class="t3-rail-count"><?php echo (int)$active_feature_count; ?></span>
+                    </button>
+                    <?php foreach ($personal_pillars as $pl): ?>
+                    <button type="button" class="t3-rail-btn" data-t3cat="<?php echo bc_meridian_e($pl['id']); ?>">
+                        <span><?php echo bc_meridian_e($pl['title']); ?></span>
+                        <span class="t3-rail-count"><?php echo count($pl['items']); ?></span>
+                    </button>
+                    <?php endforeach; ?>
+                </aside>
+
+                <!-- Right Active Glass Workspace -->
+                <div class="t3-workspace" id="t3Workspace">
+                    <?php foreach ($personal_pillars as $pl): ?>
+                    <article class="t3-glass t3-cat-panel" data-t3panel="<?php echo bc_meridian_e($pl['id']); ?>">
+                        <div class="t3-cat-head">
+                            <div class="t3-cat-title">
+                                <span class="t3-cat-ico" aria-hidden="true"><?php echo $pl['icon']; ?></span>
+                                <div>
+                                    <span class="t3-eyebrow" style="margin-bottom:2px"><?php echo bc_meridian_e($pl['eyebrow']); ?></span>
+                                    <h3><?php echo bc_meridian_e($pl['title']); ?></h3>
+                                    <p><?php echo bc_meridian_e($pl['subtitle']); ?></p>
+                                </div>
+                            </div>
+                            <span class="t3-badge"><?php echo count($pl['items']); ?> Active</span>
+                        </div>
+
+                        <div class="t3-feat-grid">
+                            <?php foreach ($pl['items'] as $it): ?>
+                            <a class="t3-feat-tile" href="<?php echo bc_meridian_e($it['href']); ?>" data-search="<?php echo bc_meridian_e(strtolower($it['title'] . ' ' . $it['desc'] . ' ' . $pl['title'])); ?>">
+                                <div>
+                                    <div class="t3-feat-top">
+                                        <strong><?php echo bc_meridian_e($it['title']); ?></strong>
+                                        <?php if (!empty($it['badge'])): ?>
+                                            <span class="t3-badge"><?php echo bc_meridian_e($it['badge']); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p style="margin-top:6px"><?php echo bc_meridian_e($it['desc']); ?></p>
+                                </div>
+                                <span class="t3-feat-foot">
+                                    <span>Open feature</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                                </span>
+                            </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </article>
+                    <?php endforeach; ?>
                 </div>
-                <div class="accordion-item">
-                    <div class="accordion-header">How do I fund my wallet? <i class="fas fa-plus"></i></div>
-                    <div class="accordion-content">
-                        <p>Once registered, you get dynamic virtual bank accounts dedicated to your wallet. Funding any of these banks automatically credits your wallet instantly.</p>
+            </div>
+
+            <?php if (!empty($coming_soon_items)): ?>
+            <div class="t3-cs-wrap" id="coming-soon">
+                <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px">
+                    <div>
+                        <span class="t3-eyebrow">Service Control Status</span>
+                        <h3 style="margin:0;font-size:20px;font-weight:800">Coming Soon &amp; Paused Features (<?php echo (int)$paused_feature_count; ?>)</h3>
                     </div>
+                    <span style="font-size:13px;color:var(--t3-ink-3)">Synced automatically with Site Owner Service Control Center</span>
                 </div>
-                <div class="accordion-item">
-                    <div class="accordion-header">Is customer support available? <i class="fas fa-plus"></i></div>
-                    <div class="accordion-content">
-                        <p>Yes, we have 24/7 dedicated customer service. You can reach us via mail for immediate resolutions.</p>
-                    </div>
+                <div class="t3-cs-grid">
+                    <?php foreach ($coming_soon_items as $cs): ?>
+                    <a class="t3-cs-card" href="<?php echo bc_meridian_e($cs['href']); ?>">
+                        <span class="t3-cs-tag"><?php echo bc_meridian_e($cs['reason']); ?></span>
+                        <h4><?php echo bc_meridian_e($cs['title']); ?></h4>
+                        <p><?php echo bc_meridian_e($cs['category']); ?> · <?php echo bc_meridian_e($cs['desc']); ?></p>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <!-- 3-Step Glass Onboarding Flow -->
+    <section class="t3-sec">
+        <div class="t3-wrap">
+            <div class="t3-sec-head">
+                <div>
+                    <span class="t3-eyebrow">How It Works</span>
+                    <h2>Start in three streamlined steps</h2>
+                    <p>Move from account registration to automated everyday payments and virtual card spending in minutes.</p>
+                </div>
+            </div>
+            <div class="t3-steps">
+                <div class="t3-glass t3-step" data-rv>
+                    <span class="t3-step-num">01</span>
+                    <h3>Create &amp; verify your profile</h3>
+                    <p>Register in seconds, set your transaction Security PIN and complete KYC verification for higher limits.</p>
+                </div>
+                <div class="t3-glass t3-step" data-rv>
+                    <span class="t3-step-num">02</span>
+                    <h3>Fund via virtual bank or card</h3>
+                    <p>Receive deposits into your dedicated virtual bank account or fund directly with verifiable receipts.</p>
+                </div>
+                <div class="t3-glass t3-step" data-rv>
+                    <span class="t3-step-num">03</span>
+                    <h3>Pay, transfer &amp; earn rewards</h3>
+                    <p>Settle bills, send transfers, spend with USD virtual cards and collect loyalty rewards automatically.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security & Support Band -->
+    <section class="t3-sec" id="security">
+        <div class="t3-wrap">
+            <div class="t3-sec-head">
+                <div>
+                    <span class="t3-eyebrow">Security &amp; Support</span>
+                    <h2>Protection at every layer</h2>
+                    <p>Identity checks, transaction PIN locks, Google Authenticator &amp; email OTP, recovery tools and human dispute care.</p>
+                </div>
+                <a class="btn ghost" href="/Security.php">Security Overview</a>
+            </div>
+            <div class="t3-sec-grid">
+                <div class="t3-glass t3-sec-card" data-rv>
+                    <h3>Identity verification—KYC</h3>
+                    <p>Tiered verification helps keep accounts compliant and unlocks higher transfer and card limits.</p>
+                    <a href="/web/KYCVerification.php">Verify identity →</a>
+                </div>
+                <div class="t3-glass t3-sec-card" data-rv>
+                    <h3>Security PIN &amp; 2FA</h3>
+                    <p>Combine a private transaction PIN with Google Authenticator or email OTP before sensitive actions.</p>
+                    <a href="/web/SecuritySetup.php">Configure 2FA →</a>
+                </div>
+                <div class="t3-glass t3-sec-card" data-rv>
+                    <h3>Recovery &amp; controls</h3>
+                    <p>Reset credentials safely, monitor active sessions and manage account security preferences anytime.</p>
+                    <a href="<?php echo $t3_enabled('password_reset') ? '/web/PasswordRecovery.php' : '/web/AccountSettings.php'; ?>">Manage security →</a>
+                </div>
+                <div class="t3-glass t3-sec-card" data-rv>
+                    <h3>Support &amp; disputes</h3>
+                    <p>Track transaction references and reach dedicated support whenever a payment needs manual review.</p>
+                    <a href="/Contact.php">Contact support →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="t3-sec" id="faq">
+        <div class="t3-wrap">
+            <div class="t3-sec-head">
+                <div>
+                    <span class="t3-eyebrow">Questions &amp; Answers</span>
+                    <h2>Frequently asked questions</h2>
+                </div>
+            </div>
+            <div class="t3-faq-grid">
+                <div class="t3-glass t3-faq-card open">
+                    <button type="button" class="t3-faq-btn" aria-expanded="true">
+                        <span>How do Personal Features sync with Service Control Center?</span>
+                        <span>+</span>
+                    </button>
+                    <div class="t3-faq-body">Every service listed under Accounts &amp; Payments, Everyday Services, Cards &amp; Digital Assets, Rewards &amp; Tools and Security &amp; Support checks live Service Control status. Paused services automatically relocate to Coming Soon.</div>
+                </div>
+                <div class="t3-glass t3-faq-card">
+                    <button type="button" class="t3-faq-btn" aria-expanded="false">
+                        <span>Can I switch between Personal and Business accounts?</span>
+                        <span>+</span>
+                    </button>
+                    <div class="t3-faq-body">Yes. Use the Personal / Business switcher in the top navigation bar to explore consumer tools or visit the Business, Merchant &amp; Developer API portal.</div>
+                </div>
+                <div class="t3-glass t3-faq-card">
+                    <button type="button" class="t3-faq-btn" aria-expanded="false">
+                        <span>What security options protect my wallet?</span>
+                        <span>+</span>
+                    </button>
+                    <div class="t3-faq-body">Accounts support KYC verification, a transaction Security PIN, Google Authenticator (TOTP), email OTP verification, recovery tools and 24/7 dispute support.</div>
+                </div>
+                <div class="t3-glass t3-faq-card">
+                    <button type="button" class="t3-faq-btn" aria-expanded="false">
+                        <span>Are receipts and transaction tracking included?</span>
+                        <span>+</span>
+                    </button>
+                    <div class="t3-faq-body">Every wallet funding, transfer and bill order generates a trackable reference inside your Transaction History and Payment Receipts console.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom CTA Banner -->
+    <section class="t3-sec" style="padding-top:16px">
+        <div class="t3-wrap">
+            <div class="t3-glass t3-cta-banner" data-rv>
+                <div>
+                    <span class="t3-eyebrow">Ready to begin</span>
+                    <h2>Join <?php echo $site_e; ?> today</h2>
+                    <p>Manage personal wallets, everyday utilities, virtual cards, rewards and account security from one frosted glass hub.</p>
+                </div>
+                <div class="t3-cta-row">
+                    <?php if ($t3_dash !== ''): ?>
+                        <a class="btn primary lg" href="<?php echo bc_meridian_e($t3_dash); ?>">Go to Dashboard</a>
+                    <?php else: ?>
+                        <a class="btn primary lg" href="/web/Register.php">Create free account</a>
+                    <?php endif; ?>
+                    <a class="btn ghost lg" href="/Business.php">Explore Business</a>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer style="background:#090d16; color:var(--gray-text); padding:60px 0; border-top:1px solid var(--border-color);">
-        <div class="container" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:30px;">
-            <div>
-                <img src="<?php echo $site_logo; ?>" alt="<?php echo htmlspecialchars($site_title); ?>" style="height:35px; margin-bottom:12px;">
-                <p style="opacity:0.6; font-size:0.9rem;">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_title); ?>. All Rights Reserved.</p>
+    <footer class="t3-footer">
+        <div class="t3-wrap">
+            <div class="t3-foot-top">
+                <div>
+                    <div class="brand" style="font-size:17px"><?php echo $site_e; ?></div>
+                    <p style="margin:6px 0 0;font-size:13.5px;color:var(--t3-ink-3)"><?php echo bc_meridian_e($ctx['site_desc']); ?></p>
+                </div>
+                <div class="t3-cta-row">
+                    <?php if ($t3_app_badge !== ''): ?>
+                        <?php echo $t3_app_badge; ?>
+                    <?php else: ?>
+                        <a class="btn ghost sm" href="/DownloadApp.php">Mobile App Info</a>
+                    <?php endif; ?>
+                    <a class="btn ghost sm" href="/Contact.php">Support</a>
+                </div>
             </div>
-            <div style="display:flex; gap:20px;">
-                <a href="/web/policy/privacy.php" style="color:var(--gray-text); text-decoration:none; font-size:0.9rem;">Privacy Policy</a>
-                <a href="/web/policy/terms.php" style="color:var(--gray-text); text-decoration:none; font-size:0.9rem;">Terms of Service</a>
+
+            <?php echo bc_public_directory_html(); ?>
+
+            <div class="t3-foot-meta">
+                <span>&copy; <?php echo date('Y'); ?> <?php echo $site_e; ?>. All rights reserved.</span>
+                <span>Luminous Glass Template · Service Control Synced</span>
             </div>
         </div>
-    <?php require_once __DIR__ . '/func/bc-public-pages.php'; bc_public_directory_html(); ?>
-<?php echo bc_public_app_badge_html(bc_public_saved_app_url((int)($vendor_account_details['id'] ?? 0), $site_details ?? [])); ?>
-</footer>
+    </footer>
 
-    <!-- Scripting -->
     <script>
-        const navToggle = document.getElementById('navToggle');
-        const siteNav = document.getElementById('siteNav');
-        if (navToggle) {
-            navToggle.addEventListener('click', () => {
-                siteNav.style.display = siteNav.style.display === 'flex' ? 'none' : 'flex';
-                if(siteNav.style.display === 'flex') {
-                    siteNav.style.flexDirection = 'column';
-                    siteNav.style.position = 'absolute';
-                    siteNav.style.top = '100%';
-                    siteNav.style.left = '0';
-                    siteNav.style.width = '100%';
-                    siteNav.style.background = 'var(--card-bg)';
-                    siteNav.style.padding = '20px';
-                }
+        window.__MERIDIAN__ = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+    </script>
+    <script src="/asset/meridian-1/meridian-1.js?v=1" defer></script>
+    <script>
+    (function () {
+        // Glass Surface Toggle (Luminous Frost Light <-> Midnight Frost)
+        var themeBtn = document.getElementById('t3ThemeToggle');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', function () {
+                var root = document.documentElement;
+                var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                root.setAttribute('data-theme', next);
+                themeBtn.textContent = next === 'dark' ? 'Switch to Luminous Frost' : 'Switch to Midnight Frost';
             });
         }
 
-        // Header scroll effect
-        window.addEventListener('scroll', () => {
-            const header = document.getElementById('siteHeader');
-            if (window.scrollY > 50) {
-                header.classList.add('scrolled');
-            } else {
-                header.classList.remove('scrolled');
-            }
-        });
-
-        // Accordion script
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            header.addEventListener('click', () => {
-                const item = header.parentElement;
-                const isActive = item.classList.contains('active');
-                document.querySelectorAll('.accordion-item').forEach(el => el.classList.remove('active'));
-                if (!isActive) item.classList.add('active');
+        // Bento Tab Switcher (Top-Up <-> FX)
+        var tabBtns = document.querySelectorAll('[data-t3tab]');
+        var paneTopup = document.getElementById('t3PaneTopup');
+        var paneFx = document.getElementById('t3PaneFx');
+        for (var i = 0; i < tabBtns.length; i++) {
+            tabBtns[i].addEventListener('click', function () {
+                var target = this.getAttribute('data-t3tab');
+                for (var j = 0; j < tabBtns.length; j++) {
+                    var on = tabBtns[j] === this;
+                    tabBtns[j].classList.toggle('is-on', on);
+                    tabBtns[j].setAttribute('aria-selected', on ? 'true' : 'false');
+                }
+                if (paneTopup) paneTopup.classList.toggle('is-on', target === 'topup');
+                if (paneFx) paneFx.classList.toggle('is-on', target === 'fx');
             });
-        });
+        }
+
+        // Top-up calculator
+        var activeNet = 'MTN';
+        var netBtns = document.querySelectorAll('#t3NetRow .t3-net-btn');
+        var topType = document.getElementById('t3TopupType');
+        var topAmt = document.getElementById('t3TopupAmt');
+        var topMeta = document.getElementById('t3TopupMeta');
+        var topPay = document.getElementById('t3TopupPay');
+        var topGo = document.getElementById('t3TopupGo');
+
+        function updateTopup() {
+            var amt = Math.max(100, parseFloat(topAmt ? topAmt.value : 2000) || 2000);
+            var isData = topType && topType.value === 'data';
+            var discount = isData ? 0.03 : 0.02;
+            var payable = Math.round(amt * (1 - discount));
+            if (topMeta) topMeta.textContent = activeNet + (isData ? ' Data bundle estimate' : ' Airtime estimate');
+            if (topPay) topPay.textContent = '₦' + payable.toLocaleString('en-US');
+            if (topGo) topGo.setAttribute('href', isData ? '/services/data.php' : '/services/airtime.php');
+        }
+        for (var n = 0; n < netBtns.length; n++) {
+            netBtns[n].addEventListener('click', function () {
+                activeNet = this.getAttribute('data-net') || 'MTN';
+                for (var k = 0; k < netBtns.length; k++) netBtns[k].classList.toggle('is-on', netBtns[k] === this);
+                updateTopup();
+            });
+        }
+        if (topType) topType.addEventListener('change', updateTopup);
+        if (topAmt) topAmt.addEventListener('input', updateTopup);
+        updateTopup();
+
+        // FX converter
+        var rates = (window.__MERIDIAN__ && window.__MERIDIAN__.rates) || { USD: 1, NGN: 1550, GBP: 0.79, EUR: 0.92 };
+        var fxAmt = document.getElementById('t3FxAmt');
+        var fxFrom = document.getElementById('t3FxFrom');
+        var fxTo = document.getElementById('t3FxTo');
+        var fxRes = document.getElementById('t3FxResult');
+        var fxNote = document.getElementById('t3FxNote');
+        var sym = { NGN: '₦', USD: '$', GBP: '£', EUR: '€' };
+
+        function updateFx() {
+            if (!fxAmt || !fxFrom || !fxTo || !fxRes) return;
+            var a = Math.max(0, parseFloat(fxAmt.value) || 0);
+            var f = fxFrom.value;
+            var t = fxTo.value;
+            var rf = rates[f] || 1;
+            var rt = rates[t] || 1;
+            var out = (a / rf) * rt;
+            fxRes.textContent = (sym[t] || '') + out.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (fxNote) fxNote.textContent = '1 ' + f + ' ≈ ' + ((rt / rf)).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ' + t;
+        }
+        if (fxAmt) fxAmt.addEventListener('input', updateFx);
+        if (fxFrom) fxFrom.addEventListener('change', updateFx);
+        if (fxTo) fxTo.addEventListener('change', updateFx);
+        updateFx();
+
+        // Split-rail category filter + live search
+        var railBtns = document.querySelectorAll('[data-t3cat]');
+        var panels = document.querySelectorAll('[data-t3panel]');
+        var searchBox = document.getElementById('t3FeatureSearch');
+        var activeCat = 'all';
+
+        function applyExplorer() {
+            var q = (searchBox ? searchBox.value : '').trim().toLowerCase();
+            for (var i = 0; i < panels.length; i++) {
+                var p = panels[i];
+                var id = p.getAttribute('data-t3panel');
+                var catMatch = (activeCat === 'all' || id === activeCat);
+                var tiles = p.querySelectorAll('.t3-feat-tile');
+                var visibleCount = 0;
+                for (var j = 0; j < tiles.length; j++) {
+                    var hay = tiles[j].getAttribute('data-search') || '';
+                    var match = !q || hay.indexOf(q) !== -1;
+                    tiles[j].classList.toggle('is-filtered-out', !match);
+                    if (match) visibleCount++;
+                }
+                p.classList.toggle('is-hidden', !catMatch || visibleCount === 0);
+            }
+        }
+        for (var r = 0; r < railBtns.length; r++) {
+            railBtns[r].addEventListener('click', function () {
+                activeCat = this.getAttribute('data-t3cat') || 'all';
+                for (var m = 0; m < railBtns.length; m++) {
+                    railBtns[m].classList.toggle('is-on', railBtns[m] === this);
+                }
+                applyExplorer();
+            });
+        }
+        if (searchBox) searchBox.addEventListener('input', applyExplorer);
+
+        // FAQ Accordion
+        var faqCards = document.querySelectorAll('.t3-faq-card');
+        for (var f = 0; f < faqCards.length; f++) {
+            (function (card) {
+                var btn = card.querySelector('.t3-faq-btn');
+                if (!btn) return;
+                btn.addEventListener('click', function () {
+                    var open = !card.classList.contains('open');
+                    card.classList.toggle('open', open);
+                    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+            })(faqCards[f]);
+        }
+    })();
     </script>
-    
-    <?php seo_render_custom_footer($site_details); ?>
+    <?php
+    if (function_exists('seo_render_custom_footer')) {
+        seo_render_custom_footer($site_details);
+    }
+    ?>
 </body>
 </html>
