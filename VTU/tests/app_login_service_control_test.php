@@ -86,7 +86,8 @@ if (is_dir($root . '/ANDROID - iOS')) {
         $splashKt = file_get_contents($base . '/java/' . $pkg . '/ui/splash/SplashActivity.kt');
         $loginXml = file_get_contents($base . '/res/layout/activity_login.xml');
         $apiKt = file_get_contents($base . '/java/' . $pkg . '/api/VtuApiService.kt');
-        alsc_chk("$name activity_login.xml has tv_forgot_password", strpos($loginXml, 'id="@+id/tv_forgot_password"') !== false);
+        alsc_chk("$name activity_login.xml has tv_forgot_password and CardView brand:bg=surface",
+            strpos($loginXml, 'id="@+id/tv_forgot_password"') !== false && strpos($loginXml, 'brand:bg=surface') !== false);
         alsc_chk("$name LoginActivity toggles tvRegister & tvForgotPassword from site-info",
             strpos($loginKt, 'KEY_REGISTRATION_ENABLED') !== false && strpos($loginKt, 'KEY_PASSWORD_RESET_ENABLED') !== false && strpos($loginKt, 'refreshSiteAuthFlags()') !== false);
         alsc_chk("$name SplashActivity stores registration & password_reset flags",

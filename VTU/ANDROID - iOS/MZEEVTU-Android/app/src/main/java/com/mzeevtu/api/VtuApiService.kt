@@ -31,6 +31,7 @@ interface VtuApiService {
     @POST("web/api/services.php")
     suspend fun getServices(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 
+    @Headers("Cache-Control: no-cache")
     @GET("web/api/site-info.php")
     suspend fun getSiteInfo(): Response<Map<String, Any>>
 

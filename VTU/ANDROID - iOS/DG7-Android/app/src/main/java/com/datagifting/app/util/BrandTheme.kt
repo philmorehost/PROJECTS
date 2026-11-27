@@ -127,6 +127,7 @@ object BrandTheme : Application.ActivityLifecycleCallbacks {
             fun c(token: String) = color(view.context, token)
             roles["bg"]?.let { token ->
                 if (view is MaterialCardView) view.setCardBackgroundColor(c(token))
+                else if (view is androidx.cardview.widget.CardView) view.setCardBackgroundColor(c(token))
                 else view.backgroundTintList = ColorStateList.valueOf(c(token))
             }
             if (view is TextView) {
