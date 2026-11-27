@@ -7,7 +7,7 @@ include_once("../func/bc-kyc-av-scanner.php");
 include_once("../func/bc-security.php");
 
 if (function_exists('bc_kyc_av_ensure_schema')) bc_kyc_av_ensure_schema($connection_server);
-if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema();
+if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema($connection_server);
 
 // Force clear cache on load to ensure we see latest settings
 if (isset($_SESSION)) {
@@ -288,15 +288,15 @@ $vision_catalog = [
     'huggingface' => ['label' => 'HuggingFace Inference',      'models' => ['Salesforce/blip-image-captioning' => 'Image captioning']],
 ];
 
-$ai_rev_q = mysqli_query($connection_server, "SELECT SUM(cost_naira) as revenue, COUNT(*) as calls FROM sas_ai_transactions WHERE MONTH(created_at)=MONTH(NOW()) AND status='success'");
+$ai_rev_q = @mysqli_query($connection_server, "SELECT SUM(cost_naira) as revenue, COUNT(*) as calls FROM sas_ai_transactions WHERE MONTH(created_at)=MONTH(NOW()) AND status='success'");
 $ai_rev = $ai_rev_q ? mysqli_fetch_assoc($ai_rev_q) : ['revenue' => 0, 'calls' => 0];
 
 // Intelligence Hub Data (Last 30 Days for visibility)
-$top_consumers_q = mysqli_query($connection_server, "SELECT COALESCE(v.company_name, t.username) as name, v.website_url, SUM(t.tokens_burned) as total FROM sas_ai_transactions t LEFT JOIN sas_vendors v ON v.id=t.vendor_id WHERE t.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY t.vendor_id, t.username ORDER BY total DESC LIMIT 5");
-$recent_logs_q = mysqli_query($connection_server, "SELECT t.*, COALESCE(v.company_name, 'System Admin') as vendor_name, v.website_url FROM sas_ai_transactions t LEFT JOIN sas_vendors v ON v.id=t.vendor_id ORDER BY t.id DESC LIMIT 10");
+$top_consumers_q = @mysqli_query($connection_server, "SELECT COALESCE(v.company_name, t.username) as name, v.website_url, SUM(t.tokens_burned) as total FROM sas_ai_transactions t LEFT JOIN sas_vendors v ON v.id=t.vendor_id WHERE t.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY t.vendor_id, t.username ORDER BY total DESC LIMIT 5");
+$recent_logs_q = @mysqli_query($connection_server, "SELECT t.*, COALESCE(v.company_name, 'System Admin') as vendor_name, v.website_url FROM sas_ai_transactions t LEFT JOIN sas_vendors v ON v.id=t.vendor_id ORDER BY t.id DESC LIMIT 10");
 
 // Live Health Metrics
-$health_q = mysqli_query($connection_server, "SELECT AVG(duration_ms) as avg_lat, COUNT(*) as total_calls FROM sas_ai_transactions WHERE status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
+$health_q = @mysqli_query($connection_server, "SELECT AVG(duration_ms) as avg_lat, COUNT(*) as total_calls FROM sas_ai_transactions WHERE status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)");
 $health = ($health_q) ? mysqli_fetch_assoc($health_q) : ['avg_lat' => 0, 'total_calls' => 0];
 $avg_latency = ($health && $health['avg_lat'] > 0) ? round($health['avg_lat']) : 450;
 
@@ -471,7 +471,7 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                             <thead class="table-light"><tr class="small text-muted"><th>Vendor</th><th>Date</th><th class="text-end pe-4">Action</th></tr></thead>
                             <tbody>
                                 <?php 
-                                $req_q = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE ai_request_status='pending' ORDER BY id DESC");
+                                $req_q = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE ai_request_status='pending' ORDER BY id DESC");
                                 if ($req_q && mysqli_num_rows($req_q) > 0):
                                     while($req = mysqli_fetch_assoc($req_q)): ?>
                                     <tr>
@@ -626,16 +626,18 @@ bc_adm_head("AI Management | Super Admin", array("area" => "spadmin"));
                                 </thead>
                                 <tbody>
                                     <?php if ($kyc_reports_q && mysqli_num_rows($kyc_reports_q) > 0): while($kr = mysqli_fetch_assoc($kyc_reports_q)):
-                                        $dec = (string)($kr['decision'] ?? '');
+                                        $dec = (string)($kr['ai_status'] ?? ($kr['decision'] ?? ''));
                                         $dbadge = (strpos($dec, 'approve') !== false) ? 'success' : ((strpos($dec, 'reject') !== false) ? 'danger' : 'warning');
+                                        $kr_reason = (string)($kr['decision_reason'] ?? ($kr['reason'] ?? ''));
+                                        $kr_date = (string)($kr['created_at'] ?? ($kr['analyzed_at'] ?? ''));
                                     ?>
                                     <tr>
                                         <td class="small fw-bold"><?php echo htmlspecialchars((string)$kr['vendor_name']); ?></td>
                                         <td class="small">@<?php echo htmlspecialchars((string)($kr['username'] ?: ('user#' . (int)$kr['user_id']))); ?></td>
                                         <td><span class="badge bg-<?php echo $dbadge; ?> rounded-pill"><?php echo htmlspecialchars($dec ?: 'analyzed'); ?></span></td>
                                         <td class="small fw-bold"><?php echo (int)($kr['confidence'] ?? 0); ?>%</td>
-                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr((string)($kr['reason'] ?? ''), 0, 100)); ?></td>
-                                        <td class="text-end x-small text-muted"><?php echo !empty($kr['analyzed_at']) ? date('M j H:i', strtotime((string)$kr['analyzed_at'])) : ''; ?></td>
+                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr($kr_reason, 0, 100)); ?></td>
+                                        <td class="text-end x-small text-muted"><?php echo $kr_date !== '' ? date('M j H:i', strtotime($kr_date)) : ''; ?></td>
                                     </tr>
                                     <?php endwhile; else: ?>
                                     <tr><td colspan="6" class="text-center py-3 text-muted small">No KYC/KYB AI compliance reports generated yet.</td></tr>

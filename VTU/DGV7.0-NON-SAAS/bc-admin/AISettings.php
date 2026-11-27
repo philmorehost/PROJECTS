@@ -12,7 +12,7 @@ $esc_vid = $vid;
 $is_saas = bc_ai_is_saas();
 
 if (function_exists('bc_kyc_av_ensure_schema')) bc_kyc_av_ensure_schema($connection_server);
-if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema();
+if (function_exists('bc_kyc_ai_ensure_schema')) bc_kyc_ai_ensure_schema($connection_server);
 if (function_exists('bc_chat_schema_ready') && !bc_chat_schema_ready() && function_exists('bc_chat_ensure_schema')) {
     bc_chat_ensure_schema();
 }
@@ -907,15 +907,16 @@ bc_adm_head("AI Business Suite | " . ($get_all_super_admin_site_details["site_ti
                                 </thead>
                                 <tbody>
                                     <?php if ($kyc_ai_logs_q && mysqli_num_rows($kyc_ai_logs_q) > 0): while($kr = mysqli_fetch_assoc($kyc_ai_logs_q)):
-                                        $dec = (string)($kr['decision'] ?? '');
+                                        $dec = (string)($kr['ai_status'] ?? ($kr['decision'] ?? ''));
+                                        $kr_reason = (string)($kr['decision_reason'] ?? ($kr['reason'] ?? ''));
                                         $is_kyb = (strpos($dec, 'kyb') === 0);
                                         $badge = (strpos($dec, 'approve') !== false) ? 'success' : ((strpos($dec, 'reject') !== false) ? 'danger' : 'warning text-dark');
                                     ?>
                                     <tr>
                                         <td class="small fw-bold">@<?php echo htmlspecialchars((string)($kr['username'] ?: ('user#' . (int)$kr['user_id']))); ?></td>
-                                        <td><span class="badge bg-<?php echo $badge; ?> rounded-pill"><?php echo htmlspecialchars($dec); ?></span></td>
+                                        <td><span class="badge bg-<?php echo $badge; ?> rounded-pill"><?php echo htmlspecialchars($dec ?: 'analyzed'); ?></span></td>
                                         <td class="small fw-bold"><?php echo (int)($kr['confidence'] ?? 0); ?>%</td>
-                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr((string)($kr['reason'] ?? ''), 0, 120)); ?></td>
+                                        <td class="x-small text-muted"><?php echo htmlspecialchars(substr($kr_reason, 0, 120)); ?></td>
                                         <td class="text-end">
                                             <a href="<?php echo $is_kyb ? 'BusinessKYB.php' : ('KYCManagement.php?review_user=' . (int)$kr['user_id']); ?>" class="btn btn-sm btn-light rounded-pill">View</a>
                                         </td>

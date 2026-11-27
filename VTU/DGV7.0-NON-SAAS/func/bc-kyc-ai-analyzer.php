@@ -1273,13 +1273,13 @@ if (!function_exists('bc_vendor_kyc_ai_analyze_and_store')) {
             bc_kyc_ai_ensure_schema($connection_server);
         }
         if (function_exists('bc_ai_platform_status')) {
-            $plat = bc_ai_platform_status($connection_server);
-            if (empty($plat['global_ai_enabled']) || empty($plat['vision_key_configured'])) {
+            $plat = bc_ai_platform_status($connection_server, $vendor_id, 'kyb_report');
+            if (empty($plat['global_enabled']) || empty($plat['key_configured'])) {
                 return ['status' => 'skipped', 'reason' => $plat['reason'] ?? 'Platform AI Vision is not active'];
             }
         }
-        if (!function_exists('ai_engine') || !ai_engine()->isAvailable()) {
-            return ['status' => 'skipped', 'reason' => 'AI provider is unavailable'];
+        if (!function_exists('ai_engine') || !ai_engine()->isVisionConfigured()) {
+            return ['status' => 'skipped', 'reason' => 'AI Vision provider is unavailable'];
         }
 
         $vq = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$vendor_id' LIMIT 1");

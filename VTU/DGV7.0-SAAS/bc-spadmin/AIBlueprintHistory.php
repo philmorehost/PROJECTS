@@ -1,10 +1,10 @@
 <?php
 require_once __DIR__ . '/../func/bc-secure-session.php';
  bc_secure_session_start();
-include("../func/bc-admin-config.php");
+include("../func/bc-spadmin-config.php");
 
 // Super Admin only
-$is_super = (isset($get_logged_admin_details['id']) && $get_logged_admin_details['id'] == 1);
+$is_super = isset($get_logged_spadmin_details['id']);
 if (!$is_super) { header("Location: /bc-spadmin/Login.php"); exit(); }
 
 // ── Manual Trigger ────────────────────────────────────────────────────────────
