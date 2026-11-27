@@ -69,6 +69,10 @@ $sp = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/ServiceControl.php');
 alsc_chk('SAAS bc-spadmin ServiceControl updates existing rows before insert',
     strpos($sp, 'UPDATE sas_global_service_control SET status=$status') !== false);
 
+$saasReg = file_get_contents($root . '/DGV7.0-SAAS/web/api/register.php');
+alsc_chk('SAAS web/api/register.php does not invoke bc_fintech_api_credential on new users',
+    strpos($saasReg, 'bc_fintech_api_credential(') === false);
+
 $guestSiteInfo = file_get_contents($root . '/DGV7.0-NON-SAAS/web/guest-api/site-info.php');
 alsc_chk('NON-SAAS guest site-info resolves registration & password_reset',
     strpos($guestSiteInfo, 'bc_registration_enabled') !== false && strpos($guestSiteInfo, 'password_reset') !== false);

@@ -77,7 +77,7 @@ class AuthRepository(private val context: Context) {
     suspend fun register(params: Map<String, Any>): RegisterOutcome {
         return try {
             val response = api.register(params)
-            if (!response.isSuccessful) return RegisterOutcome.Failure("Server error: ${response.code()}")
+            if (!response.isSuccessful) return RegisterOutcome.Failure(serverErrorMessage(response))
 
             val body = response.body() ?: return RegisterOutcome.Failure("Empty response")
             when ((body["status"] as? String ?: "error").lowercase()) {
@@ -97,7 +97,7 @@ class AuthRepository(private val context: Context) {
     suspend fun registerVerify(token: String, otp: String): ApiResult<String> {
         return try {
             val response = api.register(mapOf("registration_token" to token, "otp" to otp))
-            if (!response.isSuccessful) return ApiResult.Error("Server error: ${response.code()}")
+            if (!response.isSuccessful) return ApiResult.Error(serverErrorMessage(response))
 
             val body = response.body() ?: return ApiResult.Error("Empty response")
             if ((body["status"] as? String ?: "error") == "success") {
@@ -124,6 +124,9 @@ class AuthRepository(private val context: Context) {
             ApiResult.Error(e.message ?: "Network error")
         }
     }
+
+    private fun serverErrorMessage(resp: retrofit2.Response<*>): String =
+        LoginHttpError.message(resp.code(), resp.errorBody()?.string())
 
     private fun persistLogin(data: Map<String, Any>) {
         // Never use the developer API key as a first-party login credential.

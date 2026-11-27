@@ -64,7 +64,7 @@ object RetrofitClient {
 
                 // Resolve the current secure session for EVERY call (login/logout can rotate it).
                 val token = sessionContext?.let { com.mzeevtu.util.PreferenceManager(it).getApiKey() }
-                val publicAuth = original.url.encodedPath.substringAfterLast('/') in setOf("login.php", "login-otp.php", "register.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php", "forgot-password.php", "site-info.php")
+                val publicAuth = original.url.encodedPath.substringAfterLast('/') in setOf("login.php", "login-otp.php", "register.php", "register-otp.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php", "forgot-password.php", "site-info.php")
                 if (!publicAuth && !token.isNullOrBlank()) {
                     builder.header("Authorization", "Bearer $token")
                     // PHP hosts may strip Authorization before FastCGI; same verified session, not an API-key fallback.

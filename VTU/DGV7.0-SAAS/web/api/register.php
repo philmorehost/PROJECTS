@@ -151,7 +151,8 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     $phone   = mysqli_real_escape_string($connection_server, $pending['phone']);
     $address = mysqli_real_escape_string($connection_server, $pending['address']);
     $country = mysqli_real_escape_string($connection_server, (string)($pending['country'] ?? ''));
-    $api_key = mysqli_real_escape_string($connection_server, bc_fintech_api_credential((string)($pending['api_key'] ?? $api_key), $vendor_id));
+    $raw_pending_key = preg_replace('/[^a-zA-Z0-9]/', '', (string)($pending['api_key'] ?? $api_key));
+    $api_key = $raw_pending_key !== '' ? $raw_pending_key : $api_key;
     $referral_id = mysqli_real_escape_string($connection_server, (string)($pending['referral_id'] ?? ''));
 
     $recheck = mysqli_query($connection_server, "SELECT id FROM sas_users WHERE vendor_id='$vendor_id' AND (username='$user' OR email='$email')");
