@@ -1611,6 +1611,7 @@ $js_config = array(
 <div class="sheet" id="getSheet" hidden=""><div class="glass" role="dialog" aria-modal="true" aria-labelledby="getTitle" style="max-width:420px;text-align:center" id="getBody"></div></div>
 <div class="toast glass" id="toast" role="status" aria-live="polite"></div>
 
+<script>window.MERIDIAN_CONFIG = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;</script>
 <script src="/asset/meridian-1/meridian-1.js"></script>
 <script>
 (function () {
