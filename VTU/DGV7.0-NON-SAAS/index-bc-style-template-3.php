@@ -21,7 +21,7 @@ $site_details = array(
 );
 $header_image_url = '';
 if ($vid > 0 && ($connection_server ?? null) instanceof mysqli) {
-    $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.date DESC LIMIT 1");
+    $stmt_site = mysqli_prepare($connection_server, "SELECT sd.*, vst.header_image, vst.primary_color FROM sas_site_details sd LEFT JOIN sas_vendor_style_templates vst ON vst.vendor_id = sd.vendor_id WHERE sd.vendor_id = ? ORDER BY vst.id DESC LIMIT 1");
     if (!$stmt_site) {
         $stmt_site = mysqli_prepare($connection_server, "SELECT * FROM sas_site_details WHERE vendor_id = ? LIMIT 1");
     }
@@ -263,6 +263,7 @@ $js_config = array(
     <style>
         :root {
             --t3-primary: <?php echo bc_meridian_e($t3_primary); ?>;
+            --primary: var(--t3-primary);
             --t3-rgb: <?php echo bc_meridian_e($t3_rgb); ?>;
             --t3-accent-2: <?php echo bc_meridian_e($t3_accent_2); ?>;
             --t3-accent-soft: <?php echo bc_meridian_e($t3_accent_soft); ?>;
