@@ -442,7 +442,7 @@ function isServiceEnabled($name, $vid = null) {
     // 1. Fetch Global Settings (Acts as Default State)
     if ($static_global_cache === null) {
         $static_global_cache = [];
-        $gc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control");
+        $gc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control ORDER BY id ASC");
         if ($gc_q) {
             while ($gc_r = mysqli_fetch_assoc($gc_q)) {
                 $static_global_cache[$gc_r['service_name']] = (int)$gc_r['status'];
@@ -453,7 +453,7 @@ function isServiceEnabled($name, $vid = null) {
     // 2. Fetch Local Vendor Settings (Acts as Personal Override/Opt-in)
     if (!isset($static_service_cache[$vid])) {
         $static_service_cache[$vid] = [];
-        $sc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid'");
+        $sc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid' ORDER BY id ASC");
         if ($sc_q) {
             while ($sc_r = mysqli_fetch_assoc($sc_q)) {
                 $static_service_cache[$vid][$sc_r['service_name']] = (int)$sc_r['status'];

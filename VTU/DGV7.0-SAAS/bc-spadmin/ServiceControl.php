@@ -103,12 +103,15 @@ $gateways = [
 ];
 
 if (isset($_POST['toggle_global_service'])) {
-    $service_name = mysqli_real_escape_string($connection_server, $_POST['service_name']);
-    $status = (int)$_POST['status'];
+    $service_name = mysqli_real_escape_string($connection_server, trim((string)($_POST['service_name'] ?? '')));
+    $status = ((int)($_POST['status'] ?? 0) === 1) ? 1 : 0;
 
-    mysqli_query($connection_server, "INSERT INTO sas_global_service_control (service_name, status)
-        VALUES ('$service_name', $status)
-        ON DUPLICATE KEY UPDATE status=$status");
+    $existing = mysqli_query($connection_server, "SELECT id FROM sas_global_service_control WHERE service_name='$service_name' LIMIT 1");
+    if ($existing && mysqli_num_rows($existing) > 0) {
+        mysqli_query($connection_server, "UPDATE sas_global_service_control SET status=$status WHERE service_name='$service_name'");
+    } else {
+        mysqli_query($connection_server, "INSERT INTO sas_global_service_control (service_name, status) VALUES ('$service_name', $status)");
+    }
 
     $_SESSION["product_purchase_response"] = "Global setting updated successfully.";
     header("Location: ServiceControl.php");
@@ -128,8 +131,8 @@ if (isset($_POST['bulk_update_vendor_banks'])) {
 
 // Fetch current global settings
 $global_settings = [];
-$q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control");
-while($r = mysqli_fetch_assoc($q)) $global_settings[$r['service_name']] = $r['status'];
+$q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_global_service_control ORDER BY id ASC");
+if ($q) { while($r = mysqli_fetch_assoc($q)) $global_settings[$r['service_name']] = $r['status']; }
 
 // Fetch vendor virtual accounts for management
 $vendor_banks = [];

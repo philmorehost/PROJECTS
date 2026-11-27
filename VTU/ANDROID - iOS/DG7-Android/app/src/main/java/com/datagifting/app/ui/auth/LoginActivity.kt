@@ -2,13 +2,18 @@ package com.datagifting.app.ui.auth
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.datagifting.app.R
+import com.datagifting.app.api.RetrofitClient
 import com.datagifting.app.databinding.ActivityLoginBinding
 import com.datagifting.app.data.model.ApiResult
 import com.datagifting.app.data.repository.LoginOutcome
@@ -46,8 +51,45 @@ class LoginActivity : AppCompatActivity() {
         binding.tvRegister.setOnClickListener {
             startActivity(Intent(this, RegisterActivity::class.java))
         }
+        binding.tvForgotPassword.setOnClickListener { showForgotPasswordDialog() }
 
+        applySiteAuthFlags()
         setupBiometricButton()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applySiteAuthFlags()
+        refreshSiteAuthFlags()
+    }
+
+    private fun applySiteAuthFlags() {
+        val regEnabled = prefs.getBoolean(Constants.KEY_REGISTRATION_ENABLED, true)
+        val resetEnabled = prefs.getBoolean(Constants.KEY_PASSWORD_RESET_ENABLED, true)
+        binding.tvRegister.visibility = if (regEnabled) View.VISIBLE else View.GONE
+        binding.tvForgotPassword.visibility = if (resetEnabled) View.VISIBLE else View.GONE
+    }
+
+    private fun refreshSiteAuthFlags() {
+        lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.getService().getSiteInfo()
+                if (resp.isSuccessful) {
+                    @Suppress("UNCHECKED_CAST")
+                    val data = resp.body()?.get("data") as? Map<String, Any>
+                    val services = data?.get("services") as? Map<*, *>
+                    if (services != null) {
+                        val regFlag = services["registration"]
+                        val regOn = (regFlag as? Number)?.toInt() != 0 && regFlag != false && regFlag?.toString() != "0"
+                        prefs.saveBoolean(Constants.KEY_REGISTRATION_ENABLED, regOn)
+                        val resetFlag = services["password_reset"]
+                        val resetOn = (resetFlag as? Number)?.toInt() != 0 && resetFlag != false && resetFlag?.toString() != "0"
+                        prefs.saveBoolean(Constants.KEY_PASSWORD_RESET_ENABLED, resetOn)
+                        applySiteAuthFlags()
+                    }
+                }
+            } catch (_: Exception) { }
+        }
     }
 
     private var biometricPromptShown = false
@@ -189,6 +231,117 @@ class LoginActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    private fun showForgotPasswordDialog() {
+        val input = EditText(this).apply {
+            hint = "Username or email"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            setText(binding.etUsername.text?.toString()?.trim() ?: "")
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Reset Password")
+            .setMessage("Enter your username or email to receive a 6-digit verification code.")
+            .setView(box)
+            .setPositiveButton("Send Code") { _, _ ->
+                val target = input.text.toString().trim()
+                if (target.isEmpty()) {
+                    binding.root.showSnack("Enter your username or email")
+                } else {
+                    requestPasswordResetCode(target)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun extractApiMessage(resp: retrofit2.Response<Map<String, Any>>, fallback: String): String {
+        val bodyMsg = resp.body()?.get("message") as? String
+        if (!bodyMsg.isNullOrBlank()) return bodyMsg
+        return try {
+            val raw = resp.errorBody()?.string().orEmpty()
+            val msg = org.json.JSONObject(raw).optString("message", "")
+            if (msg.isNotBlank()) msg else fallback
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
+    private fun requestPasswordResetCode(user: String) {
+        binding.progressBar.show()
+        lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.getService().forgotPassword(mapOf("user" to user))
+                binding.progressBar.hide()
+                val status = resp.body()?.get("status") as? String ?: ""
+                val msg = extractApiMessage(resp, "Unable to send reset code")
+                if (resp.isSuccessful && (status == "otp_required" || status == "success")) {
+                    binding.root.showSnack(msg)
+                    showForgotPasswordConfirmDialog(user)
+                } else {
+                    binding.root.showSnack(msg)
+                }
+            } catch (e: Exception) {
+                binding.progressBar.hide()
+                binding.root.showSnack(e.message ?: "Network error")
+            }
+        }
+    }
+
+    private fun showForgotPasswordConfirmDialog(user: String) {
+        val otpInput = EditText(this).apply {
+            hint = "6-digit verification code"
+            inputType = InputType.TYPE_CLASS_NUMBER
+        }
+        val passInput = EditText(this).apply {
+            hint = "New password (min 8 chars)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(otpInput)
+            addView(passInput)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Verify & Set Password")
+            .setMessage("Enter the 6-digit code sent to your email and your new password.")
+            .setView(box)
+            .setPositiveButton("Reset Password") { _, _ ->
+                val code = otpInput.text.toString().trim()
+                val newPass = passInput.text.toString()
+                if (code.length != 6 || newPass.length < 8) {
+                    binding.root.showSnack("Enter a 6-digit code and a password of at least 8 characters")
+                } else {
+                    confirmPasswordReset(user, code, newPass)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmPasswordReset(user: String, otp: String, newPassword: String) {
+        binding.progressBar.show()
+        lifecycleScope.launch {
+            try {
+                val resp = RetrofitClient.getService().forgotPassword(
+                    mapOf("user" to user, "otp" to otp, "new_password" to newPassword)
+                )
+                binding.progressBar.hide()
+                val msg = extractApiMessage(resp, "Unable to reset password")
+                binding.root.showSnack(msg)
+            } catch (e: Exception) {
+                binding.progressBar.hide()
+                binding.root.showSnack(e.message ?: "Network error")
+            }
+        }
     }
 
     private fun verifyLoginOtp(step: LoginOutcome.OtpRequired, code: String) {

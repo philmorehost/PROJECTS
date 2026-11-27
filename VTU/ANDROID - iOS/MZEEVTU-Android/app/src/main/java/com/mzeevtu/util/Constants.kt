@@ -41,4 +41,6 @@ object Constants {
 
     // Service Control
     const val KEY_ENABLED_SERVICES = "enabled_services"
+    const val KEY_REGISTRATION_ENABLED = "site_registration_enabled"
+    const val KEY_PASSWORD_RESET_ENABLED = "site_password_reset_enabled"
 }

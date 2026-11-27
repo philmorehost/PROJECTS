@@ -76,6 +76,15 @@ class SplashActivity : AppCompatActivity() {
                         val support = it["support"] as? Map<*, *>
                         prefs.saveString(com.datagifting.app.util.Constants.KEY_SUPPORT_EMAIL, support?.get("email") as? String ?: "")
                         prefs.saveString(com.datagifting.app.util.Constants.KEY_SUPPORT_WHATSAPP, support?.get("whatsapp") as? String ?: "")
+                        val services = it["services"] as? Map<*, *>
+                        if (services != null) {
+                            val regFlag = services["registration"]
+                            val regOn = (regFlag as? Number)?.toInt() != 0 && regFlag != false && regFlag?.toString() != "0"
+                            prefs.saveBoolean(com.datagifting.app.util.Constants.KEY_REGISTRATION_ENABLED, regOn)
+                            val resetFlag = services["password_reset"]
+                            val resetOn = (resetFlag as? Number)?.toInt() != 0 && resetFlag != false && resetFlag?.toString() != "0"
+                            prefs.saveBoolean(com.datagifting.app.util.Constants.KEY_PASSWORD_RESET_ENABLED, resetOn)
+                        }
                     }
                 }
             } catch (_: Exception) {}

@@ -264,7 +264,7 @@ function isServiceEnabled($name, $vid = null) {
     // Fetch Local Vendor Settings only
     if (!isset($static_service_cache[$vid])) {
         $static_service_cache[$vid] = [];
-        $sc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid'");
+        $sc_q = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vid' ORDER BY id ASC");
         if ($sc_q) {
             while ($sc_r = mysqli_fetch_assoc($sc_q)) {
                 $static_service_cache[$vid][$sc_r['service_name']] = (int)$sc_r['status'];

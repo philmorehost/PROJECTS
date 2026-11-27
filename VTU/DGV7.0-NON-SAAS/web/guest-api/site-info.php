@@ -19,10 +19,19 @@ $get_style = mysqli_fetch_array(mysqli_query($connection_server, "SELECT * FROM 
 
 // A service_name with no row here is treated as enabled by default (matching isServiceEnabled()'s
 // own documented default) — the app must NOT hide a key that's simply absent from this map.
+if (file_exists(__DIR__ . '/../../func/bc-stepup.php')) { include_once(__DIR__ . '/../../func/bc-stepup.php'); }
 $services = array();
-$get_sc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vendor_id'");
-while ($row = mysqli_fetch_assoc($get_sc)) {
-    $services[$row['service_name']] = (int)$row['status'];
+$get_sc = mysqli_query($connection_server, "SELECT service_name, status FROM sas_service_control WHERE vendor_id='$vendor_id' ORDER BY id ASC");
+if ($get_sc) {
+    while ($row = mysqli_fetch_assoc($get_sc)) {
+        $services[$row['service_name']] = (int)$row['status'];
+    }
+}
+if (function_exists('bc_registration_enabled')) {
+    $services['registration'] = bc_registration_enabled($vendor_id) ? 1 : 0;
+}
+if (function_exists('isServiceEnabled')) {
+    $services['password_reset'] = isServiceEnabled('password_reset', $vendor_id) ? 1 : 0;
 }
 
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
