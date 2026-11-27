@@ -53,13 +53,18 @@ while ($row = mysqli_fetch_assoc($result)) {
 
     $status = tranStatus($row['status']);
 
+    $csv_desc = strip_tags($row['description']);
+    if (function_exists('bc_mask_provider_names')) {
+        $csv_desc = bc_mask_provider_names($csv_desc);
+    }
+
     fputcsv($output, array(
         $row['date'],
         $row['reference'],
         $type,
         $row['discounted_amount'] ?? $row['amount'],
         $status,
-        strip_tags($row['description'])
+        $csv_desc
     ));
 }
 

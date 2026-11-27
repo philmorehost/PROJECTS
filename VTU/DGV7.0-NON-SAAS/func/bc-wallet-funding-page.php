@@ -103,9 +103,17 @@ function bc_fund_public_error($e) {
     return in_array($e->getMessage(), $messages, true) ? $e->getMessage() : 'Funding configuration is unavailable. Contact support; do not transfer funds yet.';
 }
 
+function bc_fund_mask_label($text) {
+    $text = (string)$text;
+    if (function_exists('bc_mask_provider_names')) {
+        return bc_mask_provider_names($text);
+    }
+    return preg_replace('/\b(?:payhub|paystack|monnify|flutterwave|beewave|payvessel|klasha|platnova|1global)\b/i', 'Aggregator (Provider)', $text);
+}
+
 function bc_fund_render($model) {
-    $error = $model['error'] ?? '';
-    $success = $model['success'] ?? '';
+    $error = bc_fund_mask_label($model['error'] ?? '');
+    $success = bc_fund_mask_label($model['success'] ?? '');
     $bank = $model['bank'] ?? null;
     $available = !empty($model['available']);
     $gateways = is_array($model['gateways'] ?? null) ? $model['gateways'] : [];
@@ -133,9 +141,9 @@ function bc_fund_render($model) {
     <?php if (!empty($model['retry'])): ?><p class="alert alert-info">Opening this page does not retry a previous payment. If you already paid, contact support with the original payment reference before paying again.</p><?php endif; ?>
     <?php if ($inline_beewave !== null): ?>
     <div class="alert alert-info mb-3" data-beewave-checkout="<?php echo bc_fund_e(json_encode($inline_beewave)); ?>">
-        <h2 class="h6 fw-bold mb-1">Complete BeeWave Payment</h2>
+        <h2 class="h6 fw-bold mb-1">Complete Aggregator (Provider) Payment</h2>
         <p class="mb-2 small">Reference: <strong><?php echo bc_fund_e($inline_beewave['reference'] ?? ''); ?></strong> · Amount: <strong>NGN <?php echo bc_fund_e(number_format((float)($inline_beewave['charge_amount'] ?? 0), 2)); ?></strong></p>
-        <button type="button" id="beewaveLaunchBtn" class="btn btn-primary btn-sm">Open BeeWave Checkout</button>
+        <button type="button" id="beewaveLaunchBtn" class="btn btn-primary btn-sm">Open Aggregator (Provider) Checkout</button>
     </div>
     <?php endif; ?>
     <form method="post" action="/web/Fund.php" data-wallet-funding>
@@ -145,9 +153,9 @@ function bc_fund_render($model) {
         <?php foreach ($gateways as $gw): ?>
             <?php
                 $gw_name = (string)($gw['gateway_name'] ?? '');
-                $gw_label = (string)($gw['label'] ?? ucfirst($gw_name));
+                $gw_label = bc_fund_mask_label((string)($gw['label'] ?? 'Aggregator (Provider)'));
                 $gw_markup = isset($gw['markup_percent']) ? (float)$gw['markup_percent'] : (float)($gw['percentage'] ?? 0.5);
-                $gw_fee_label = (string)($gw['gateway_fee_label'] ?? '');
+                $gw_fee_label = bc_fund_mask_label((string)($gw['gateway_fee_label'] ?? ''));
                 $gw_rule = is_array($gw['gateway_fee_rule'] ?? null) ? $gw['gateway_fee_rule'] : [];
                 $fee_cfg = array_merge($gw_rule, [
                     'gateway_name' => $gw_name,
@@ -170,10 +178,10 @@ function bc_fund_render($model) {
     <?php if ($dva_available): ?>
         <label class="d-block p-3 border rounded mb-2">
             <input type="radio" name="gateway" value="payhub_dva" required <?php echo $selected === 'payhub_dva' ? 'checked' : ''; ?>>
-            <strong>PayHub bank transfer</strong> <span class="small text-muted">· Dedicated Virtual Account</span>
+            <strong>Aggregator (Provider) bank transfer</strong> <span class="small text-muted">· Dedicated Virtual Account</span>
         </label>
     <?php elseif (empty($gateways)): ?>
-        <label class="d-block p-3 border rounded"><input type="radio" name="gateway" value="payhub" required <?php echo $available ? 'checked' : 'disabled'; ?>> PayHub bank transfer<?php echo $available ? '' : ' — currently unavailable'; ?></label>
+        <label class="d-block p-3 border rounded"><input type="radio" name="gateway" value="payhub" required <?php echo $available ? 'checked' : 'disabled'; ?>> Aggregator (Provider) bank transfer<?php echo $available ? '' : ' — currently unavailable'; ?></label>
     <?php endif; ?>
     </fieldset>
     <label for="fund-amount" class="form-label">Amount to credit wallet (NGN)</label>

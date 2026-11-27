@@ -1533,3 +1533,315 @@ if (!function_exists('bc_adm_assets')) {
         }
     }
 }
+
+if (!function_exists('bc_adm_api_directory')) {
+    /**
+     * Authoritative map of every admin-configurable API: which service it powers,
+     * its purpose, where the admin configures it, and which user-facing page(s) it links to.
+     */
+    function bc_adm_api_directory() {
+        return array(
+            'airtime' => array(
+                'api_name'      => 'Airtime Top-Up API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'VTU Airtime Recharge (MTN, Airtel, Glo, 9mobile)',
+                'purpose'       => 'Processes instant mobile airtime top-ups, fetches network variation/discount rates, and settles purchase callbacks.',
+                'admin_page'    => 'Airtime.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Buy Airtime (/web/Airtime.php)', 'path' => '../web/Airtime.php'),
+                    array('label' => 'Admin Bulk/Product Setup (ProductSetUp.php)', 'path' => 'ProductSetUp.php'),
+                ),
+            ),
+            'sme-data' => array(
+                'api_name'      => 'SME Data API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'SME Data Bundles',
+                'purpose'       => 'Delivers discounted SME data plans, fetches live plan variations from your upstream gateway, and records data order statuses.',
+                'admin_page'    => 'SmeData.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Buy Data — SME (/web/SmeData.php)', 'path' => '../web/SmeData.php'),
+                ),
+            ),
+            'shared-data' => array(
+                'api_name'      => 'Shared Data API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Shared / Gifting Data Bundles',
+                'purpose'       => 'Handles shared data bundle provisioning and automated plan variation syncing across supported mobile networks.',
+                'admin_page'    => 'SharedData.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Shared Data (/web/SharedData.php)', 'path' => '../web/SharedData.php'),
+                ),
+            ),
+            'corporate-data' => array(
+                'api_name'      => 'Corporate Gifting Data API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Corporate Gifting Data Plans',
+                'purpose'       => 'Provisions corporate-gifting data bundles and pulls plan costs/codes from the selected data API.',
+                'admin_page'    => 'CorporateData.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Corporate Data (/web/CorporateData.php)', 'path' => '../web/CorporateData.php'),
+                ),
+            ),
+            'direct-data' => array(
+                'api_name'      => 'Direct / Regular Data API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Direct Data Plans',
+                'purpose'       => 'Executes direct carrier data top-ups and syncs official regular bundle pricing.',
+                'admin_page'    => 'DirectData.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Direct Data (/web/DirectData.php)', 'path' => '../web/DirectData.php'),
+                ),
+            ),
+            'cable' => array(
+                'api_name'      => 'Cable TV Subscription API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'DStv, GOtv, Startimes & Showmax Subscriptions',
+                'purpose'       => 'Verifies decoder IUC/Smartcard numbers, fetches bouquet plans, and renews Cable TV packages.',
+                'admin_page'    => 'Cable.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Cable TV (/web/Cable.php)', 'path' => '../web/Cable.php'),
+                ),
+            ),
+            'electric' => array(
+                'api_name'      => 'Electricity Token API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Prepaid & Postpaid Electricity Bills (All DISCOs)',
+                'purpose'       => 'Validates customer meter numbers before payment and generates prepaid meter tokens or settles postpaid bills.',
+                'admin_page'    => 'Electric.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Electricity (/web/Electric.php)', 'path' => '../web/Electric.php'),
+                ),
+            ),
+            'exam' => array(
+                'api_name'      => 'Exam PINs API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'WAEC, NECO, NABTEB & JAMB Result Checker PINs',
+                'purpose'       => 'Purchases and returns instant examination scratch-card/result-checker PINs and serial numbers.',
+                'admin_page'    => 'Exam.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Exam PINs (/web/Exam.php)', 'path' => '../web/Exam.php'),
+                ),
+            ),
+            'betting' => array(
+                'api_name'      => 'Betting Wallet Funding API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Sports Betting Account Top-Ups',
+                'purpose'       => 'Verifies customer betting account IDs and funds supported sportsbook wallets.',
+                'admin_page'    => 'Betting.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Betting (/web/Betting.php)', 'path' => '../web/Betting.php'),
+                ),
+            ),
+            'sms' => array(
+                'api_name'      => 'Bulk SMS API',
+                'category'      => 'VTU & Bills',
+                'service'       => 'Bulk SMS & Sender ID Messaging',
+                'purpose'       => 'Dispatches bulk SMS campaigns to recipient phone numbers using approved Sender IDs.',
+                'admin_page'    => 'BulkSMS.php',
+                'admin_section' => 'API Setting',
+                'linked_pages'  => array(
+                    array('label' => 'Bulk SMS (/web/BulkSMS.php)', 'path' => '../web/BulkSMS.php'),
+                    array('label' => 'Sender ID Approvals (SenderIDRequests.php)', 'path' => 'SenderIDRequests.php'),
+                ),
+            ),
+            'rechargecard' => array(
+                'api_name'      => 'Recharge Card E-PIN API',
+                'category'      => 'Print Hub',
+                'service'       => 'Printable Airtime Recharge Card E-PINs',
+                'purpose'       => 'Generates bulk airtime recharge PINs and serials for user printing via the Print Hub.',
+                'admin_page'    => 'Rechargecard.php',
+                'admin_section' => 'API Gateway Settings',
+                'linked_pages'  => array(
+                    array('label' => 'Recharge Card Printing (/web/Rechargecard.php)', 'path' => '../web/Rechargecard.php'),
+                    array('label' => 'Print Hub (/web/PrintHub.php)', 'path' => '../web/PrintHub.php'),
+                ),
+            ),
+            'datacard' => array(
+                'api_name'      => 'Data Card E-PIN API',
+                'category'      => 'Print Hub',
+                'service'       => 'Printable Data Card E-PINs',
+                'purpose'       => 'Generates printable data bundle E-PINs for users and agents.',
+                'admin_page'    => 'Datacard.php',
+                'admin_section' => 'API Gateway Settings',
+                'linked_pages'  => array(
+                    array('label' => 'Data Card Printing (/web/Datacard.php)', 'path' => '../web/Datacard.php'),
+                    array('label' => 'Print Hub (/web/PrintHub.php)', 'path' => '../web/PrintHub.php'),
+                ),
+            ),
+            'print-hub' => array(
+                'api_name'      => 'Print Hub Manual & Plan Configuration',
+                'category'      => 'Print Hub',
+                'service'       => 'Print Hub E-PIN Cards (Data, Airtime, Cable, Electric, Exam, Betting)',
+                'purpose'       => 'Configures Print Hub plan pricing, batch stock, and manual fulfillment tracking alongside your VTU APIs.',
+                'admin_page'    => 'DataBundleCard.php',
+                'admin_section' => 'Print Hub Settings',
+                'linked_pages'  => array(
+                    array('label' => 'Print Hub (/web/PrintHub.php)', 'path' => '../web/PrintHub.php'),
+                    array('label' => 'Batch Transactions (BatchTransactions.php)', 'path' => 'BatchTransactions.php'),
+                ),
+            ),
+            'gift-card' => array(
+                'api_name'      => 'Reloadly Gift Card API',
+                'category'      => 'Gift Cards & Crypto',
+                'service'       => 'International Gift Cards Catalogue & Orders',
+                'purpose'       => 'Authenticates with Reloadly (Client ID & Secret), syncs the global gift card product catalogue, and fulfils user gift card purchases.',
+                'admin_page'    => 'GiftCard.php',
+                'admin_section' => 'Reloadly Credentials',
+                'linked_pages'  => array(
+                    array('label' => 'Gift Cards (/web/GiftCard.php)', 'path' => '../web/GiftCard.php'),
+                    array('label' => 'Gift Card Product Setup (GiftCardSetup.php)', 'path' => 'GiftCardSetup.php'),
+                ),
+            ),
+            'payment-gateways' => array(
+                'api_name'      => 'Integrated Payment Gateways (Paystack, PayHub, Monnify, Flutterwave, BeeWave, PayVessel)',
+                'category'      => 'Payments & Payouts',
+                'service'       => 'Wallet Funding Checkout & Dedicated Virtual Bank Accounts',
+                'purpose'       => 'Processes card/bank/USSD wallet deposits, verifies webhook signatures, and issues/credits dedicated virtual bank accounts.',
+                'admin_page'    => 'PaymentGateway.php',
+                'admin_section' => 'Integrated Payment Gateways',
+                'linked_pages'  => array(
+                    array('label' => 'Fund Wallet (/web/Fund.php)', 'path' => '../web/Fund.php'),
+                    array('label' => 'Virtual Banks (/web/VirtualBanks.php)', 'path' => '../web/VirtualBanks.php'),
+                ),
+            ),
+            'payout-gateway' => array(
+                'api_name'      => 'Withdrawal & Payout API (PayHub / Paystack)',
+                'category'      => 'Payments & Payouts',
+                'service'       => 'User & Vendor Bank Withdrawals / Transfers',
+                'purpose'       => 'Resolves recipient bank accounts and executes automated NGN bank payouts when users withdraw from their wallet.',
+                'admin_page'    => 'PaymentGateway.php',
+                'admin_section' => 'Finance & Withdrawal Settings',
+                'linked_pages'  => array(
+                    array('label' => 'Send Fund / Bank Transfer (/web/SendFund.php)', 'path' => '../web/SendFund.php'),
+                    array('label' => 'Withdrawals Queue (Withdrawals.php)', 'path' => 'Withdrawals.php'),
+                ),
+            ),
+            'fintech-api' => array(
+                'api_name'      => 'Fintech API Access (Klasha, Flutterwave, Platnova, 1GLOBAL)',
+                'category'      => 'Fintech & Global',
+                'service'       => 'Cross-Border Payouts, China Payout, Global Tuition, Travel eSIM, POS & Virtual Cards',
+                'purpose'       => 'Unlocks and stores API credentials for international remittances, tuition payments, eSIM plans, POS requests, and USD virtual cards.',
+                'admin_page'    => 'PaymentGateway.php',
+                'admin_section' => 'Fintech API Access',
+                'linked_pages'  => array(
+                    array('label' => 'International Transfer (/web/IntlTransfer.php)', 'path' => '../web/IntlTransfer.php'),
+                    array('label' => 'Global Tuition (/web/Tuition.php)', 'path' => '../web/Tuition.php'),
+                    array('label' => 'Travel eSIM (/web/ESIM.php)', 'path' => '../web/ESIM.php'),
+                    array('label' => 'POS Request (/web/POSRequest.php)', 'path' => '../web/POSRequest.php'),
+                ),
+            ),
+            'klasha-gateway' => array(
+                'api_name'      => 'Klasha Encrypted Gateway API',
+                'category'      => 'Fintech & Global',
+                'service'       => 'China Payouts, Wire Transfers & Multi-Currency FX Quotes',
+                'purpose'       => 'Stores encrypted Klasha merchant keys, login email, and Business ID used for live China payout and wire FX quotes.',
+                'admin_page'    => 'PaymentGateway.php',
+                'admin_section' => 'Klasha API Settings',
+                'linked_pages'  => array(
+                    array('label' => 'International Transfer (/web/IntlTransfer.php)', 'path' => '../web/IntlTransfer.php'),
+                ),
+            ),
+            'fintech-routing' => array(
+                'api_name'      => 'Fintech Service Routing & Provider Credentials (Platnova / 1GLOBAL / Klasha / Flutterwave)',
+                'category'      => 'Fintech & Global',
+                'service'       => 'Per-Service Request Routing (Intl Transfer, Tuition, eSIM, POS, Crypto Hub)',
+                'purpose'       => 'Selects which enabled provider handles each fintech service route and stores Platnova/1GLOBAL/Klasha runtime keys.',
+                'admin_page'    => 'ServiceControl.php',
+                'admin_section' => 'Active Fintech Provider & Request Routes',
+                'linked_pages'  => array(
+                    array('label' => 'International Transfer (/web/IntlTransfer.php)', 'path' => '../web/IntlTransfer.php'),
+                    array('label' => 'Global Tuition (/web/Tuition.php)', 'path' => '../web/Tuition.php'),
+                    array('label' => 'Travel eSIM (/web/ESIM.php)', 'path' => '../web/ESIM.php'),
+                    array('label' => 'Crypto Hub (/web/CryptoHub.php)', 'path' => '../web/CryptoHub.php'),
+                ),
+            ),
+            'fx-api' => array(
+                'api_name'      => 'Currency Conversion API (ExchangeRate-API)',
+                'category'      => 'Platform & FX',
+                'service'       => 'Live FX Rate Converter & Multi-Currency Pricing',
+                'purpose'       => 'Fetches live currency exchange rates for the landing-page converter widget and currency-priced services.',
+                'admin_page'    => 'ServiceControl.php',
+                'admin_section' => 'Currency Conversion API',
+                'linked_pages'  => array(
+                    array('label' => 'Public Landing Converter (/index.php)', 'path' => '../index.php'),
+                    array('label' => 'International Transfer (/web/IntlTransfer.php)', 'path' => '../web/IntlTransfer.php'),
+                ),
+            ),
+            'identity-api' => array(
+                'api_name'      => 'Identity Verification Provider API (Prembly, Dojah, QoreID, Smile Identity, Monnify, Localhost)',
+                'category'      => 'Identity & KYC',
+                'service'       => 'KYC Verification, BVN Lookup & NIN Slip Printing',
+                'purpose'       => 'Verifies user BVN/NIN records against government/banking identity databases and performs name matching before KYC approval.',
+                'admin_page'    => 'IdentityAPI.php',
+                'admin_section' => 'Identity Verification Provider',
+                'linked_pages'  => array(
+                    array('label' => 'KYC Verification (/web/KYCVerification.php)', 'path' => '../web/KYCVerification.php'),
+                    array('label' => 'BVN Verification (/web/BVNVerification.php)', 'path' => '../web/BVNVerification.php'),
+                    array('label' => 'NIN Card (/web/NINCard.php)', 'path' => '../web/NINCard.php'),
+                ),
+            ),
+            'virtual-card' => array(
+                'api_name'      => 'Virtual Dollar Card API (Flutterwave)',
+                'category'      => 'Fintech & Global',
+                'service'       => 'USD Virtual Cards (Issuance, Funding, Freeze/Unfreeze)',
+                'purpose'       => 'Issues, funds, and manages USD virtual debit cards using your configured Flutterwave gateway keys and profit margins.',
+                'admin_page'    => 'VirtualCard.php',
+                'admin_section' => 'Virtual Card Manager',
+                'linked_pages'  => array(
+                    array('label' => 'Virtual Cards (/web/VirtualCard.php)', 'path' => '../web/VirtualCard.php'),
+                    array('label' => 'Gateway Keys (PaymentGateway.php)', 'path' => 'PaymentGateway.php'),
+                ),
+            ),
+            'crypto-hub' => array(
+                'api_name'      => 'Crypto Hub & Stablecoin Gateway Configuration',
+                'category'      => 'Gift Cards & Crypto',
+                'service'       => 'Stablecoin Wallets (USDC / USDT / RLUSD) & Crypto Withdrawals',
+                'purpose'       => 'Controls crypto withdrawal approvals, swap fees, asset/network policies, and gateway settlement routing.',
+                'admin_page'    => 'CryptoHub.php',
+                'admin_section' => 'Crypto Hub Management',
+                'linked_pages'  => array(
+                    array('label' => 'Crypto Hub (/web/CryptoHub.php)', 'path' => '../web/CryptoHub.php'),
+                    array('label' => 'Crypto Policies (CryptoPolicies.php)', 'path' => 'CryptoPolicies.php'),
+                ),
+            ),
+        );
+    }
+}
+
+if (!function_exists('bc_adm_render_api_info_box')) {
+    /**
+     * Renders a compact, clear Purpose + Linked Page(s) banner inside any bc-admin API card.
+     */
+    function bc_adm_render_api_info_box($key) {
+        $dir = bc_adm_api_directory();
+        if (!isset($dir[$key])) {
+            return;
+        }
+        $meta = $dir[$key];
+        echo '<div class="alert alert-light border rounded-3 p-3 mb-3 small" data-api-info-box="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '">';
+        echo '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">';
+        echo '<span class="fw-bold text-primary"><i class="bi bi-diagram-2 me-1"></i>Service: ' . htmlspecialchars($meta['service'], ENT_QUOTES, 'UTF-8') . '</span>';
+        echo '<span class="badge bg-primary bg-opacity-10 text-primary">' . htmlspecialchars($meta['category'], ENT_QUOTES, 'UTF-8') . '</span>';
+        echo '</div>';
+        echo '<div class="text-muted mb-2"><strong>Purpose:</strong> ' . htmlspecialchars($meta['purpose'], ENT_QUOTES, 'UTF-8') . '</div>';
+        if (!empty($meta['linked_pages']) && is_array($meta['linked_pages'])) {
+            echo '<div class="d-flex flex-wrap align-items-center gap-1"><strong class="text-dark me-1">Linked Page(s):</strong>';
+            foreach ($meta['linked_pages'] as $lp) {
+                $href = htmlspecialchars((string)$lp['path'], ENT_QUOTES, 'UTF-8');
+                $lbl = htmlspecialchars((string)$lp['label'], ENT_QUOTES, 'UTF-8');
+                echo '<a href="' . $href . '" class="badge bg-white text-dark border text-decoration-none"><i class="bi bi-link-45deg text-primary"></i> ' . $lbl . '</a>';
+            }
+            echo '</div>';
+        }
+        echo '</div>';
+    }
+}

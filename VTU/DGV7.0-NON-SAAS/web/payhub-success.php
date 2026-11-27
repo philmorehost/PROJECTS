@@ -96,7 +96,7 @@ if ($verify_ref !== '' || $local_ref !== '') {
                     Swal.fire({
                         icon: 'info',
                         title: 'Confirming Payment...',
-                        text: msg || 'Your wallet will be credited shortly once PayHub confirms the transaction.',
+                        text: msg || 'Your wallet will be credited shortly once Aggregator (Provider) confirms the transaction.',
                         confirmButtonText: 'Continue',
                         allowOutsideClick: false
                     }).then(function () { window.location.href = redirectTarget; });

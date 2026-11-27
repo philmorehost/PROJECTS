@@ -217,6 +217,7 @@ bc_adm_head(($current_title) . " Card EPIN | " . ($get_all_super_admin_site_deta
               </ul>
             </div>
             <div class="card-body p-3 tab-content" id="printHubSettingsContent">
+              <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('print-hub'); ?>
               <!-- Tab 1: SMS Bridge -->
               <div class="tab-pane fade show active" id="sms-bridge-pane" role="tabpanel">
                 <p class="small text-muted mb-3 mt-1">Configure automated SMS APK Bridge fulfillment settings.</p>

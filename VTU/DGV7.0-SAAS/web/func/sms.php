@@ -159,7 +159,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                         alterTransaction($reference, "api_reference", $api_response_reference);
                                                         alterTransaction($reference, "description", $api_response_description);
                                                         alterTransaction($reference, "api_website", $api_detail["api_base_url"]);
-                                                        $json_response_array = array("ref" => $reference, "status" => "success", "otp" => $api_response_text, "desc" => "Transaction Successful", "response_desc" => $api_response_description);
+                                                        $json_response_array = array("ref" => $reference, "status" => "success", "otp" => $api_response_text, "desc" => "Transaction Successful", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                                         $json_response_encode = json_encode($json_response_array, true);
                                                     }
 
@@ -170,7 +170,7 @@ if (in_array($purchase_method, $purchase_method_array)) {
                                                         alterTransaction($reference, "api_reference", $api_response_reference);
                                                         alterTransaction($reference, "description", $api_response_description);
                                                         alterTransaction($reference, "api_website", $api_detail["api_base_url"]);
-                                                        $json_response_array = array("ref" => $reference, "status" => "pending", "otp" => $api_response_text, "desc" => "Transaction Pending", "response_desc" => $api_response_description);
+                                                        $json_response_array = array("ref" => $reference, "status" => "pending", "otp" => $api_response_text, "desc" => "Transaction Pending", "response_desc" => (function_exists('bc_mask_provider_names') ? bc_mask_provider_names((string)$api_response_description) : $api_response_description));
                                                         $json_response_encode = json_encode($json_response_array, true);
                                                     }
 

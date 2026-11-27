@@ -61,7 +61,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             if ($surcharge > 0) {
                 $parts[] = '~' . rtrim(rtrim(number_format($surcharge, 2, '.', ''), '0'), '.') . '% checkout';
             }
-            $parts[] = $pct_str . ($flat > 0 ? (' + ₦' . number_format($flat, 0)) : '') . ' PayHub fee';
+            $parts[] = $pct_str . ($flat > 0 ? (' + ₦' . number_format($flat, 0)) : '') . ' gateway fee';
             if ($cap > 0) {
                 $parts[] = 'cap ₦' . number_format($cap, 0);
             }
@@ -587,11 +587,11 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         if (!($db instanceof mysqli) || $vid <= 0) return [];
         $out = [];
         $labels = [
-            'paystack' => 'Paystack (Card / Bank / USSD)',
-            'payhub' => 'PayHub Checkout',
-            'monnify' => 'Monnify (Card / Transfer / USSD)',
-            'flutterwave' => 'Flutterwave (Card / Bank)',
-            'beewave' => 'BeeWave Checkout',
+            'paystack' => 'Aggregator (Provider) — Card / Bank / USSD',
+            'payhub' => 'Aggregator (Provider) — Instant Checkout',
+            'monnify' => 'Aggregator (Provider) — Card / Transfer / USSD',
+            'flutterwave' => 'Aggregator (Provider) — Card / Bank',
+            'beewave' => 'Aggregator (Provider) — Express Checkout',
         ];
         $pricing = bc_pg_default_gateway_pricing($db);
         foreach (bc_pg_supported_checkout_gateways() as $gw) {
@@ -990,7 +990,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         if ($provider === 'paystack') {
             if ($sec === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Paystack secret key is not configured.'];
+                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) secret key is not configured.'];
             }
             $payload = [
                 'email' => $email,
@@ -1014,7 +1014,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ], $payload);
             $auth_url = trim((string)($res['json']['data']['authorization_url'] ?? ''));
             if (empty($res['ok']) || empty($res['json']['status']) || $auth_url === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Paystack checkout. Please try again.'];
+                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Aggregator (Provider) checkout. Please try again.'];
             }
             return [
                 'ok' => true,
@@ -1034,7 +1034,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         if ($provider === 'payhub') {
             if (!function_exists('makePayhubRequest')) {
-                return ['ok' => false, 'code' => 'GATEWAY_UNAVAILABLE', 'message' => 'PayHub client is unavailable.'];
+                return ['ok' => false, 'code' => 'GATEWAY_UNAVAILABLE', 'message' => 'Aggregator (Provider) client is unavailable.'];
             }
             $payload = [
                 'amount' => $charge_amount,
@@ -1062,7 +1062,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             $ph_ref = bc_pg_sanitize_reference((string)($ph['data']['reference'] ?? ''));
             $ph_ok = is_array($outer) && (($outer['status'] ?? '') === 'success') && is_array($ph) && !empty($ph['status']);
             if (!$ph_ok || $auth_url === '' || $ph_ref === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize PayHub checkout. Please try again.'];
+                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Aggregator (Provider) checkout. Please try again.'];
             }
             // Bind the PayHub-issued reference to the exact same user, vendor, and fee breakdown,
             // and link provider_reference on the local_reference row for verify-funding polls.
@@ -1089,7 +1089,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         if ($provider === 'flutterwave') {
             if ($sec === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Flutterwave secret key is not configured.'];
+                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) secret key is not configured.'];
             }
             $payload = [
                 'tx_ref' => $ref,
@@ -1117,7 +1117,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ], $payload);
             $link = trim((string)($res['json']['data']['link'] ?? ''));
             if (empty($res['ok']) || ($res['json']['status'] ?? '') !== 'success' || $link === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Flutterwave checkout. Please try again.'];
+                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Aggregator (Provider) checkout. Please try again.'];
             }
             return [
                 'ok' => true,
@@ -1137,7 +1137,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         if ($provider === 'monnify') {
             if ($pub === '' || $sec === '' || $enc === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Monnify API keys or Contract Code are not configured.'];
+                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) API keys or Contract Code are not configured.'];
             }
             $auth_res = bc_pg_http_json('POST', 'https://api.monnify.com/api/v1/auth/login', [
                 'Authorization: Basic ' . base64_encode($pub . ':' . $sec),
@@ -1145,7 +1145,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ], '{}');
             $token = trim((string)($auth_res['json']['responseBody']['accessToken'] ?? ''));
             if (empty($auth_res['ok']) || empty($auth_res['json']['requestSuccessful']) || $token === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_AUTH_FAILED', 'message' => 'Could not authenticate with Monnify.'];
+                return ['ok' => false, 'code' => 'GATEWAY_AUTH_FAILED', 'message' => 'Could not authenticate with Aggregator (Provider).'];
             }
             $payload = [
                 'amount' => $charge_amount,
@@ -1172,7 +1172,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ], $payload);
             $checkout_url = trim((string)($init_res['json']['responseBody']['checkoutUrl'] ?? ''));
             if (empty($init_res['ok']) || empty($init_res['json']['requestSuccessful']) || $checkout_url === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Monnify checkout.'];
+                return ['ok' => false, 'code' => 'GATEWAY_INIT_FAILED', 'message' => 'Could not initialize Aggregator (Provider) checkout.'];
             }
             return [
                 'ok' => true,
@@ -1192,7 +1192,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
 
         if ($provider === 'beewave') {
             if ($pub === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'BeeWave public key is not configured.'];
+                return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) public key is not configured.'];
             }
             return [
                 'ok' => true,
@@ -1653,14 +1653,14 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             : bc_pg_clamp_markup($cfg['percentage'] ?? null, 0.5);
 
         if ($provider === 'paystack') {
-            if ($sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Paystack secret key missing.'];
+            if ($sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) secret key missing.'];
             $res = bc_pg_http_json('GET', 'https://api.paystack.co/transaction/verify/' . rawurlencode($reference), [
                 'Authorization: Bearer ' . $sec,
                 'Cache-Control: no-cache',
             ]);
             $data = $res['json']['data'] ?? null;
             if (empty($res['ok']) || empty($res['json']['status']) || !is_array($data)) {
-                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Paystack transaction.'];
+                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Aggregator (Provider) transaction.'];
             }
             if (($data['domain'] ?? '') === 'test') {
                 return ['ok' => false, 'code' => 'TEST_MODE_REJECTED', 'message' => 'Test-mode transactions cannot credit live wallets.'];
@@ -1728,7 +1728,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 }
             } else {
                 if ($sec === '') {
-                    return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'PayHub secret key missing.'];
+                    return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) secret key missing.'];
                 }
                 $ph_base = bc_pg_payhub_base_url($db);
                 $ph_headers = ['Authorization: Bearer ' . $sec, 'Content-Type: application/json'];
@@ -1747,10 +1747,10 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
                 }
             }
             if (!$ph_ok) {
-                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify PayHub transaction.'];
+                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Aggregator (Provider) transaction.'];
             }
             if (strtolower((string)($data['domain'] ?? 'live')) === 'test') {
-                return ['ok' => false, 'code' => 'TEST_MODE_REJECTED', 'message' => 'Test-mode PayHub transactions cannot credit live wallets.'];
+                return ['ok' => false, 'code' => 'TEST_MODE_REJECTED', 'message' => 'Test-mode Aggregator (Provider) transactions cannot credit live wallets.'];
             }
             $st = strtolower((string)($data['status'] ?? ''));
             if (!in_array($st, ['paid', 'success', 'successful'], true) || (isset($data['paid']) && $data['paid'] === false)) {
@@ -1790,7 +1790,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         }
 
         if ($provider === 'flutterwave') {
-            if ($sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Flutterwave secret key missing.'];
+            if ($sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) secret key missing.'];
             $tx_id = trim((string)($extra['transaction_id'] ?? ''));
             if ($tx_id !== '' && ctype_digit($tx_id)) {
                 $url = 'https://api.flutterwave.com/v3/transactions/' . rawurlencode($tx_id) . '/verify';
@@ -1803,11 +1803,11 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             ]);
             $data = $res['json']['data'] ?? null;
             if (empty($res['ok']) || ($res['json']['status'] ?? '') !== 'success' || !is_array($data)) {
-                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Flutterwave transaction.'];
+                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Aggregator (Provider) transaction.'];
             }
             $st = strtolower((string)($data['status'] ?? ''));
             if (!in_array($st, ['successful', 'success'], true)) {
-                return ['ok' => false, 'code' => 'NOT_PAID', 'message' => 'Flutterwave payment is not completed yet.'];
+                return ['ok' => false, 'code' => 'NOT_PAID', 'message' => 'Aggregator (Provider) payment is not completed yet.'];
             }
             if (strtoupper((string)($data['currency'] ?? 'NGN')) !== 'NGN') {
                 return ['ok' => false, 'code' => 'CURRENCY_MISMATCH', 'message' => 'Only NGN transactions are supported.'];
@@ -1836,14 +1836,14 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         }
 
         if ($provider === 'monnify') {
-            if ($pub === '' || $sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Monnify API keys missing.'];
+            if ($pub === '' || $sec === '') return ['ok' => false, 'code' => 'GATEWAY_UNCONFIGURED', 'message' => 'Aggregator (Provider) API keys missing.'];
             $auth_res = bc_pg_http_json('POST', 'https://api.monnify.com/api/v1/auth/login', [
                 'Authorization: Basic ' . base64_encode($pub . ':' . $sec),
                 'Content-Type: application/json',
             ], '{}');
             $token = trim((string)($auth_res['json']['responseBody']['accessToken'] ?? ''));
             if (empty($auth_res['ok']) || empty($auth_res['json']['requestSuccessful']) || $token === '') {
-                return ['ok' => false, 'code' => 'GATEWAY_AUTH_FAILED', 'message' => 'Unable to authenticate with Monnify.'];
+                return ['ok' => false, 'code' => 'GATEWAY_AUTH_FAILED', 'message' => 'Unable to authenticate with Aggregator (Provider).'];
             }
             $tx_ref = trim((string)($extra['transaction_reference'] ?? ''));
             if ($tx_ref !== '' && stripos($tx_ref, 'MNFY|') === 0) {
@@ -1865,10 +1865,10 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
             }
             $body = $res['json']['responseBody'] ?? null;
             if (empty($res['ok']) || empty($res['json']['requestSuccessful']) || !is_array($body)) {
-                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Monnify transaction.'];
+                return ['ok' => false, 'code' => 'VERIFY_FAILED', 'message' => 'Unable to verify Aggregator (Provider) transaction.'];
             }
             if (strtoupper((string)($body['paymentStatus'] ?? '')) !== 'PAID') {
-                return ['ok' => false, 'code' => 'NOT_PAID', 'message' => 'Monnify payment has not been paid yet.'];
+                return ['ok' => false, 'code' => 'NOT_PAID', 'message' => 'Aggregator (Provider) payment has not been paid yet.'];
             }
             if (strtoupper((string)($body['currencyCode'] ?? 'NGN')) !== 'NGN') {
                 return ['ok' => false, 'code' => 'CURRENCY_MISMATCH', 'message' => 'Only NGN transactions are supported.'];
@@ -1899,7 +1899,7 @@ if (!defined('BC_PG_SETTLEMENT_LOADED')) {
         if ($provider === 'beewave') {
             // BeeWave settles via its server-authenticated webhook (?secret=...).
             // A browser/app poll can only observe whether the webhook already settled the intent/claim.
-            return ['ok' => false, 'code' => 'AWAITING_WEBHOOK', 'message' => 'Awaiting BeeWave server webhook confirmation. Your wallet will be credited automatically once confirmed.'];
+            return ['ok' => false, 'code' => 'AWAITING_WEBHOOK', 'message' => 'Awaiting Aggregator (Provider) server webhook confirmation. Your wallet will be credited automatically once confirmed.'];
         }
 
         return ['ok' => false, 'code' => 'UNSUPPORTED_GATEWAY', 'message' => 'Unsupported gateway.'];

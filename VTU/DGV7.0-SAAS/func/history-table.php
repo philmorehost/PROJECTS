@@ -43,6 +43,9 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
             } else {
                 $type = ucwords($row["type_alternative"] ?? $row["description"] ?? 'Transaction');
             }
+            if (!$is_admin && function_exists('bc_mask_provider_names')) {
+                $type = bc_mask_provider_names($type);
+            }
             $ref = $row['reference'];
             $raw_amt = $row['discounted_amount'] ?? ($row['amount'] ?? 0);
             $amount = number_format(is_numeric($raw_amt) ? (float)$raw_amt : 0.0, 2);

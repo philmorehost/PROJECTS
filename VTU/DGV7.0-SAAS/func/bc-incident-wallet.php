@@ -101,7 +101,8 @@ function bc_incident_wallet_post($vendor, $username, $direction, $product, $labe
     try {
         if (function_exists('sendVendorEmail')) {
             $recipient=(string)($row['email'] ?? '');
-            if (is_string($recipient) && filter_var($recipient,FILTER_VALIDATE_EMAIL)) sendVendorEmail($recipient,'Wallet transaction recorded',htmlspecialchars("Reference: $reference | $direction NGN $charged | Balance: $after | $description",ENT_QUOTES,'UTF-8'));
+            $notice_desc = (!$is_vendor && function_exists('bc_mask_provider_names')) ? bc_mask_provider_names((string)$description) : (string)$description;
+            if (is_string($recipient) && filter_var($recipient,FILTER_VALIDATE_EMAIL)) sendVendorEmail($recipient,'Wallet transaction recorded',htmlspecialchars("Reference: $reference | $direction NGN $charged | Balance: $after | $notice_desc",ENT_QUOTES,'UTF-8'));
         }
     } catch(Throwable $ignored) { error_log('[WALLET_NOTICE] Delivery failed after committed transaction.'); }
     $finished=microtime(true);

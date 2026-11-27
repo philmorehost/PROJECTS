@@ -59,6 +59,7 @@ function bc_gateway_api_cards($db,$actor) {
         $ready=false;$access=false;try{$access=bc_gateway_api_entitled($db,(int)$actor['id'],$slug);if($access)$ready=bc_gateway_api_read($db,(int)$actor['id'],$slug)!==null;}catch(Throwable $ignored){}
         ?>
         <div class="card p-4 mb-4" id="gateway-<?php echo $slug; ?>"><h5><?php echo $label; ?> API Settings</h5>
+        <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('klasha-gateway'); ?>
         <p><?php echo $ready?'Encrypted configuration saved.':'No encrypted configuration saved.'; ?> Blank fields retain the previously saved values. Keys are never sent back to this form.</p>
         <p>Saving configuration does not enable withdrawals or bypass compliance, Service Control or financial holds. Crypto staging and live activation remain paused.</p>
         <?php if(!$access): ?><p>Purchase <?php echo $label; ?> access in <a href="#fintech-api-access">Fintech API Access</a> before saving keys.</p><?php else: ?>

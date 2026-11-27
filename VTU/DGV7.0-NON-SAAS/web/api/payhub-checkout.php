@@ -103,7 +103,7 @@ $init = bc_pg_init_gateway_checkout(
 );
 
 if (empty($init['ok'])) {
-    $fail(422, $init['code'] ?? 'PAYHUB_INIT_FAILED', $init['message'] ?? 'Unable to initialize PayHub checkout.');
+    $fail(422, $init['code'] ?? 'PAYHUB_INIT_FAILED', $init['message'] ?? 'Unable to initialize Aggregator (Provider) checkout.');
 }
 
 if ($wants_json) {

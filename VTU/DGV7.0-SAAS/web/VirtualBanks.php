@@ -202,13 +202,13 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                                 $should_auto_reload = true;
                             } else {
                                 $no_acct_heading = "Account retrieval in progress";
-                                $no_acct_detail  = "We attempted to fetch your PayHub virtual account but received: \""
-                                    . htmlspecialchars(strip_tags($server_sync_result['message']))
+                                $no_acct_detail  = "We attempted to fetch your Aggregator (Provider) virtual account but received: \""
+                                    . htmlspecialchars(function_exists('bc_mask_provider_names') ? bc_mask_provider_names(strip_tags($server_sync_result['message'])) : strip_tags($server_sync_result['message']))
                                     . "\". Please click RE-SYNC ACCOUNTS to try again, or contact support.";
                             }
                         } elseif (!empty($keys['secret_key'])) {
                             $no_acct_heading = "Checking for your accounts…";
-                            $no_acct_detail  = "We are looking up your virtual bank account via PayHub. If nothing appears after a few seconds, click RE-SYNC ACCOUNTS.";
+                            $no_acct_detail  = "We are looking up your virtual bank account via Aggregator (Provider). If nothing appears after a few seconds, click RE-SYNC ACCOUNTS.";
                         }
                         ?>
                         <div class="col-12">
@@ -362,10 +362,10 @@ bc_app_head("Virtual Bank Accounts | " . ($get_all_site_details["site_title"]));
                 .then(data => {
                     console.log('Sync result:', data);
                     let messages = [];
-                    if(data.payhub)    messages.push("PayHub: "    + data.payhub.message);
-                    if(data.paystack)  messages.push("Paystack: "  + data.paystack.message);
-                    if(data.monnify)   messages.push("Monnify: "   + data.monnify.message);
-                    if(data.payvessel) messages.push("Payvessel: " + data.payvessel.message);
+                    if(data.payhub)    messages.push("Aggregator (Provider): " + data.payhub.message);
+                    if(data.paystack)  messages.push("Aggregator (Provider): " + data.paystack.message);
+                    if(data.monnify)   messages.push("Aggregator (Provider): " + data.monnify.message);
+                    if(data.payvessel) messages.push("Aggregator (Provider): " + data.payvessel.message);
 
                     const anySuccess = ['payhub','paystack','monnify','payvessel']
                         .some(gw => data[gw] && data[gw].status === 'success');

@@ -69,6 +69,7 @@ bc_adm_head("Virtual Card Manager | " . ($get_all_super_admin_site_details["site
 <?php bc_adm_topbar(array("area" => "admin", "title" => "VIRTUAL CARD MANAGER", "crumb" => "Home / Virtual Cards")); ?>
 
     <section class="section dashboard">
+      <?php if (function_exists('bc_adm_render_api_info_box')) bc_adm_render_api_info_box('virtual-card'); ?>
       <div class="alert alert-info border-0 rounded-4 shadow-sm">
         <strong><i class="bi bi-credit-card-2-front me-2"></i>Flutterwave is the only virtual-card provider.</strong>
         Retired third-party providers have been removed. Card operations use your Flutterwave gateway keys —
