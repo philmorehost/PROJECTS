@@ -43,6 +43,8 @@ t3_check(strpos($html, 'backdrop-filter: blur(24px)') !== false, 'uses modern gl
 t3_check(strpos($html, 't3-bento') !== false && strpos($html, 't3-explorer') !== false, 'uses new bento + split-rail layout');
 t3_check(strpos($html, 'data-theme="light"') !== false && strpos($html, 'id="t3ThemeToggle"') !== false, 'defaults to luminous light frost with surface toggle');
 t3_check(strpos($html, 'id="pswitch"') !== false && strpos($html, 'data-w="personal"') !== false && strpos($html, 'data-w="business"') !== false, 'includes Meridian-1 Personal/Business switcher');
+t3_check(strpos($html, '.m-brand-mark') !== false && strpos($html, '.pswitch button[aria-checked="true"]') !== false && strpos($html, '.menu-btn { display: none; }') !== false, 'styles Meridian-1 brand mark, active switcher pill contrast, and desktop menu button visibility');
+t3_check(strpos($html, '--t3-sky') === false && strpos($html, '--t3-violet') === false && strpos($html, 'window.MERIDIAN_CONFIG') !== false, 'uses harmonious brand-derived palette without clashing rainbow variables and wires MERIDIAN_CONFIG');
 
 // Meridian-1 menu items
 foreach (array(

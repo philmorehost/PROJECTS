@@ -51,9 +51,11 @@ $t3_rgb = '40, 123, 255';
 if (sscanf($t3_primary, '#%02x%02x%02x', $r3, $g3, $b3) === 3) {
     $t3_rgb = "$r3, $g3, $b3";
 }
-$t3_sky = bc_meridian_mix_hex($t3_primary, '#06B6D4', 0.42);
-$t3_violet = bc_meridian_mix_hex($t3_primary, '#7C3AED', 0.48);
-$t3_emerald = '#10B981';
+// Harmonious analogous shades derived strictly from the vendor's primary color (no clashing rainbow hues)
+$t3_accent_2 = bc_meridian_mix_hex($t3_primary, '#0F172A', 0.72);
+$t3_accent_soft = bc_meridian_mix_hex($t3_primary, '#FFFFFF', 0.35);
+$t3_light_ink = $t3_light_mode['primary_text'];
+$t3_dark_ink = $t3_dark_mode['primary_text'];
 $t3_dash = function_exists('bc_public_dashboard_url') ? bc_public_dashboard_url() : '';
 $t3_app_badge = bc_public_app_badge_html($ctx['app_url']);
 
@@ -262,27 +264,28 @@ $js_config = array(
         :root {
             --t3-primary: <?php echo bc_meridian_e($t3_primary); ?>;
             --t3-rgb: <?php echo bc_meridian_e($t3_rgb); ?>;
-            --t3-sky: <?php echo bc_meridian_e($t3_sky); ?>;
-            --t3-violet: <?php echo bc_meridian_e($t3_violet); ?>;
-            --t3-emerald: #10B981;
+            --t3-accent-2: <?php echo bc_meridian_e($t3_accent_2); ?>;
+            --t3-accent-soft: <?php echo bc_meridian_e($t3_accent_soft); ?>;
+            --t3-emerald: #059669;
 
             /* Luminous Frost Light (default for Template 3) */
-            --t3-bg: #F3F6FC;
-            --t3-bg-2: #EBF1FB;
+            --t3-bg: #F4F6FA;
+            --t3-bg-2: #ECEFF6;
             --t3-ink: #0F172A;
             --t3-ink-2: #334155;
             --t3-ink-3: #64748B;
-            --t3-glass: rgba(255, 255, 255, 0.72);
-            --t3-glass-strong: rgba(255, 255, 255, 0.88);
-            --t3-glass-soft: rgba(255, 255, 255, 0.52);
+            --t3-glass: rgba(255, 255, 255, 0.76);
+            --t3-glass-strong: rgba(255, 255, 255, 0.92);
+            --t3-glass-soft: rgba(255, 255, 255, 0.56);
             --t3-border: rgba(15, 23, 42, 0.09);
-            --t3-border-hi: rgba(255, 255, 255, 0.92);
-            --t3-shadow: 0 22px 60px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-            --t3-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-            --t3-nav-bg: rgba(248, 250, 255, 0.76);
-            --t3-input-bg: rgba(255, 255, 255, 0.78);
+            --t3-border-hi: rgba(255, 255, 255, 0.94);
+            --t3-shadow: 0 22px 58px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+            --t3-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+            --t3-nav-bg: rgba(255, 255, 255, 0.80);
+            --t3-input-bg: rgba(255, 255, 255, 0.84);
             --t3-pill-bg: rgba(var(--t3-rgb), 0.10);
-            --t3-pill-ink: var(--t3-primary);
+            --t3-pill-ink: <?php echo bc_meridian_e($t3_light_ink); ?>;
+            --t3-primary-ink: <?php echo bc_meridian_e($t3_light_ink); ?>;
             --t3-on-primary: <?php echo bc_meridian_e($t3_light_mode['on_primary']); ?>;
 
             --accent: var(--t3-primary);
@@ -293,22 +296,23 @@ $js_config = array(
         }
 
         html[data-theme="dark"] {
-            --t3-bg: #080E1D;
-            --t3-bg-2: #0D162B;
+            --t3-bg: #080D1A;
+            --t3-bg-2: #0D1426;
             --t3-ink: #F1F5F9;
             --t3-ink-2: #CBD5E1;
             --t3-ink-3: #94A3B8;
-            --t3-glass: rgba(15, 24, 46, 0.66);
-            --t3-glass-strong: rgba(18, 29, 54, 0.84);
-            --t3-glass-soft: rgba(255, 255, 255, 0.05);
+            --t3-glass: rgba(15, 23, 42, 0.68);
+            --t3-glass-strong: rgba(17, 26, 48, 0.88);
+            --t3-glass-soft: rgba(255, 255, 255, 0.055);
             --t3-border: rgba(255, 255, 255, 0.14);
             --t3-border-hi: rgba(255, 255, 255, 0.24);
             --t3-shadow: 0 24px 64px rgba(2, 6, 23, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.14);
             --t3-shadow-sm: 0 10px 28px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.10);
-            --t3-nav-bg: rgba(9, 15, 31, 0.76);
-            --t3-input-bg: rgba(9, 15, 30, 0.62);
+            --t3-nav-bg: rgba(10, 16, 32, 0.80);
+            --t3-input-bg: rgba(9, 15, 30, 0.64);
             --t3-pill-bg: rgba(var(--t3-rgb), 0.20);
-            --t3-pill-ink: #E2E8F0;
+            --t3-pill-ink: <?php echo bc_meridian_e($t3_dark_ink); ?>;
+            --t3-primary-ink: <?php echo bc_meridian_e($t3_dark_ink); ?>;
             --t3-on-primary: <?php echo bc_meridian_e($t3_dark_mode['on_primary']); ?>;
         }
 
@@ -328,7 +332,7 @@ $js_config = array(
         button, input, select { font: inherit; color: inherit; }
         img { max-width: 100%; display: block; }
 
-        /* ── Prismatic Frost Mesh Canvas ─────────────────────────────── */
+        /* ── Harmonious Frost Mesh Canvas ────────────────────────────── */
         .t3-mesh {
             position: fixed;
             inset: 0;
@@ -336,21 +340,21 @@ $js_config = array(
             pointer-events: none;
             overflow: hidden;
             background:
-                radial-gradient(1200px 640px at 8% -6%, rgba(var(--t3-rgb), 0.18), transparent 60%),
-                radial-gradient(960px 620px at 94% 12%, color-mix(in srgb, var(--t3-sky) 22%, transparent), transparent 58%),
-                radial-gradient(900px 580px at 65% 88%, color-mix(in srgb, var(--t3-violet) 16%, transparent), transparent 60%),
+                radial-gradient(1100px 620px at 8% -4%, rgba(var(--t3-rgb), 0.14), transparent 62%),
+                radial-gradient(920px 580px at 94% 14%, rgba(148, 163, 184, 0.16), transparent 60%),
+                radial-gradient(880px 540px at 62% 92%, rgba(var(--t3-rgb), 0.09), transparent 62%),
                 linear-gradient(180deg, var(--t3-bg) 0%, var(--t3-bg-2) 100%);
         }
         .t3-orb {
             position: absolute;
             border-radius: 50%;
-            filter: blur(78px);
-            opacity: .55;
-            animation: t3Float 20s ease-in-out infinite alternate;
+            filter: blur(88px);
+            opacity: .42;
+            animation: t3Float 22s ease-in-out infinite alternate;
         }
-        .t3-orb.a { width: 460px; height: 460px; top: -120px; left: -90px; background: rgba(var(--t3-rgb), 0.34); }
-        .t3-orb.b { width: 420px; height: 420px; top: 18%; right: -110px; background: color-mix(in srgb, var(--t3-sky) 46%, transparent); animation-delay: -6s; }
-        .t3-orb.c { width: 380px; height: 380px; bottom: -100px; left: 32%; background: color-mix(in srgb, var(--t3-violet) 36%, transparent); animation-delay: -11s; }
+        .t3-orb.a { width: 440px; height: 440px; top: -130px; left: -90px; background: rgba(var(--t3-rgb), 0.24); }
+        .t3-orb.b { width: 390px; height: 390px; top: 20%; right: -110px; background: rgba(148, 163, 184, 0.24); animation-delay: -6s; }
+        .t3-orb.c { width: 360px; height: 360px; bottom: -110px; left: 32%; background: rgba(var(--t3-rgb), 0.16); animation-delay: -11s; }
         @keyframes t3Float {
             0% { transform: translate3d(0, 0, 0) scale(1); }
             100% { transform: translate3d(34px, -24px, 0) scale(1.07); }
@@ -360,12 +364,12 @@ $js_config = array(
             inset: 0;
             z-index: -1;
             pointer-events: none;
-            background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+            background-image: radial-gradient(rgba(15, 23, 42, 0.065) 1px, transparent 1px);
             background-size: 26px 26px;
-            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 85%);
+            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 85%);
         }
         html[data-theme="dark"] .t3-dots {
-            background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-image: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1px);
         }
 
         .t3-wrap {
@@ -391,7 +395,7 @@ $js_config = array(
             inset: 0;
             border-radius: inherit;
             padding: 1px;
-            background: linear-gradient(140deg, var(--t3-border-hi), transparent 45%, rgba(var(--t3-rgb), 0.22));
+            background: linear-gradient(140deg, var(--t3-border-hi), transparent 45%, rgba(var(--t3-rgb), 0.18));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
@@ -422,7 +426,7 @@ $js_config = array(
             box-shadow: var(--t3-shadow-sm);
             transition: background .25s ease, box-shadow .25s ease;
         }
-        #nav.stuck {
+        #nav.stuck, #nav.compact {
             background: var(--t3-glass-strong);
             box-shadow: var(--t3-shadow);
         }
@@ -433,38 +437,58 @@ $js_config = array(
             gap: 14px;
             padding: 10px 16px;
         }
-        .brand {
+        .logo {
             display: inline-flex;
             align-items: center;
             gap: 10px;
             font-family: 'Space Grotesk', sans-serif;
             font-weight: 700;
-            font-size: 15px;
-            letter-spacing: -0.02em;
+            font-size: 16px;
+            letter-spacing: -0.025em;
+            color: var(--t3-ink);
             white-space: nowrap;
+            flex: 0 0 auto;
         }
-        .brand-mark {
-            width: 34px;
-            height: 34px;
+        .m-brand-mark {
+            width: 36px;
+            height: 36px;
             border-radius: 11px;
             display: inline-grid;
             place-items: center;
-            background: linear-gradient(135deg, var(--t3-primary), var(--t3-sky));
+            background: linear-gradient(135deg, var(--t3-primary), var(--t3-accent-2));
             color: var(--t3-on-primary);
-            box-shadow: 0 8px 20px rgba(var(--t3-rgb), 0.34);
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 800;
+            font-size: 16px;
+            line-height: 1;
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 8px 18px rgba(var(--t3-rgb), 0.28);
+            flex: 0 0 auto;
         }
-        .brand-mark svg { width: 18px; height: 18px; }
-        .brand-img { width: 34px; height: 34px; border-radius: 11px; object-fit: cover; }
+        .m-logo-img {
+            width: 36px;
+            height: 36px;
+            border-radius: 11px;
+            object-fit: cover;
+            border: 1px solid var(--t3-border);
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.10);
+            flex: 0 0 auto;
+        }
+        .ff-word {
+            font-weight: 700;
+            color: var(--t3-ink);
+        }
 
         .pswitch {
             position: relative;
             display: inline-grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, 1fr);
             padding: 3px;
             border-radius: 999px;
             background: var(--t3-glass-soft);
             border: 1px solid var(--t3-border);
-            min-width: 176px;
+            min-width: 184px;
+            flex: 0 0 auto;
         }
         .pthumb {
             position: absolute;
@@ -472,25 +496,29 @@ $js_config = array(
             bottom: 3px;
             left: 3px;
             border-radius: 999px;
-            background: var(--t3-primary);
-            box-shadow: 0 4px 14px rgba(var(--t3-rgb), 0.36);
+            background: linear-gradient(135deg, var(--t3-primary), var(--t3-accent-2));
+            box-shadow: 0 4px 14px rgba(var(--t3-rgb), 0.30);
             transition: transform .28s var(--ease);
-            z-index: 0;
+            z-index: 1;
         }
         :root[data-world="business"] .pthumb { transform: translateX(100%); }
-        .pbtn {
+        .pswitch button {
             position: relative;
-            z-index: 1;
+            z-index: 2;
             border: 0;
             background: transparent;
-            padding: 6px 12px;
-            font-size: 12px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            font-size: 12.5px;
             font-weight: 700;
             cursor: pointer;
-            color: var(--t3-ink-3);
+            color: var(--t3-ink-2);
             transition: color .2s ease;
+            white-space: nowrap;
         }
-        .pbtn[aria-pressed="true"] { color: var(--t3-on-primary); }
+        .pswitch button[aria-checked="true"] {
+            color: var(--t3-on-primary);
+        }
 
         .links {
             display: flex;
@@ -501,20 +529,22 @@ $js_config = array(
             padding: 0;
         }
         .links a {
-            padding: 8px 11px;
+            padding: 8px 12px;
             border-radius: 10px;
-            font-size: 13px;
+            font-size: 13.5px;
             font-weight: 600;
             color: var(--t3-ink-2);
             transition: background .18s ease, color .18s ease;
             white-space: nowrap;
         }
-        .links a:hover, .links a.on {
-            color: var(--t3-ink);
+        .links a:hover,
+        .links a.is-active,
+        .links a[aria-current="page"] {
+            color: var(--t3-primary-ink);
             background: var(--t3-pill-bg);
         }
 
-        .nav-r { display: flex; align-items: center; gap: 8px; }
+        .nav-r { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
         .btn {
             display: inline-flex;
             align-items: center;
@@ -533,9 +563,9 @@ $js_config = array(
         .btn.sm { padding: 8px 13px; font-size: 12.5px; border-radius: 10px; }
         .btn.lg { padding: 13px 22px; font-size: 15px; border-radius: 14px; }
         .btn.primary {
-            background: linear-gradient(135deg, var(--t3-primary), color-mix(in srgb, var(--t3-primary) 72%, var(--t3-sky)));
+            background: linear-gradient(135deg, var(--t3-primary), var(--t3-accent-2));
             color: var(--t3-on-primary);
-            box-shadow: 0 10px 26px rgba(var(--t3-rgb), 0.30);
+            box-shadow: 0 10px 24px rgba(var(--t3-rgb), 0.26);
         }
         .btn.ghost {
             background: var(--t3-glass-soft);
@@ -543,77 +573,86 @@ $js_config = array(
             color: var(--t3-ink);
         }
         .btn.ghost:hover { background: var(--t3-glass-strong); }
-        .iconbtn {
+        .icon-btn {
             width: 38px;
             height: 38px;
             border-radius: 11px;
             border: 1px solid var(--t3-border);
             background: var(--t3-glass-soft);
-            display: none;
+            color: var(--t3-ink);
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            flex: 0 0 auto;
         }
-        .iconbtn svg, .btn svg { width: 17px; height: 17px; flex: 0 0 auto; }
+        .icon-btn svg, .btn svg { width: 17px; height: 17px; flex: 0 0 auto; }
+        .menu-btn { display: none; }
 
-        @media (max-width: 1020px) {
-            .links, .nav-r .hide-m { display: none; }
-            .iconbtn { display: inline-flex; }
+        @media (max-width: 1060px) {
+            .links { display: none; }
+            .menu-btn { display: inline-flex; }
         }
-        @media (max-width: 560px) {
-            .pswitch { min-width: 144px; }
-            .pbtn { padding: 6px 8px; font-size: 11.5px; }
+        @media (max-width: 640px) {
+            .nav-r > .ghost { display: none; }
+        }
+        @media (max-width: 580px) {
+            .ff-word { display: none; }
+            .pswitch { min-width: 152px; }
+            .pswitch button { padding: 6px 10px; font-size: 12px; }
         }
 
         /* ── Meridian-1 Sheet & Get-App Modal ────────────────────────── */
+        #sheet[hidden], #getSheet[hidden] { display: none !important; }
         .sheet {
             position: fixed;
             inset: 0;
             z-index: 90;
             background: rgba(15, 23, 42, 0.52);
             backdrop-filter: blur(12px);
-            display: none;
-            align-items: flex-end;
+            display: flex;
+            align-items: flex-start;
             justify-content: center;
-            padding: 16px;
+            padding: 86px 16px 24px;
+            overflow: auto;
         }
-        .sheet.open { display: flex; }
-        .sheet-card {
-            width: min(540px, 100%);
-            max-height: 88vh;
+        .sheet > .glass {
+            width: min(520px, 100%);
+            max-height: 85vh;
             overflow: auto;
             background: var(--t3-glass-strong);
             backdrop-filter: blur(28px) saturate(190%);
             border: 1px solid var(--t3-border);
             border-radius: 24px;
-            padding: 20px;
+            padding: 18px;
             box-shadow: var(--t3-shadow);
             color: var(--t3-ink);
         }
-        .sheet-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-        }
-        .sheet-head .iconbtn { display: inline-flex; }
-        .sheet-links {
+        .sheet .mlinks {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
-            margin-bottom: 14px;
+            margin: 14px 0;
         }
-        .sheet-links a {
+        .sheet .mlinks a {
             padding: 11px 12px;
             border-radius: 12px;
             background: var(--t3-glass-soft);
             border: 1px solid var(--t3-border);
             font-size: 13.5px;
             font-weight: 600;
+            color: var(--t3-ink-2);
         }
-        .sheet-cta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        @media (max-width: 440px) {
-            .sheet-links, .sheet-cta { grid-template-columns: 1fr; }
+        .sheet .mlinks a:hover,
+        .sheet .mlinks a.is-active {
+            background: var(--t3-pill-bg);
+            color: var(--t3-primary-ink);
+            border-color: rgba(var(--t3-rgb), 0.30);
+        }
+        .sheet .row { display: flex; gap: 10px; }
+        @media (max-width: 460px) {
+            .sheet .mlinks { grid-template-columns: 1fr; }
+            .sheet .row { flex-direction: column; }
         }
 
         /* ── Hero: Asymmetric Luminous Bento ─────────────────────────── */
@@ -681,7 +720,7 @@ $js_config = array(
             font-weight: 700;
         }
         .t3-grad {
-            background: linear-gradient(125deg, var(--t3-primary) 10%, var(--t3-sky) 55%, var(--t3-violet) 100%);
+            background: linear-gradient(125deg, var(--t3-primary) 15%, var(--t3-accent-2) 95%);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
@@ -882,9 +921,12 @@ $js_config = array(
             font-weight: 600;
         }
         .t3-trust-row span:last-child {
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: var(--t3-pill-bg);
+            color: var(--t3-primary-ink);
             font-size: 11px;
             font-weight: 700;
-            color: var(--t3-emerald);
         }
 
         /* ── Sections ────────────────────────────────────────────────── */
@@ -903,7 +945,7 @@ $js_config = array(
             font-weight: 800;
             letter-spacing: .12em;
             text-transform: uppercase;
-            color: var(--t3-primary);
+            color: var(--t3-primary-ink);
             margin-bottom: 6px;
         }
         .t3-sec-head h2 {
@@ -1016,9 +1058,9 @@ $js_config = array(
             border-radius: 14px;
             display: inline-grid;
             place-items: center;
-            background: linear-gradient(135deg, rgba(var(--t3-rgb), 0.16), color-mix(in srgb, var(--t3-sky) 16%, transparent));
+            background: linear-gradient(135deg, rgba(var(--t3-rgb), 0.16), rgba(var(--t3-rgb), 0.06));
             border: 1px solid rgba(var(--t3-rgb), 0.25);
-            color: var(--t3-primary);
+            color: var(--t3-primary-ink);
             flex: 0 0 auto;
         }
         .t3-cat-ico svg { width: 21px; height: 21px; }
@@ -1073,7 +1115,7 @@ $js_config = array(
             justify-content: space-between;
             font-size: 12px;
             font-weight: 700;
-            color: var(--t3-primary);
+            color: var(--t3-primary-ink);
         }
         .t3-feat-foot svg { width: 14px; height: 14px; }
 
@@ -1133,7 +1175,7 @@ $js_config = array(
             font-family: 'Space Grotesk', sans-serif;
             font-weight: 700;
             background: var(--t3-pill-bg);
-            color: var(--t3-primary);
+            color: var(--t3-primary-ink);
             margin-bottom: 12px;
         }
         .t3-step h3 { margin: 0 0 6px; font-size: 17px; }
@@ -1149,7 +1191,7 @@ $js_config = array(
         .t3-sec-card { padding: 20px; }
         .t3-sec-card h3 { margin: 0 0 6px; font-size: 16px; }
         .t3-sec-card p { margin: 0 0 12px; font-size: 13.5px; color: var(--t3-ink-2); }
-        .t3-sec-card a { font-size: 13px; font-weight: 700; color: var(--t3-primary); }
+        .t3-sec-card a { font-size: 13px; font-weight: 700; color: var(--t3-primary-ink); }
 
         /* ── 2-Column Glass FAQ + CTA + Footer ───────────────────────── */
         .t3-faq-grid {
@@ -1173,7 +1215,7 @@ $js_config = array(
             justify-content: space-between;
             gap: 12px;
         }
-        .t3-faq-btn span:last-child { font-size: 19px; color: var(--t3-primary); transition: transform .2s ease; }
+        .t3-faq-btn span:last-child { font-size: 19px; color: var(--t3-primary-ink); transition: transform .2s ease; }
         .t3-faq-card.open .t3-faq-btn span:last-child { transform: rotate(45deg); }
         .t3-faq-body {
             display: none;
@@ -1198,6 +1240,12 @@ $js_config = array(
         }
         .t3-cta-banner p { margin: 0; color: var(--t3-ink-2); max-width: 54ch; }
 
+        .t3-footer .brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--t3-ink);
+        }
         .t3-footer {
             margin-top: 28px;
             padding: 38px 0 46px;
@@ -1238,7 +1286,7 @@ $js_config = array(
             font-size: 11.5px;
             text-transform: uppercase;
             letter-spacing: .08em;
-            color: var(--t3-primary);
+            color: var(--t3-primary-ink);
         }
         .bc-public-directory ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
         .bc-public-directory a { font-size: 13px; color: var(--t3-ink-2); }
@@ -1695,8 +1743,11 @@ $js_config = array(
         </div>
     </footer>
 
+    <div class="sheet" id="getSheet" hidden=""><div class="glass" role="dialog" aria-modal="true" aria-labelledby="getTitle" style="max-width:420px;text-align:center" id="getBody"></div></div>
+
     <script>
-        window.__MERIDIAN__ = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+        window.MERIDIAN_CONFIG = <?php echo json_encode($js_config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+        window.__MERIDIAN__ = window.MERIDIAN_CONFIG;
     </script>
     <script src="/asset/meridian-1/meridian-1.js?v=1" defer></script>
     <script>
