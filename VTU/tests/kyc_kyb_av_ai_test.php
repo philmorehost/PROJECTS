@@ -222,6 +222,13 @@ foreach (['SAAS', 'NON-SAAS'] as $ed) {
     kchk(strpos($secSrc, 'function bc_kyc_ai_ensure_schema($connection_server = null)') !== false, "$ed bc-security.php makes bc_kyc_ai_ensure_schema connection optional");
     $analyzerSrc = file_get_contents($base . '/func/bc-kyc-ai-analyzer.php');
     kchk(strpos($analyzerSrc, 'bc_ai_platform_status($connection_server)') === false && strpos($analyzerSrc, '->isAvailable()') === false, "$ed bc-kyc-ai-analyzer.php passes vendor_id to bc_ai_platform_status and avoids undefined isAvailable()");
+
+    foreach (['bc-admin/AIMarketing.php', 'bc-admin/SendMail.php'] as $copilotRel) {
+        $copilotSrc = file_get_contents($base . '/' . $copilotRel);
+        kchk(strpos($copilotSrc, "substr(\$generated, 0, 500)") === false, "$ed $copilotRel passes 8 args to bc_ai_charge_vendor_tokens without shifting model into duration_ms");
+        kchk(strpos($copilotSrc, "\$billing['tokens_remaining']") !== false && strpos($copilotSrc, "\$billing['reason']") !== false, "$ed $copilotRel reads tokens_remaining and reason from bc_ai_charge_vendor_tokens()");
+        kchk(strpos($copilotSrc, "\$billing['balance']") === false && strpos($copilotSrc, "\$billing['error']") === false, "$ed $copilotRel does not read nonexistent balance/error billing keys");
+    }
 }
 $spAi = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/AIManagement.php');
 kchk(strpos($spAi, 'av_scan_cost') !== false && strpos($spAi, 'kyc_report_cost') !== false && strpos($spAi, 'support_reply_cost') !== false && strpos($spAi, 'sas_kyc_av_logs') !== false, 'SAAS spadmin AIManagement configures AV/KYC/Support rates and views AV reports');

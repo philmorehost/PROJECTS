@@ -68,7 +68,7 @@ if ($action === 'queue') {
     $queue = bc_chat_agent_queue($vid);
     $open_threads = array();
     if ($connection_server instanceof mysqli) {
-        $oq = mysqli_query($connection_server, "SELECT * FROM sas_chat_threads
+        $oq = @mysqli_query($connection_server, "SELECT * FROM sas_chat_threads
             WHERE vendor_id='$vid' AND status='open'
             ORDER BY last_message_at DESC LIMIT 50");
         if ($oq) while ($or = mysqli_fetch_assoc($oq)) $open_threads[] = $or;
@@ -87,7 +87,7 @@ if (!$thread) bc_agent_chat_json(array('ok' => false, 'error' => 'Conversation n
 
 if ($action === 'thread') {
     // Opening a conversation marks it read for the agent side.
-    mysqli_query($connection_server, "UPDATE sas_chat_threads SET unread_for_agent=0 WHERE id='$thread_id' AND vendor_id='$vid'");
+    @mysqli_query($connection_server, "UPDATE sas_chat_threads SET unread_for_agent=0 WHERE id='$thread_id' AND vendor_id='$vid'");
     $after_id = (int)($data['after_id'] ?? 0);
     bc_agent_chat_json(array(
         'ok' => true,
@@ -103,7 +103,7 @@ if ($action === 'reply') {
     $id = bc_chat_post_message($vid, $thread_id, 'agent', $agent_name, $body);
     if (!$id) bc_agent_chat_json(array('ok' => false, 'error' => 'Reply was empty or too long.'), 400);
     if ((int)($thread['ai_enabled'] ?? 0) === 1 || (int)($thread['unread_for_agent'] ?? 0) > 0) {
-        mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0, unread_for_agent=0 WHERE id='$thread_id' AND vendor_id='$vid'");
+        @mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0, unread_for_agent=0 WHERE id='$thread_id' AND vendor_id='$vid'");
     }
     bc_agent_chat_json(array(
         'ok' => true,
@@ -127,7 +127,7 @@ if ($action === 'close') {
 }
 
 if ($action === 'pause_ai') {
-    mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0 WHERE id='$thread_id' AND vendor_id='$vid'");
+    @mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0 WHERE id='$thread_id' AND vendor_id='$vid'");
     bc_chat_event($vid, $thread_id, 'ai_paused', $agent_name, '');
     bc_agent_chat_json(array('ok' => true, 'thread' => bc_agent_chat_public_thread(bc_chat_thread_get($vid, $thread_id))));
 }

@@ -17,9 +17,9 @@ $assigned_model_raw = $get_logged_admin_details['ai_model_assigned'] ?: getSuper
 $assigned_model = $ai_engine->isModelCompatible($assigned_model_raw) ? $assigned_model_raw : $ai_engine->getDefaultModel();
 
 // Business Name Fallback Logic
-$site_q = mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
-$site_data = mysqli_fetch_assoc($site_q);
-$biz_name = $get_logged_admin_details['company_name'] ?? ($site_data['site_title'] ?? 'Our VTU Platform');
+$site_q = @mysqli_query($connection_server, "SELECT site_title FROM sas_site_details WHERE vendor_id='$vendor_id' LIMIT 1");
+$site_data = ($site_q && ($sr = mysqli_fetch_assoc($site_q))) ? $sr : null;
+$biz_name = !empty($get_logged_admin_details['company_name']) ? $get_logged_admin_details['company_name'] : ($site_data['site_title'] ?? 'Our VTU Platform');
 
 $current_bg = $get_logged_admin_details['ai_marketing_bg'] ?? 'midnight';
 $is_saas_mode = bc_ai_is_saas();
@@ -89,17 +89,16 @@ $safe_input";
             'marketing_copilot',
             'admin_' . ($get_logged_admin_details['email'] ?? 'admin'),
             ($action === 'ai_write' ? 'Marketing Write' : 'Marketing Refine') . ': ' . substr($safe_input, 0, 150),
-            substr($generated, 0, 500),
             (string)$assigned_model,
             (int)$duration,
             $per_tx_cost
         );
-        if (!$billing['ok']) {
-            $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
-            echo json_encode(['status' => 'error', 'message' => $billing['error'] ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
+        if (empty($billing['ok'])) {
+            $get_logged_admin_details['ai_token_balance'] = (int)($billing['tokens_remaining'] ?? $token_bal);
+            echo json_encode(['status' => 'error', 'message' => ($billing['reason'] ?? '') ?: 'Insufficient AI token balance. Please top up in AI Business Suite.']);
             exit;
         }
-        $get_logged_admin_details['ai_token_balance'] = (int)$billing['balance'];
+        $get_logged_admin_details['ai_token_balance'] = (int)($billing['tokens_remaining'] ?? $token_bal);
 
         // Split off a leading "SUBJECT:" line if the model produced one, so the client can
         // route it straight into the subject field instead of leaving it in the body.
@@ -143,8 +142,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'cancel_campaign') {
 
 if (isset($_POST['set-bg'])) {
     $new_bg = bc_sanitize($_POST['bg_name'] ?? 'midnight');
-    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_marketing_bg='$new_bg' WHERE id='$vendor_id'");
-    header("Location: AIMarketing.php"); exit();
+    @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_marketing_bg='$new_bg' WHERE id='$vendor_id'");
+    header("Location: AIMarketing.php");
     exit;
 }
 

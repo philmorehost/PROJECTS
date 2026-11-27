@@ -7,7 +7,7 @@ $hub_slug = isset($_GET['g']) ? (string)$_GET['g'] : '';
 ?>
 <?php include_once(__DIR__ . "/../func/bc-plate-admin.php");
 $hub_item = $hub_slug !== '' ? bc_adm_hub_find('admin', $hub_slug) : null;
-bc_adm_head(($hub_item ? $hub_item['label'] : 'Explore') . " | " . ($get_all_super_admin_site_details["site_title"]), array("area" => "admin"));
+bc_adm_head(($hub_item ? $hub_item['label'] : 'Explore') . " | " . ($get_all_super_admin_site_details["site_title"] ?? 'Admin'), array("area" => "admin"));
 ?>
 <?php bc_adm_sidebar(array("area" => "admin")); ?>
 <?php bc_adm_topbar(array("area" => "admin", "title" => $hub_item ? strtoupper($hub_item['label']) : 'EXPLORE', "crumb" => "Home / " . ($hub_item ? $hub_item['label'] : 'Explore'))); ?>

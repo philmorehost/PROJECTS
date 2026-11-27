@@ -51,7 +51,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'])) {
 
     if ($action === 'pause_ai') {
         // $connection_server is already in scope at file level; a `global` here would be redundant.
-        mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0
+        @mysqli_query($connection_server, "UPDATE sas_chat_threads SET ai_enabled=0
             WHERE id='$thread_id' AND vendor_id='$vid'");
         bc_chat_event($vid, $thread_id, 'ai_paused', $agent_name, '');
         bc_chat_redirect('The assistant is muted on this conversation.', 'success');

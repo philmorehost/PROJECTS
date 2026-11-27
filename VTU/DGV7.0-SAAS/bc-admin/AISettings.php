@@ -26,7 +26,7 @@ if (!in_array($active_tab, ['billing', 'support', 'sentinel', 'reports'], true))
 if (isset($_POST["toggle-ai"])) {
     bc_validate_csrf();
     $new_status = (int)($_POST["ai_status"] ?? 0) === 1 ? 1 : 0;
-    mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status='$new_status', kyc_ai_enabled='$new_status' WHERE id='$esc_vid'");
+    @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status='$new_status', kyc_ai_enabled='$new_status' WHERE id='$esc_vid'");
     $_SESSION["product_purchase_response"] = "AI Business Suite " . ($new_status ? "enabled." : "paused.");
     header("Location: AISettings.php?tab=" . urlencode($active_tab));
     exit();
@@ -50,7 +50,7 @@ if ($is_saas && isset($_POST['request-ai-activation'])) {
         $desc = "AI Business Suite Activation ($tokens tokens)";
         $charge = chargeVendor("debit", "ai_activation", "AI Suite", $ref, $cost, $cost, $desc, $_SERVER["HTTP_HOST"], 1);
         if ($charge === 'success') {
-            mysqli_query($connection_server, "UPDATE sas_vendors SET ai_request_status='pending', ai_pending_cost='$cost', ai_pending_tokens='$tokens' WHERE id='$esc_vid'");
+            @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_request_status='pending', ai_pending_cost='$cost', ai_pending_tokens='$tokens' WHERE id='$esc_vid'");
             bc_trigger_high_alert("AI_ACTIVATION_REQUEST", "AI activation request from " . ($get_logged_admin_details['company_name'] ?: $get_logged_admin_details['email']) . " (" . number_format($tokens) . " tokens / NGN " . number_format($cost, 2) . ")");
             $_SESSION['product_purchase_response'] = "✅ Request submitted! Super Admin has been notified for approval.";
         } else {
@@ -77,7 +77,7 @@ if ($is_saas && isset($_POST["buy-ai-tokens"])) {
         $charge = chargeVendor("debit", "ai_tokens", "AI Tokens", $ref, $cost, $cost, $desc, $_SERVER["HTTP_HOST"], 1);
         if ($charge === "success") {
             $new_bal = (int)$get_logged_admin_details["ai_token_balance"] + $token_amount;
-            mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance='$new_bal' WHERE id='$esc_vid'");
+            @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_token_balance='$new_bal' WHERE id='$esc_vid'");
             $_SESSION["product_purchase_response"] = "✅ " . number_format($token_amount) . " AI Tokens added to your vendor balance!";
         } else {
             $_SESSION["product_purchase_response"] = "❌ Token purchase failed. Check your balance.";
@@ -127,9 +127,9 @@ if (!$is_saas && isset($_POST['update-ai-credentials'])) {
 
     if ($model_assigned !== '') {
         $esc_m = mysqli_real_escape_string($connection_server, $model_assigned);
-        mysqli_query($connection_server, "UPDATE sas_vendors SET ai_model_assigned='$esc_m', ai_status=1, kyc_ai_enabled=1 WHERE id='$esc_vid'");
+        @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_model_assigned='$esc_m', ai_status=1, kyc_ai_enabled=1 WHERE id='$esc_vid'");
     } else {
-        mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status=1, kyc_ai_enabled=1 WHERE id='$esc_vid'");
+        @mysqli_query($connection_server, "UPDATE sas_vendors SET ai_status=1, kyc_ai_enabled=1 WHERE id='$esc_vid'");
     }
     $_SESSION['product_purchase_response'] = "✅ Direct AI API credentials saved & engine activated!";
     header("Location: AISettings.php?tab=billing");
@@ -231,14 +231,14 @@ if (isset($_POST['sentinel_user_action']) && isset($_POST['target_username'])) {
             bc_ai_sentinel_auto_block($connection_server, $vid, $target_u, 'Manually blocked by Admin via Security Sentinel', 0);
             $_SESSION["product_purchase_response"] = "🔒 Account @{$target_u} has been blocked.";
         } elseif ($s_act === 'unblock') {
-            mysqli_query($connection_server, "UPDATE sas_users SET is_blocked=0, failed_login_count=0 WHERE vendor_id='$esc_vid' AND username='$esc_u'");
+            @mysqli_query($connection_server, "UPDATE sas_users SET is_blocked=0, failed_login_count=0 WHERE vendor_id='$esc_vid' AND username='$esc_u'");
             @mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE vendor_id='$esc_vid' AND username='$esc_u'");
             if (function_exists('bc_log_security_event')) {
                 bc_log_security_event('SENTINEL_UNBLOCKED', 'admin_unblock', $esc_vid . ':' . $target_u, 'Unblocked from AI Security Sentinel');
             }
             $_SESSION["product_purchase_response"] = "🔓 Account @{$target_u} unblocked.";
         } elseif ($s_act === 'reset_trust') {
-            mysqli_query($connection_server, "UPDATE sas_users SET trust_score=65, is_blocked=0 WHERE vendor_id='$esc_vid' AND username='$esc_u'");
+            @mysqli_query($connection_server, "UPDATE sas_users SET trust_score=65, is_blocked=0 WHERE vendor_id='$esc_vid' AND username='$esc_u'");
             @mysqli_query($connection_server, "DELETE FROM sas_blocked_accounts WHERE vendor_id='$esc_vid' AND username='$esc_u'");
             if (function_exists('bc_log_security_event')) {
                 bc_log_security_event('SENTINEL_TRUST_RESET', 'admin_reset_trust', $esc_vid . ':' . $target_u, 'Trust score reset to 65');
@@ -259,7 +259,7 @@ if (isset($_POST["add-whitelist"])) {
     if (!empty($pid)) {
         $esc_pid = mysqli_real_escape_string($connection_server, $pid);
         $esc_exp = !empty($expiry) ? "'" . mysqli_real_escape_string($connection_server, $expiry) . "'" : "NULL";
-        mysqli_query($connection_server,
+        @mysqli_query($connection_server,
             "INSERT INTO sas_customer_whitelist (vendor_id, product_id, is_whitelisted, daily_limit_override, override_expiry)
              VALUES ('$esc_vid', '$esc_pid', 1, '$limit', $esc_exp)
              ON DUPLICATE KEY UPDATE is_whitelisted=1, daily_limit_override='$limit', override_expiry=$esc_exp"
@@ -273,14 +273,14 @@ if (isset($_POST["add-whitelist"])) {
 if (isset($_GET["remove-whitelist"])) {
     $pid = bc_sanitize($_GET["remove-whitelist"]);
     $esc_pid = mysqli_real_escape_string($connection_server, $pid);
-    mysqli_query($connection_server, "DELETE FROM sas_customer_whitelist WHERE vendor_id='$esc_vid' AND product_id='$esc_pid'");
+    @mysqli_query($connection_server, "DELETE FROM sas_customer_whitelist WHERE vendor_id='$esc_vid' AND product_id='$esc_pid'");
     $_SESSION["product_purchase_response"] = "VIP entry removed.";
     header("Location: AISettings.php?tab=sentinel");
     exit();
 }
 
 // ── Load Data for Unified AI Business Suite ─────────────────────────────────
-$v_refresh = mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$esc_vid' LIMIT 1");
+$v_refresh = @mysqli_query($connection_server, "SELECT * FROM sas_vendors WHERE id='$esc_vid' LIMIT 1");
 if ($v_refresh && ($vr = mysqli_fetch_assoc($v_refresh))) {
     $get_logged_admin_details = array_merge($get_logged_admin_details, $vr);
 }
