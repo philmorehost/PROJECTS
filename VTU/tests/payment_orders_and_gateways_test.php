@@ -284,4 +284,21 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
 $spPg = file_get_contents("$root/DGV7.0-SAAS/bc-spadmin/PaymentGateway.php");
 pcheck(strpos($spPg, 'save-default-gateway-pricing') !== false, 'SAAS spadmin PaymentGateway manages default gateway fee schedule');
 
+// ── 5. Bulk deletion of pending payment orders (admin + spadmin) ──────────────
+pcheck(strpos($po, 'bulk_delete_pending') !== false, 'Admin PaymentOrders supports bulk_delete_pending');
+pcheck(strpos($po, "sec29_verify_admin_pin_only(\$get_logged_admin_details, \$_POST, 'payment_order_delete')") !== false, 'Admin bulk pending delete verifies admin PIN');
+pcheck(strpos($po, "DELETE FROM sas_submitted_payments WHERE vendor_id='\$admin_vid' AND status='2'") !== false, 'Admin bulk delete scopes sas_submitted_payments to vendor and status=2');
+pcheck(strpos($po, "DELETE FROM sas_transactions WHERE vendor_id='\$admin_vid' AND status='2' AND product_unique_id='manual_funding'") !== false, 'Admin bulk delete scopes sas_transactions to vendor, status=2, and manual_funding');
+pcheck(strpos($po, "'payment_orders_bulk_deleted'") !== false, 'Admin bulk delete writes security audit entry');
+pcheck(strpos($po, "\$po_bulk_select_source = 'web'") !== false && strpos($po, "\$po_bulk_select_source = 'app'") !== false, 'Admin PaymentOrders passes bulk select sources for web & app pending tables');
+foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
+    $ht_src = file_get_contents("$root/$ed/func/history-table.php");
+    pcheck(strpos($ht_src, 'po-select-all') !== false && strpos($ht_src, 'po-row-check') !== false && strpos($ht_src, "(string)\$row['status'] === '2'") !== false, "$ed history-table renders bulk checkboxes only for pending status=2 rows");
+}
+$spPo = file_get_contents("$root/DGV7.0-SAAS/bc-spadmin/PaymentOrders.php");
+pcheck(strpos($spPo, 'bulk_delete_pending') !== false, 'SAAS spadmin PaymentOrders supports bulk_delete_pending');
+pcheck(strpos($spPo, "sec30_verify_spadmin_pin_only(\$get_logged_spadmin_details, \$_POST, 'vendor_payment_delete')") !== false, 'SAAS spadmin bulk pending delete verifies spadmin PIN');
+pcheck(strpos($spPo, "DELETE FROM sas_super_admin_submitted_payments WHERE status='2'") !== false, 'SAAS spadmin bulk delete restricts deletes to status=2');
+pcheck(strpos($spPo, "'vendor_payment_orders_bulk_deleted'") !== false, 'SAAS spadmin bulk delete writes security audit entry');
+
 echo "PASS $checks payment orders, gateway settlement, Service Control, and mobile checks\n";

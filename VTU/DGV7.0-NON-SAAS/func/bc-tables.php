@@ -16,7 +16,7 @@
 // leaves no marker and the next request runs the file again - everything here is written to be
 // repeatable, which is what makes that safe.
 // To force a full run regardless (installer, debugging): $GLOBALS['bc_tables_force_run'] = true;
-if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.26-pg-markup-1');
+if (!defined('BC_TABLES_VERSION')) define('BC_TABLES_VERSION', '2026.11.28-settings-innodb-1');
 
 if (!function_exists('bc_ensure_wallet_transactional_schema')) {
     function bc_ensure_wallet_transactional_schema($connection_server) {
@@ -1084,8 +1084,12 @@ if ($create_vendor_style_templates_table) {
 $create_spadmin_style_templates_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_spadmin_style_templates (template_name VARCHAR(225) NOT NULL, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
 //Create Super Admin Options Table
-$create_super_admin_options_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_super_admin_options (option_name VARCHAR(255) PRIMARY KEY, option_value TEXT)");
+$create_super_admin_options_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_super_admin_options (option_name VARCHAR(255) PRIMARY KEY, option_value TEXT) ENGINE=InnoDB");
 if ($create_super_admin_options_table) {
+    $q_sa_opt_eng = @mysqli_query($connection_server, "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sas_super_admin_options'");
+    if ($q_sa_opt_eng && ($r_sa_opt_eng = mysqli_fetch_assoc($q_sa_opt_eng)) && strtoupper((string)($r_sa_opt_eng['ENGINE'] ?? '')) !== 'INNODB') {
+        @mysqli_query($connection_server, "ALTER TABLE sas_super_admin_options ENGINE=InnoDB");
+    }
     $check_opt = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_options WHERE option_name='print_hub_secret'");
     if (mysqli_num_rows($check_opt) == 0) {
         $sec = md5(uniqid(rand(), true));
@@ -1341,10 +1345,15 @@ if ($create_loyalty_bonus_settings_table) {
 }
 
 //Create Settings Table
-$create_settings_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_settings (id INT NOT NULL AUTO_INCREMENT, vendor_id INT UNSIGNED NOT NULL, setting_name VARCHAR(225) NOT NULL, setting_value VARCHAR(225) NOT NULL, PRIMARY KEY (id))");
+$create_settings_table = mysqli_query($connection_server, "CREATE TABLE IF NOT EXISTS sas_settings (id INT NOT NULL AUTO_INCREMENT, vendor_id INT UNSIGNED NOT NULL, setting_name VARCHAR(225) NOT NULL, setting_value VARCHAR(225) NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB");
 if ($create_settings_table) {
+    $q_set_eng = @mysqli_query($connection_server, "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sas_settings'");
+    if ($q_set_eng && ($r_set_eng = mysqli_fetch_assoc($q_set_eng)) && strtoupper((string)($r_set_eng['ENGINE'] ?? '')) !== 'INNODB') {
+        @mysqli_query($connection_server, "ALTER TABLE sas_settings ENGINE=InnoDB");
+    }
     $check_idx = mysqli_query($connection_server, "SHOW INDEX FROM sas_settings WHERE Key_name = 'idx_vendor_setting'");
     if (mysqli_num_rows($check_idx) == 0) {
+        @mysqli_query($connection_server, "DELETE s1 FROM sas_settings s1 INNER JOIN sas_settings s2 ON s1.vendor_id = s2.vendor_id AND s1.setting_name = s2.setting_name AND s1.id < s2.id");
         mysqli_query($connection_server, "ALTER TABLE sas_settings ADD UNIQUE INDEX idx_vendor_setting (vendor_id, setting_name)");
     }
 }

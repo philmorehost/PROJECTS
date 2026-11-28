@@ -5,13 +5,14 @@
 $is_batch = $is_batch ?? false;
 $show_vendor_col = !empty($show_vendor_info) && !$is_batch;
 $tx_receipt_source = isset($tx_receipt_source) ? (string)$tx_receipt_source : '';
+$po_bulk_source = (isset($po_bulk_select_source) && in_array($po_bulk_select_source, array('web', 'app'), true) && !empty($is_admin) && !$is_batch) ? $po_bulk_select_source : '';
 
 if ($query_result && mysqli_num_rows($query_result) >= 1) {
     $show_actions = ($is_admin && ((isset($is_payment_order) && $is_payment_order) || (isset($is_fund_transfer) && $is_fund_transfer) || (isset($inline_approve_page) && $inline_approve_page !== ''))) || (!$is_admin);
     echo '<div class="card border-0 shadow-sm rounded-4 overflow-hidden mt-3">';
     echo '<div class="table-responsive">';
     echo '<table class="table table-hover align-middle mb-0">';
-    echo '<thead class="bg-light"><tr><th class="border-0 px-4 py-3">Type</th>' . ($show_vendor_col ? '<th class="border-0 py-3">Vendor</th>' : '') . '<th class="border-0 py-3">' . ($is_batch ? 'Batch ID' : 'Reference') . '</th><th class="border-0 py-3 text-end px-4">' . ($is_batch ? 'Details' : 'Amount') . '</th><th class="border-0 py-3 text-center">Status</th>' . ($show_actions ? '<th class="border-0 py-3 text-center">Action</th>' : '') . '</tr></thead>';
+    echo '<thead class="bg-light"><tr>' . ($po_bulk_source !== '' ? '<th class="border-0 ps-3" style="width:38px;"><input type="checkbox" class="form-check-input po-select-all" data-po-source="' . htmlspecialchars($po_bulk_source, ENT_QUOTES, 'UTF-8') . '" title="Select all visible pending orders"></th>' : '') . '<th class="border-0 px-4 py-3">Type</th>' . ($show_vendor_col ? '<th class="border-0 py-3">Vendor</th>' : '') . '<th class="border-0 py-3">' . ($is_batch ? 'Batch ID' : 'Reference') . '</th><th class="border-0 py-3 text-end px-4">' . ($is_batch ? 'Details' : 'Amount') . '</th><th class="border-0 py-3 text-center">Status</th>' . ($show_actions ? '<th class="border-0 py-3 text-center">Action</th>' : '') . '</tr></thead>';
     echo '<tbody>';
 
     while ($row = mysqli_fetch_assoc($query_result)) {
@@ -58,6 +59,13 @@ if ($query_result && mysqli_num_rows($query_result) >= 1) {
         $date = date('M d, Y H:i', strtotime($row['date']));
 
         echo '<tr class="cursor-pointer" tabindex="0" role="button" onkeydown="if(event.target===this &amp;&amp; (event.key===&quot;Enter&quot; || event.key===&quot; &quot;)){event.preventDefault();this.click();}" onclick="' . htmlspecialchars($onclick, ENT_QUOTES, 'UTF-8') . '">';
+        if ($po_bulk_source !== '') {
+            echo '<td class="ps-3" onclick="event.stopPropagation();">'
+                . ((string)$row['status'] === '2'
+                    ? '<input type="checkbox" class="form-check-input po-row-check po-check-' . htmlspecialchars($po_bulk_source, ENT_QUOTES, 'UTF-8') . '" data-po-source="' . htmlspecialchars($po_bulk_source, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars((string)$ref, ENT_QUOTES, 'UTF-8') . '">'
+                    : '')
+                . '</td>';
+        }
         echo '<td class="px-4">
                 ' . (!empty($row["product_unique_id"]) ? '<div class="text-primary fw-bold mb-1" style="font-size:15px; letter-spacing: 0.5px;">' . htmlspecialchars($row["product_unique_id"]) . '</div>' : '') . '
                 <div class="fw-bold text-dark" style="font-size:13px;">' . htmlspecialchars($type) . '</div>

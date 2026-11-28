@@ -42,6 +42,65 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
+    if (isset($_POST["bulk_delete_pending"])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $sp_redirect = "/bc-spadmin/PaymentOrders.php";
+        $ret_sq = trim(strip_tags((string)($_POST['return_searchq'] ?? '')));
+        if ($ret_sq !== '') {
+            $sp_redirect .= '?searchq=' . urlencode($ret_sq);
+        }
+        $delete_scope = trim(strip_tags((string)($_POST['delete_scope'] ?? 'selected')));
+        if (!in_array($delete_scope, array('selected', 'all'), true)) {
+            $_SESSION["product_purchase_response"] = "Invalid bulk delete scope.";
+            header("Location: " . $sp_redirect);
+            exit();
+        }
+        $sec30_pin_err = sec30_verify_spadmin_pin_only($get_logged_spadmin_details, $_POST, 'vendor_payment_delete');
+        if ($sec30_pin_err !== '') {
+            $_SESSION["product_purchase_response"] = $sec30_pin_err;
+            header("Location: " . $sp_redirect);
+            exit();
+        }
+        $deleted_count = 0;
+        if ($delete_scope === 'selected') {
+            $raw_refs = is_array($_POST['selected_refs'] ?? null) ? $_POST['selected_refs'] : array();
+            $refs = array_values(array_unique(array_filter(array_map(function ($r) {
+                return is_string($r) ? trim(strip_tags($r)) : '';
+            }, $raw_refs), function ($r) { return $r !== ''; })));
+            if (empty($refs)) {
+                $_SESSION["product_purchase_response"] = "Select at least one pending payment order to delete.";
+                header("Location: " . $sp_redirect);
+                exit();
+            }
+            foreach (array_chunk($refs, 200) as $chunk) {
+                $in_sql = implode(',', array_map(function ($r) use ($connection_server) {
+                    return "'" . mysqli_real_escape_string($connection_server, $r) . "'";
+                }, $chunk));
+                if (mysqli_query($connection_server, "DELETE FROM sas_super_admin_submitted_payments WHERE status='2' AND reference IN ($in_sql)")) {
+                    $deleted_count += max(0, (int)mysqli_affected_rows($connection_server));
+                }
+            }
+        } else {
+            $filter_sq = trim(strip_tags((string)($_POST['filter_searchq'] ?? '')));
+            $bulk_search_sql = "";
+            if ($filter_sq !== '' && !empty($_POST['apply_search_filter'])) {
+                $f_esc = mysqli_real_escape_string($connection_server, $filter_sq);
+                $bulk_search_sql = " AND (reference LIKE '%$f_esc%' OR description LIKE '%$f_esc%' OR amount LIKE '%$f_esc%')";
+            }
+            if (mysqli_query($connection_server, "DELETE FROM sas_super_admin_submitted_payments WHERE status='2' $bulk_search_sql")) {
+                $deleted_count += max(0, (int)mysqli_affected_rows($connection_server));
+            }
+        }
+        if ($deleted_count > 0 && function_exists('bc_sec_audit')) {
+            bc_sec_audit(0, 'spadmin', (string)$get_logged_spadmin_details["email"], 'vendor_payment_orders_bulk_deleted', $delete_scope, "Deleted $deleted_count pending vendor payment order(s)");
+        }
+        $_SESSION["product_purchase_response"] = $deleted_count > 0
+            ? "Deleted $deleted_count pending vendor payment order(s)."
+            : "No matching pending payment orders were found to delete.";
+        header("Location: " . $sp_redirect);
+        exit();
+    }
+
     if(isset($_POST["order-ref"])){
         if (function_exists('bc_validate_csrf')) bc_validate_csrf();
         $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"] ?? '')));
@@ -191,6 +250,8 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
             $get_user_pending_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE status='2' $search_statement ORDER BY date DESC LIMIT $limit $offset_statement");
             $get_user_successful_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE status='1' $search_statement ORDER BY date DESC LIMIT $limit $offset_statement");
             $get_user_failed_transaction_details = mysqli_query($connection_server, "SELECT * FROM sas_super_admin_submitted_payments WHERE status='3' $search_statement ORDER BY date DESC LIMIT $limit $offset_statement");
+            $sp_pending_count_q = mysqli_query($connection_server, "SELECT COUNT(*) c FROM sas_super_admin_submitted_payments WHERE status='2'");
+            $sp_pending_total = ($sp_pending_count_q && ($sp_pending_r = mysqli_fetch_assoc($sp_pending_count_q))) ? (int)($sp_pending_r['c'] ?? 0) : 0;
         ?>
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden mb-4">
             <div class="card-header bg-white py-4 border-0">
@@ -218,9 +279,25 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
                 <div class="tab-content p-0">
                     <!-- Pending Tab -->
                     <div class="tab-pane fade show active" id="tab-pending">
+                        <?php if ($sp_pending_total > 0): ?>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 bg-light border-top border-bottom px-4 py-3">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge bg-secondary-subtle text-dark border px-3 py-2 rounded-pill" id="spPoSelectedBadge">0 selected</span>
+                                <span class="small text-muted">Select pending orders or wipe all pending requests (approved &amp; rejected orders are never affected).</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" id="spPoDeleteSelectedBtn" disabled data-bs-toggle="modal" data-bs-target="#bulkDeleteSpOrdersModal" data-mode="selected">
+                                    <i class="bi bi-trash3 me-1"></i>Delete Selected
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#bulkDeleteSpOrdersModal" data-mode="all">
+                                    <i class="bi bi-trash3-fill me-1"></i>Delete All Pending (<?php echo $sp_pending_total; ?>)
+                                </button>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
-                                <thead class="bg-light"><tr class="small text-uppercase text-muted"><th class="ps-4">Ref / Vendor</th><th>Details</th><th>Amount</th><th>Status</th><th class="text-end pe-4">Actions</th></tr></thead>
+                                <thead class="bg-light"><tr class="small text-uppercase text-muted"><th class="ps-4" style="width:38px;"><input type="checkbox" class="form-check-input" id="spPoSelectAll" title="Select all visible pending orders"></th><th>Ref / Vendor</th><th>Details</th><th>Amount</th><th>Status</th><th class="text-end pe-4">Actions</th></tr></thead>
                                 <tbody>
                                     <?php if($get_user_pending_transaction_details && mysqli_num_rows($get_user_pending_transaction_details) > 0):
                                         while($row = mysqli_fetch_assoc($get_user_pending_transaction_details)):
@@ -229,6 +306,9 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
                                     ?>
                                     <tr>
                                         <td class="ps-4">
+                                            <input type="checkbox" class="form-check-input sp-po-check" value="<?php echo htmlspecialchars($row['reference'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        </td>
+                                        <td>
                                             <div class="fw-bold text-dark small"><?php echo $row["reference"]; ?></div>
                                             <div class="small text-muted"><?php echo $v_email; ?></div>
                                         </td>
@@ -246,7 +326,7 @@ bc_adm_head("Payment Orders", array("area" => "spadmin"));
                                         </td>
                                     </tr>
                                     <?php endwhile; else: ?>
-                                    <tr><td colspan="5" class="text-center py-5 text-muted">No pending requests found</td></tr>
+                                    <tr><td colspan="6" class="text-center py-5 text-muted">No pending requests found</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -379,5 +459,106 @@ document.getElementById('approveOrderModal').addEventListener('show.bs.modal', f
     submit.className = 'btn rounded-pill px-4 fw-bold ' + (approve ? 'btn-success' : 'btn-danger');
 });
 </script>
+
+<?php if ($sp_pending_total > 0): ?>
+<div class="modal fade" id="bulkDeleteSpOrdersModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" action="PaymentOrders.php" class="modal-content border-0 shadow">
+      <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+      <input type="hidden" name="bulk_delete_pending" value="1">
+      <input type="hidden" name="return_searchq" value="<?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="filter_searchq" value="<?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="delete_scope" id="spPoBulkDeleteScope" value="selected">
+      <div id="spPoBulkSelectedInputs"></div>
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold text-danger" id="spPoBulkTitle">Delete Pending Payment Orders</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3" id="spPoBulkDesc">Permanently delete pending payment orders. Approved and rejected orders are never affected.</p>
+        <?php if ($searchq !== ''): ?>
+        <div class="form-check mb-3 d-none" id="spPoFilterWrap">
+          <input class="form-check-input" type="checkbox" name="apply_search_filter" value="1" id="spPoApplySearchFilter" checked>
+          <label class="form-check-label small" for="spPoApplySearchFilter">
+            Only delete pending orders matching filter "<strong><?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?></strong>"
+          </label>
+        </div>
+        <?php endif; ?>
+        <div class="mb-1">
+          <label class="form-label small fw-bold text-muted">SECURITY PIN</label>
+          <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" class="form-control text-center fw-bold" placeholder="****" required autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Delete Permanently</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+    var selectAll = document.getElementById('spPoSelectAll');
+    var badge = document.getElementById('spPoSelectedBadge');
+    var delBtn = document.getElementById('spPoDeleteSelectedBtn');
+    var modalEl = document.getElementById('bulkDeleteSpOrdersModal');
+    if (!badge || !delBtn || !modalEl) return;
+
+    function updateSpCount() {
+        var rows = document.querySelectorAll('.sp-po-check');
+        var checked = document.querySelectorAll('.sp-po-check:checked');
+        badge.textContent = checked.length + ' selected';
+        delBtn.disabled = checked.length === 0;
+        if (selectAll) {
+            selectAll.checked = rows.length > 0 && checked.length === rows.length;
+            selectAll.indeterminate = checked.length > 0 && checked.length < rows.length;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            document.querySelectorAll('.sp-po-check').forEach(function (cb) {
+                cb.checked = selectAll.checked;
+            });
+            updateSpCount();
+        });
+    }
+    document.querySelectorAll('.sp-po-check').forEach(function (cb) {
+        cb.addEventListener('change', updateSpCount);
+    });
+
+    modalEl.addEventListener('show.bs.modal', function (ev) {
+        var btn = ev.relatedTarget;
+        var mode = btn ? btn.getAttribute('data-mode') : 'selected';
+        var selectedBox = document.getElementById('spPoBulkSelectedInputs');
+        var scopeInput = document.getElementById('spPoBulkDeleteScope');
+        var title = document.getElementById('spPoBulkTitle');
+        var desc = document.getElementById('spPoBulkDesc');
+        var filterWrap = document.getElementById('spPoFilterWrap');
+        selectedBox.innerHTML = '';
+
+        if (mode === 'all') {
+            scopeInput.value = 'all';
+            if (filterWrap) filterWrap.classList.remove('d-none');
+            title.textContent = 'Delete All Pending Vendor Orders';
+            desc.textContent = 'This will permanently delete all matching pending vendor payment orders. Approved and rejected orders will never be touched.';
+        } else {
+            scopeInput.value = 'selected';
+            if (filterWrap) filterWrap.classList.add('d-none');
+            var checked = document.querySelectorAll('.sp-po-check:checked');
+            checked.forEach(function (cb) {
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'selected_refs[]';
+                inp.value = cb.value;
+                selectedBox.appendChild(inp);
+            });
+            title.textContent = 'Delete ' + checked.length + ' Selected Pending Order(s)';
+            desc.textContent = 'Permanently delete ' + checked.length + ' selected pending vendor payment order(s). Approved and rejected orders are never affected.';
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php bc_adm_foot(array("area" => "spadmin")); ?>

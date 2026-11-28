@@ -300,8 +300,7 @@ class AIEngine
         ]);
 
         $headers = [
-            'Content-Type: application/json',
-            "Authorization: Bearer {$api_key}"
+            "Authorization: Bearer {$api_key}",
         ];
 
         $start = microtime(true);
@@ -373,7 +372,6 @@ class AIEngine
         ]);
 
         $headers = [
-            'Content-Type: application/json',
             "x-api-key: {$api_key}",
             'anthropic-version: 2023-06-01',
         ];
@@ -438,7 +436,7 @@ class AIEngine
         $payload = json_encode($payload_data);
 
         $start = microtime(true);
-        $raw = $this->curlPost($url, $payload, $this->timeout_generate, ['Content-Type: application/json']);
+        $raw = $this->curlPost($url, $payload, $this->timeout_generate);
         $duration_ms = (int)((microtime(true) - $start) * 1000);
 
         if ($raw === false) return $this->errorResult('Ollama API unreachable (is it running?)', $model, $duration_ms);
@@ -474,7 +472,6 @@ class AIEngine
         $api_key = $this->getApiKeyForProvider('huggingface');
 
         $headers = [
-            'Content-Type: application/json',
             "Authorization: Bearer {$api_key}",
         ];
 
@@ -547,9 +544,9 @@ class AIEngine
             'max_tokens' => $options['num_predict'] ?? 1024,
         ]);
 
+        $api_key = $this->getApiKeyForProvider($this->provider);
         $headers = [
-            'Content-Type: application/json',
-            "Authorization: Bearer {$this->api_key}"
+            "Authorization: Bearer {$api_key}",
         ];
 
         $start = microtime(true);
@@ -653,11 +650,35 @@ PROMPT;
 
     public function listModels(): array { return []; } // Cloud models are fixed
 
+    /**
+     * Build deduplicated HTTP headers for JSON POST requests so Content-Type: application/json
+     * is never sent twice (duplicate Content-Type headers are folded into
+     * "application/json, application/json" by HTTP/2 / proxies and rejected by Groq/OpenAI).
+     */
+    public static function buildPostHeaders(array $headers = []): array
+    {
+        $by_name = ['content-type' => 'Content-Type: application/json'];
+        foreach ($headers as $h) {
+            $line = trim((string)$h);
+            if ($line === '') continue;
+            $colon = strpos($line, ':');
+            if ($colon === false) {
+                $by_name['raw_' . count($by_name)] = $line;
+                continue;
+            }
+            $name = strtolower(trim(substr($line, 0, $colon)));
+            $val  = trim(substr($line, $colon + 1));
+            if ($name === '') continue;
+            $by_name[$name] = trim(substr($line, 0, $colon)) . ': ' . $val;
+        }
+        return array_values($by_name);
+    }
+
     /** @return string|false */
     private function curlPost(string $url, string $body, int $timeout = 30, array $headers = [])
     {
         $ch = curl_init($url);
-        $final_headers = array_merge(['Content-Type: application/json'], $headers);
+        $final_headers = self::buildPostHeaders($headers);
 
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,
