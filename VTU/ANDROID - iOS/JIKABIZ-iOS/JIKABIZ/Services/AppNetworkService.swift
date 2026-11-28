@@ -74,7 +74,7 @@ class AppNetworkService {
 
     private func isPublicAuth(_ endpoint: String) -> Bool {
         let name = endpoint.components(separatedBy: "/").last ?? endpoint
-        return ["login.php", "login-otp.php", "register.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php", "forgot-password.php", "site-info.php"].contains(name)
+        return ["login.php", "login-otp.php", "register.php", "register-otp.php", "resend-register-otp.php", "resend-login-otp.php", "password-recovery.php", "forgot-password.php", "site-info.php"].contains(name)
     }
 
     func request<T: Decodable>(_ endpoint: String, params: [String: Any], completion: @escaping (Result<T, Error>) -> Void) {

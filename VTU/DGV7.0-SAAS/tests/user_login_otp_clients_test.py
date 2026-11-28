@@ -44,6 +44,22 @@ class LoginOtpClients(unittest.TestCase):
                 self.assertIn('OtpRequired', src)
                 self.assertIn('loginOtp', src)
 
+    def test_ios_register_supports_otp_and_resend(self):
+        views = list(APPS.glob('*-iOS/*/Views/RegisterView.swift'))
+        self.assertEqual(len(views), 3)
+        for view in views:
+            with self.subTest(view=view):
+                src = view.read_text(encoding='utf-8-sig')
+                self.assertIn('otp_required', src)
+                self.assertIn('registration_token', src)
+                self.assertIn('register-otp.php', src)
+                self.assertIn('login-otp.php', src)
+        nets = list(APPS.glob('*-iOS/*/Services/AppNetworkService.swift'))
+        self.assertEqual(len(nets), 3)
+        for net in nets:
+            with self.subTest(net=net):
+                self.assertIn('"register-otp.php"', net.read_text(encoding='utf-8-sig'))
+
 
 if __name__ == '__main__':
     unittest.main()

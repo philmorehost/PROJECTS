@@ -39,6 +39,11 @@ struct RegisterView: View {
 
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var infoMessage: String?
+    @State private var registrationToken: String?
+    @State private var registrationOtp = ""
+    @State private var loginChallenge: String?
+    @State private var loginOtp = ""
 
     /// Called once registration (and the auto-login) succeeded.
     var onRegistered: () -> Void
@@ -54,50 +59,128 @@ struct RegisterView: View {
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    if let info = infoMessage {
+                        Text(info)
+                            .foregroundColor(brandTheme.ink)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
 
-                    Group {
-                        TextField("Username (min 6 characters)", text: $username)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                        TextField("First name", text: $firstname)
-                        TextField("Last name", text: $lastname)
-                        TextField("Email address", text: $email)
-                            .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                        Picker("Country", selection: $country) {
-                            ForEach(countryOptions, id: \.code) { item in
-                                Text("\(item.name) (\(item.code))").tag(item.code)
+                    if let challenge = loginChallenge {
+                        Text("Sign-In Verification")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Account created! Enter the 6-digit login code sent to your email.")
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        TextField("6-digit code", text: $loginOtp)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                        Button(action: { verifyLoginOtp(challenge: challenge) }) {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
+                            } else {
+                                Text("Verify and Sign In")
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        TextField("Phone number (e.g. 08012345678 or +447911123456)", text: $phone)
-                            .keyboardType(.phonePad)
-                        TextField("Home address", text: $address)
-                        TextField("Referral username (optional)", text: $referral)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                        SecureField("Password", text: $password)
-                        SecureField("Confirm password", text: $confirmPassword)
-                    }
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding()
+                        .background(loginOtp.count == 6 ? brandTheme.primary : Color.gray.opacity(0.5))
+                        .foregroundColor(loginOtp.count == 6 ? brandTheme.onPrimary : brandTheme.onSurface)
+                        .cornerRadius(12)
+                        .disabled(isLoading || loginOtp.count != 6 || !loginOtp.allSatisfy({ $0.isNumber }))
+                    } else if let token = registrationToken {
+                        Text("Verify Your Email")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(infoMessage ?? "Enter the 6-digit verification code sent to \(email).")
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        TextField("6-digit verification code", text: $registrationOtp)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
 
-                    Button(action: register) {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
-                        } else {
-                            Text("Create Account")
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
+                        Button(action: { verifyRegistrationOtp(token: token) }) {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
+                            } else {
+                                Text("Verify")
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
+                        .padding()
+                        .background(registrationOtp.count == 6 ? brandTheme.primary : Color.gray.opacity(0.5))
+                        .foregroundColor(registrationOtp.count == 6 ? brandTheme.onPrimary : brandTheme.onSurface)
+                        .cornerRadius(12)
+                        .disabled(isLoading || registrationOtp.count != 6 || !registrationOtp.allSatisfy({ $0.isNumber }))
+
+                        HStack {
+                            Button("Resend Code") {
+                                resendRegistrationOtp(token: token)
+                            }
+                            .disabled(isLoading)
+                            Spacer()
+                            Button("Edit Details") {
+                                registrationToken = nil
+                                registrationOtp = ""
+                                errorMessage = nil
+                                infoMessage = nil
+                            }
+                            .disabled(isLoading)
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(brandTheme.ink)
+                    } else {
+                        Group {
+                            TextField("Username (min 6 characters)", text: $username)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                            TextField("First name", text: $firstname)
+                            TextField("Last name", text: $lastname)
+                            TextField("Email address", text: $email)
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                            Picker("Country", selection: $country) {
+                                ForEach(countryOptions, id: \.code) { item in
+                                    Text("\(item.name) (\(item.code))").tag(item.code)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            TextField("Phone number (e.g. 08012345678 or +447911123456)", text: $phone)
+                                .keyboardType(.phonePad)
+                            TextField("Home address", text: $address)
+                            TextField("Referral username (optional)", text: $referral)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                            SecureField("Password", text: $password)
+                            SecureField("Confirm password", text: $confirmPassword)
+                        }
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                        Button(action: register) {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: brandTheme.onPrimary))
+                            } else {
+                                Text("Create Account")
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding()
+                        .background(canSubmit ? brandTheme.primary : Color.gray.opacity(0.5))
+                        .foregroundColor(canSubmit ? brandTheme.onPrimary : brandTheme.onSurface)
+                        .cornerRadius(12)
+                        .disabled(!canSubmit || isLoading)
                     }
-                    .padding()
-                    .background(canSubmit ? brandTheme.primary : Color.gray.opacity(0.5))
-                    .foregroundColor(canSubmit ? brandTheme.onPrimary : brandTheme.onSurface)
-                    .cornerRadius(12)
-                    .disabled(!canSubmit || isLoading)
                 }
                 .padding()
             }
@@ -118,6 +201,7 @@ struct RegisterView: View {
 
     private func register() {
         errorMessage = nil
+        infoMessage = nil
 
         // Mirror the server's own rules so the failure is explained before a round trip.
         guard username.count >= 6 else {
@@ -153,33 +237,181 @@ struct RegisterView: View {
             isLoading = false
             switch result {
             case .success(let json):
-                let status = bcString(json["status"])
+                let status = bcString(json["status"]).lowercased()
+                if status == "otp_required" {
+                    let token = bcString(json["registration_token"])
+                    guard !token.isEmpty else {
+                        errorMessage = "Verification token missing. Please try again."
+                        return
+                    }
+                    registrationToken = token
+                    registrationOtp = ""
+                    let msg = bcString(json["message"])
+                    infoMessage = msg.isEmpty ? "Enter the 6-digit verification code sent to your email." : msg
+                    return
+                }
                 guard status == "success" else {
                     let msg = bcString(json["message"])
                     errorMessage = msg.isEmpty ? "Registration failed." : msg
                     return
                 }
-
-                // Only a server-issued revocable app session may establish app login.
-                // Without one the caller returns to the normal password/email-OTP flow.
-                let data = bcDict(json["data"])
-                let key = bcString(data["app_token"])
-                if !key.isEmpty {
-                    AppNetworkService.shared.apiKey = key
-                }
-                let uname = bcString(data["username"])
-                UserDefaults.standard.set(uname.isEmpty ? username : uname, forKey: "saved_username")
-                // A brand-new account has no PIN. Setting this false is what makes the app entry
-                // point show the mandatory PIN screen instead of the dashboard.
-                AppNetworkService.shared.pinSet = false
-
-                dismiss()
-                // Do not open the authenticated dashboard without an issued session.
-                if !key.isEmpty { onRegistered() }
+                completeRegistration(json)
 
             case .failure(let error):
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func verifyRegistrationOtp(token: String) {
+        errorMessage = nil
+        infoMessage = nil
+        let cleanOtp = registrationOtp.filter { $0.isNumber }
+        guard cleanOtp.count == 6 else {
+            errorMessage = "Enter the 6-digit verification code."
+            return
+        }
+        isLoading = true
+        AppNetworkService.shared.requestObject("register.php", params: [
+            "registration_token": token,
+            "otp": cleanOtp
+        ]) { result in
+            isLoading = false
+            switch result {
+            case .success(let json):
+                let status = bcString(json["status"]).lowercased()
+                guard status == "success" else {
+                    let msg = bcString(json["message"])
+                    errorMessage = msg.isEmpty ? "Verification failed." : msg
+                    return
+                }
+                completeRegistration(json)
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func resendRegistrationOtp(token: String) {
+        errorMessage = nil
+        infoMessage = nil
+        isLoading = true
+        AppNetworkService.shared.requestObject("register-otp.php", params: [
+            "registration_token": token
+        ]) { result in
+            isLoading = false
+            switch result {
+            case .success(let json):
+                let status = bcString(json["status"]).lowercased()
+                let msg = bcString(json["message"])
+                if status == "success" {
+                    infoMessage = msg.isEmpty ? "A new verification code has been sent." : msg
+                } else {
+                    errorMessage = msg.isEmpty ? "Could not resend the code." : msg
+                }
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func completeRegistration(_ json: [String: Any]) {
+        // Only a server-issued revocable app session may establish app login.
+        // Without one the caller signs in via login.php (or returns to password/email-OTP flow).
+        let data = bcDict(json["data"])
+        let key = bcString(data["app_token"])
+        if !key.isEmpty {
+            AppNetworkService.shared.apiKey = key
+        }
+        let uname = bcString(data["username"])
+        UserDefaults.standard.set(uname.isEmpty ? username.lowercased() : uname, forKey: "saved_username")
+        // A brand-new account has no PIN. Setting this false is what makes the app entry
+        // point show the mandatory PIN screen instead of the dashboard.
+        AppNetworkService.shared.pinSet = false
+
+        if !key.isEmpty {
+            dismiss()
+            if !key.isEmpty { onRegistered() }
+            return
+        }
+        autoLogin(username: uname.isEmpty ? username.lowercased() : uname)
+    }
+
+    private func autoLogin(username: String) {
+        isLoading = true
+        AppNetworkService.shared.requestObject("login.php", params: [
+            "user": username,
+            "pass": password
+        ]) { result in
+            isLoading = false
+            switch result {
+            case .success(let json):
+                let status = bcString(json["status"]).lowercased()
+                if status == "otp_required" {
+                    let challenge = bcString(json["challenge"])
+                    if !challenge.isEmpty {
+                        registrationToken = nil
+                        loginChallenge = challenge
+                        loginOtp = ""
+                        infoMessage = "Account created! Enter the 6-digit login code sent to your email."
+                        return
+                    }
+                }
+                if status == "success" {
+                    finishAutoLogin(json)
+                } else {
+                    registrationToken = nil
+                    infoMessage = "Account created! Please sign in."
+                }
+            case .failure:
+                registrationToken = nil
+                infoMessage = "Account created! Please sign in."
+            }
+        }
+    }
+
+    private func verifyLoginOtp(challenge: String) {
+        errorMessage = nil
+        let cleanOtp = loginOtp.filter { $0.isNumber }
+        guard cleanOtp.count == 6 else {
+            errorMessage = "Enter the 6-digit code."
+            return
+        }
+        isLoading = true
+        AppNetworkService.shared.requestObject("login-otp.php", params: [
+            "challenge": challenge,
+            "otp": cleanOtp
+        ]) { result in
+            isLoading = false
+            switch result {
+            case .success(let json):
+                if bcString(json["status"]).lowercased() == "success" {
+                    finishAutoLogin(json)
+                } else {
+                    let msg = bcString(json["message"])
+                    errorMessage = msg.isEmpty ? "Verification failed." : msg
+                }
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func finishAutoLogin(_ json: [String: Any]) {
+        let data = bcDict(json["data"])
+        let key = bcString(data["app_token"])
+        guard !key.isEmpty else {
+            infoMessage = "Account created! Please sign in."
+            return
+        }
+        AppNetworkService.shared.apiKey = key
+        AppNetworkService.shared.pinSet = bcBool(data["security_pin_set"])
+        AppNetworkService.shared.pinRequired = bcBool(data["pin_required"])
+        let uname = bcString(data["username"])
+        if !uname.isEmpty {
+            UserDefaults.standard.set(uname, forKey: "saved_username")
+        }
+        dismiss()
+        if !key.isEmpty { onRegistered() }
     }
 }
