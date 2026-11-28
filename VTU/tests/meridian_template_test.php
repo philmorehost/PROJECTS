@@ -15,6 +15,10 @@ $_SERVER['HTTP_HOST'] = 'meridian.example.test';
 $_SERVER['REQUEST_URI'] = '/';
 $_SERVER['HTTPS'] = 'on';
 $connection_server = null;
+$GLOBALS['m_test_disabled'] = array();
+function isServiceEnabled($key, $vid) {
+    return empty($GLOBALS['m_test_disabled']) || !in_array($key, $GLOBALS['m_test_disabled'], true);
+}
 
 // 1. Default brand fallback when site_title is empty/unset
 $ctx = bc_meridian_context();
@@ -33,7 +37,8 @@ m_check(strpos($personal_html, '/asset/meridian-1/meridian-theme.css') !== false
 m_check(strpos($personal_html, '/asset/meridian-1/meridian-1.js') !== false, 'personal page loads meridian-1.js');
 m_check(strpos($personal_html, 'data-theme="dark"') !== false && strpos($personal_html, 'data-world="personal"') !== false, 'personal page uses meridian dark glass personal world');
 m_check(strpos($personal_html, 'aria-label="Explore more"') !== false, 'personal page includes bc_public_directory_html');
-m_check(strpos($personal_html, 'Pending replacement integration') !== false, 'personal page puts retired crypto integration in Coming Soon');
+m_check(strpos($personal_html, 'Pending replacement integration') === false, 'personal page has no Pending replacement integration notice');
+m_check(strpos($personal_html, 'Crypto Buy / Sell &amp; Stablecoins') !== false || strpos($personal_html, 'Crypto Buy / Sell & Stablecoins') !== false, 'personal page renders crypto service when enabled');
 
 // 2.5 Homepage rearrangement, #topupForm inside #hero, vault copy, removed duo card, shield, and zero-404 Personal feature catalogue links
 $hero_pos = strpos($personal_html, 'Everyday top-ups and bill payments, together.');
@@ -95,29 +100,54 @@ $found_crypto_live = false;
 foreach ($crypto_cat['categories'] as $cat) {
     m_check(count($cat['items']) > 0, 'rendered live category is non-empty: ' . $cat['id']);
     foreach ($cat['items'] as $it) {
-        if (($it['service'] ?? '') === 'crypto_hub') $found_crypto_live = true;
+        if (($it['key'] ?? '') === 'crypto_hub') $found_crypto_live = true;
     }
 }
-m_check(!$found_crypto_live, 'crypto_hub is never live while Plisio replacement is pending');
-m_check(count($crypto_cat['coming_soon']) >= 1, 'coming soon contains retired crypto items');
+m_check($found_crypto_live, 'crypto_hub is live when enabled in Service Control Center');
+m_check(count($crypto_cat['coming_soon']) === 0, 'coming soon is empty when all services are enabled');
+
+$GLOBALS['m_test_disabled'] = array('crypto_hub');
+$crypto_disabled_cat = bc_meridian_service_catalog('personal', 0);
+$found_crypto_live_when_off = false;
+foreach ($crypto_disabled_cat['categories'] as $cat) {
+    foreach ($cat['items'] as $it) {
+        if (($it['key'] ?? '') === 'crypto_hub') $found_crypto_live_when_off = true;
+    }
+}
+m_check(!$found_crypto_live_when_off, 'crypto_hub is hidden from live categories when disabled in Service Control Center');
+m_check(count($crypto_disabled_cat['coming_soon']) >= 1, 'coming soon contains crypto_hub when disabled in Service Control Center');
 
 // 5. ReferAndEarn uses dark cards (no bright pastel inline backgrounds)
+$GLOBALS['m_test_disabled'] = array();
 ob_start();
 bc_landing_render_referral(bc_landing_context());
 $refer_html = ob_get_clean();
 m_check(strpos($refer_html, 'data-theme="dark"') !== false, 'ReferAndEarn uses dark theme');
 m_check(strpos($refer_html, '#b8f1cc') === false && strpos($refer_html, '#d9d6fe') === false && strpos($refer_html, '#fde68a') === false, 'ReferAndEarn removed low-contrast inline pastels');
 
-// 5.5. Services.php and services/crypto.php gate crypto_hub into Coming Soon
+// 5.5. Services.php and services/crypto.php reflect Service Control Center for crypto_hub
 ob_start();
 bc_landing_render_services_index(bc_landing_context());
 $services_html = ob_get_clean();
-m_check(strpos($services_html, 'Pending replacement integration') !== false, 'Services.php moves crypto_hub to Coming Soon');
+m_check(strpos($services_html, 'Pending replacement integration') === false, 'Services.php has no Pending replacement integration label');
+m_check(strpos($services_html, '/services/crypto.php') !== false && strpos($services_html, 'id="coming-soon"') === false, 'Services.php lists crypto_hub as active when enabled');
 
 ob_start();
 bc_landing_render_service(bc_landing_context(), 'crypto');
 $crypto_svc_html = ob_get_clean();
-m_check(strpos($crypto_svc_html, 'Coming Soon') !== false && strpos($crypto_svc_html, '/web/CryptoHub.php') === false, 'services/crypto.php gates CTA while replacement integration is pending');
+m_check(strpos($crypto_svc_html, 'Pending replacement integration') === false && strpos($crypto_svc_html, '/web/CryptoHub.php') !== false, 'services/crypto.php exposes CTA when enabled in Service Control Center');
+
+$GLOBALS['m_test_disabled'] = array('crypto_hub');
+ob_start();
+bc_landing_render_services_index(bc_landing_context());
+$services_disabled_html = ob_get_clean();
+m_check(strpos($services_disabled_html, 'id="coming-soon"') !== false && strpos($services_disabled_html, 'Crypto') !== false, 'Services.php moves crypto_hub to Coming Soon when disabled');
+
+ob_start();
+bc_landing_render_service(bc_landing_context(), 'crypto');
+$crypto_svc_disabled_html = ob_get_clean();
+m_check(strpos($crypto_svc_disabled_html, 'Coming Soon') !== false && strpos($crypto_svc_disabled_html, '/web/CryptoHub.php') === false, 'services/crypto.php gates CTA when disabled in Service Control Center');
+$GLOBALS['m_test_disabled'] = array();
 
 // 6. AccountSettings, site-info, and edition parity checks
 $shared_files = array(

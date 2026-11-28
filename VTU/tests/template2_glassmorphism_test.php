@@ -94,8 +94,8 @@ foreach (array(
     t2_check(strpos($html, $feature_needle) !== false, 'renders Personal Feature text: ' . $feature_needle);
 }
 
-// Crypto pending replacement integration goes to Coming Soon
-t2_check(strpos($html, 'id="coming-soon"') !== false && strpos($html, 'Pending replacement integration') !== false, 'crypto_hub is routed to Coming Soon');
+// Crypto service is active when enabled in Service Control Center (no Pending replacement integration)
+t2_check(strpos($html, 'Pending replacement integration') === false && strpos($html, 'Crypto Buy/Sell and stablecoin services') !== false, 'crypto_hub is active when enabled in Service Control Center');
 
 // All internal links exist in both SAAS and NON-SAAS
 preg_match_all('/href="([^"]+)"/', $html, $matches);
@@ -107,7 +107,7 @@ foreach (array_unique($matches[1]) as $url) {
 }
 
 // 4. Verify Service Control Center gating dynamically hides/moves disabled services into Coming Soon
-$GLOBALS['t2_test_disabled'] = array('airtime', 'virtual_card', 'virtual_bank_display', 'ai_suite', 'password_reset');
+$GLOBALS['t2_test_disabled'] = array('airtime', 'virtual_card', 'virtual_bank_display', 'ai_suite', 'password_reset', 'crypto_hub');
 ob_start();
 require $root . '/DGV7.0-SAAS/index-bc-style-template-2.php';
 $gated_html = ob_get_clean();
@@ -124,6 +124,7 @@ t2_check(strpos($active_section, 'Airtime purchase') === false && strpos($cs_sec
 t2_check(strpos($active_section, 'Virtual dollar cards') === false && strpos($cs_section, 'Virtual dollar cards') !== false, 'disabled virtual_card moved from active pillars to Coming Soon');
 t2_check(strpos($active_section, 'Virtual bank accounts') === false && strpos($cs_section, 'Virtual bank accounts') !== false, 'disabled virtual_bank_display moved from active pillars to Coming Soon');
 t2_check(strpos($active_section, 'AI assistant and budgeting tools') === false && strpos($cs_section, 'AI assistant and budgeting tools') !== false, 'disabled ai_suite moved from active pillars to Coming Soon');
+t2_check(strpos($active_section, 'Crypto Buy/Sell and stablecoin services') === false && strpos($cs_section, 'Crypto Buy/Sell and stablecoin services') !== false, 'disabled crypto_hub moved from active pillars to Coming Soon');
 t2_check(strpos($gated_html, 'id="t2FxCard"') !== false, 'currency_conversion preview stays active when enabled');
 
 echo "$n template-2 glassmorphism & service control checks passed\n";

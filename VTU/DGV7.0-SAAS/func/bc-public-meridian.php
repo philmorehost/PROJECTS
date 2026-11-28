@@ -196,10 +196,6 @@ if (!function_exists('bc_meridian_personal_style_vars')) {
 if (!function_exists('bc_meridian_service_enabled')) {
     function bc_meridian_service_enabled($key, $vendor_id) {
         if ($key === null || $key === '') return true;
-        if ($key === 'crypto_hub') {
-            // §28: Plisio was retired; replacement crypto provider integration is pending.
-            return false;
-        }
         if (function_exists('isServiceEnabled')) {
             return (bool)isServiceEnabled($key, $vendor_id);
         }
@@ -271,7 +267,7 @@ if (!function_exists('bc_meridian_service_catalog')) {
                     'items' => array(
                         array('title' => 'AI Business Suite', 'note' => 'Smart reconciliation & business workflows', 'href' => '/Business.php#vtu-api', 'key' => 'ai_suite'),
                         array('title' => 'Partner Referrals', 'note' => 'Track verified partner onboarding rewards', 'href' => '/ReferAndEarn.php', 'key' => 'referral'),
-                        array('title' => 'Crypto Treasury & Stablecoins', 'note' => 'USDC / USDT settlement (pending replacement integration)', 'href' => '/services/crypto.php', 'key' => 'crypto_hub', 'pending_reason' => 'Pending replacement integration'),
+                        array('title' => 'Crypto Treasury & Stablecoins', 'note' => 'USDC, USDT & supported digital asset settlement', 'href' => '/services/crypto.php', 'key' => 'crypto_hub'),
                     ),
                 ),
             );
@@ -321,7 +317,7 @@ if (!function_exists('bc_meridian_service_catalog')) {
                     'subtitle' => 'Buy, sell & stablecoin settlement rails',
                     'icon' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 8h4a2 2 0 0 1 0 4h-4m0 0h4.5a2 2 0 0 1 0 4H9.5m2-9.5V8m0 8v1.5"/></svg>',
                     'items' => array(
-                        array('title' => 'Crypto Buy / Sell & Stablecoins', 'note' => 'USDC, USDT & digital asset settlement (pending replacement integration)', 'href' => '/services/crypto.php', 'key' => 'crypto_hub', 'pending_reason' => 'Pending replacement integration'),
+                        array('title' => 'Crypto Buy / Sell & Stablecoins', 'note' => 'Buy, sell & manage USDC, USDT and supported digital assets', 'href' => '/services/crypto.php', 'key' => 'crypto_hub'),
                     ),
                 ),
                 array(

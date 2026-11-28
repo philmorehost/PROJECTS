@@ -103,7 +103,7 @@ foreach (array(
     t3_check(strpos($html, $feature_needle) !== false, 'renders Personal Feature text: ' . $feature_needle);
 }
 
-t3_check(strpos($html, 'id="coming-soon"') !== false && strpos($html, 'Pending replacement integration') !== false, 'crypto_hub is routed to Coming Soon');
+t3_check(strpos($html, 'Pending replacement integration') === false && strpos($html, 'Crypto Buy/Sell and stablecoin services') !== false, 'crypto_hub is active when enabled in Service Control Center');
 
 // All internal links exist in both SAAS and NON-SAAS
 preg_match_all('/href="([^"]+)"/', $html, $matches);
@@ -115,7 +115,7 @@ foreach (array_unique($matches[1]) as $url) {
 }
 
 // 4. Verify Service Control Center gating dynamically moves disabled services into Coming Soon
-$GLOBALS['t3_test_disabled'] = array('airtime', 'virtual_card', 'virtual_bank_display', 'ai_suite', 'password_reset');
+$GLOBALS['t3_test_disabled'] = array('airtime', 'virtual_card', 'virtual_bank_display', 'ai_suite', 'password_reset', 'crypto_hub');
 ob_start();
 require $root . '/DGV7.0-SAAS/index-bc-style-template-3.php';
 $gated_html = ob_get_clean();
@@ -132,5 +132,6 @@ t3_check(strpos($active_section, 'Airtime purchase') === false && strpos($cs_sec
 t3_check(strpos($active_section, 'Virtual dollar cards') === false && strpos($cs_section, 'Virtual dollar cards') !== false, 'disabled virtual_card moved to Coming Soon');
 t3_check(strpos($active_section, 'Virtual bank accounts') === false && strpos($cs_section, 'Virtual bank accounts') !== false, 'disabled virtual_bank_display moved to Coming Soon');
 t3_check(strpos($active_section, 'AI assistant and budgeting tools') === false && strpos($cs_section, 'AI assistant and budgeting tools') !== false, 'disabled ai_suite moved to Coming Soon');
+t3_check(strpos($active_section, 'Crypto Buy/Sell and stablecoin services') === false && strpos($cs_section, 'Crypto Buy/Sell and stablecoin services') !== false, 'disabled crypto_hub moved to Coming Soon');
 
 echo "$n template-3 glassmorphism & service control checks passed\n";

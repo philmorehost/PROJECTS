@@ -1,10 +1,22 @@
 <?php
-/** Alternative AccountSettings unlock when the owner explicitly disables Google action checks. */
+/** Alternative / flexible AccountSettings unlock supporting Security PIN + Email OTP or Google Authenticator. */
+function bc_action_settings_should_handle($scope, $p, $actor) {
+    $enrolled = function_exists('bc_gauth_enrolled') && bc_gauth_enrolled($actor);
+    $has_pin = !empty($actor['security_pin']);
+    $is_account_settings = in_array((string)$scope, ['bc_admin_settings', 'spadmin_settings'], true);
+    if (!$p['google']) return true;
+    if ($p['email'] && $has_pin) {
+        if (!$enrolled) return true;
+        if ($is_account_settings) return true;
+    }
+    if ($is_account_settings && !$has_pin && !$enrolled && $p['email']) return true;
+    return false;
+}
 function bc_action_settings_gate($scope,$table,$actor,$exempt) {
     try{$p=bc_action_channels($table,$actor);}catch(Throwable $e){return false;} // legacy gate stays locked
     $fingerprint=hash('sha256',json_encode([$p,$actor['password']??'',$actor['security_pin']??'',$actor['totp_secret']??'']));
     if(isset($_SESSION['bc_action_unlock_policy'][$scope]) && !hash_equals($_SESSION['bc_action_unlock_policy'][$scope],$fingerprint))unset($_SESSION['bc_gauth_unlock'][$scope]);
-    if($p['google'])return false;
+    if(!bc_action_settings_should_handle($scope,$p,$actor))return false;
     if(!isset($_SESSION['bc_action_unlock_policy'][$scope]))unset($_SESSION['bc_gauth_unlock'][$scope]);
     $reply=function($ok,$message){header('Content-Type: application/json; charset=UTF-8');echo json_encode(['status'=>$ok?'success':'error','message'=>$message]);exit;};
     if(isset($_POST['send_settings_code'])){
@@ -20,8 +32,16 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
         @ini_set('display_errors', '0');@ini_set('html_errors', '0');
         header('Content-Type: application/json; charset=UTF-8');
         bc_validate_csrf(true);
-        $input=['pin'=>(string)($_POST['pin']??''),'otp_code'=>(string)($_POST['otp_code']??''),'factor_method'=>'auto'];
-        $error=$table==='sas_super_admin'?bc_stepup_spadmin_verify($actor,$input,'settings_unlock'):bc_stepup_admin_verify($actor,$input,'settings_unlock');
+        $enrolled=function_exists('bc_gauth_enrolled') && bc_gauth_enrolled($actor);
+        if($enrolled && $p['google'] && isset($_POST['gauth_code']) && !isset($_POST['pin'])){
+            $error=bc_gauth_verify_unlock($scope,$table,$actor,(string)$_POST['gauth_code']);
+        }else{
+            $requested=(string)($_POST['factor_method']??'auto');
+            if(!in_array($requested,['auto','google','email'],true))$requested='auto';
+            $code=(string)($_POST['otp_code']??'');
+            $input=['pin'=>(string)($_POST['pin']??''),'totp_code'=>$code,'otp_code'=>$code,'factor_method'=>$requested];
+            $error=$table==='sas_super_admin'?bc_stepup_spadmin_verify($actor,$input,'settings_unlock'):bc_stepup_admin_verify($actor,$input,'settings_unlock');
+        }
         if($error===''){
             $_SESSION['bc_gauth_unlock'][$scope]=time()+600;
             $_SESSION['bc_action_unlock_policy'][$scope]=$fingerprint;
@@ -41,9 +61,28 @@ function bc_action_settings_gate($scope,$table,$actor,$exempt) {
 function bc_action_settings_banner($scope,$actor) {
     $table=($scope==='spadmin_settings'||strpos((string)$scope,'spadmin_')===0)?'sas_super_admin':'sas_vendors';
     try{$p=bc_action_channels($table,$actor);}catch(Throwable $e){return null;}
-    if($p['google'])return null;
+    if(!bc_action_settings_should_handle($scope,$p,$actor))return null;
     $csrf=bc_csrf_field();
     if(bc_gauth_unlocked_until($scope)>0)return '<div class="alert alert-success">Settings are unlocked under your action verification policy for up to 10 minutes.</div>';
-    $factor=$p['email']?'<label>Email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" required></label><button type="button" class="btn btn-outline-primary" data-security-send="send_settings_code">Send code</button>':'';
-    return '<div class="alert alert-warning"><h5>Unlock settings using your action verification policy</h5><p>Google action verification is OFF. '.($p['email']?'PIN and email OTP required.':'PIN-only mode selected; this is less secure.').'</p><form method="post" data-channel-policy>'.$csrf.'<label>Security PIN<input type="password" name="pin" class="form-control" required autocomplete="off"></label>'.$factor.'<p data-wallet-status role="status" aria-live="polite"></p><button name="gauth-unlock" value="1" class="btn btn-primary">Unlock settings</button></form></div><script src="../asset/bc-admin-wallet.js"></script>';
+    $enrolled=function_exists('bc_gauth_enrolled') && bc_gauth_enrolled($actor);
+    $has_pin=!empty($actor['security_pin']);
+    if(!$has_pin){
+        $pin_hint=$table==='sas_super_admin'
+            ?'Set your 4-digit Super Admin Security PIN in the <strong>Security</strong> tab below (or enrol Google Authenticator) before unlocking settings.'
+            :'Set your 4-digit Admin Security PIN first (using the PIN setup prompt or Security &amp; Keys tab) to unlock with Security PIN + Email OTP — or enrol Google Authenticator below.';
+        return '<div class="alert alert-warning rounded-4 mb-4"><h5>Settings are locked</h5><p class="mb-0">'.$pin_hint.'</p></div>';
+    }
+    if($p['google'] && $enrolled && $p['email']){
+        $factor='<label class="d-block mt-2">Verification method<select name="factor_method" class="form-select"><option value="google">Google Authenticator code</option><option value="email">Email OTP</option></select></label>'
+            .'<label class="d-block mt-2">Authenticator / Email OTP code<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>'
+            .'<button type="button" class="btn btn-outline-primary my-2" data-security-send="send_settings_code">Send email code</button>';
+        $desc='Verify with your Security PIN plus either Google Authenticator or an Email OTP.';
+    }elseif($p['email']){
+        $factor='<input type="hidden" name="factor_method" value="email"><label class="d-block mt-2">Email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label><button type="button" class="btn btn-outline-primary my-2" data-security-send="send_settings_code">Send code</button>';
+        $desc='Enter your Security PIN and the 6-digit Email OTP sent to your account email.';
+    }else{
+        $factor='';
+        $desc='PIN-only mode selected; this is less secure.';
+    }
+    return '<div class="alert alert-warning rounded-4 mb-4"><h5>Unlock settings using your action verification policy</h5><p>'.$desc.'</p><form method="post" data-channel-policy>'.$csrf.'<label class="d-block">Security PIN<input type="password" name="pin" class="form-control" required autocomplete="off"></label>'.$factor.'<p data-wallet-status role="status" aria-live="polite"></p><button name="gauth-unlock" value="1" class="btn btn-primary">Unlock settings</button></form></div><script src="../asset/bc-admin-wallet.js"></script>';
 }

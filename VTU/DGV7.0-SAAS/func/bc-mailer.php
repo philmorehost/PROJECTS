@@ -79,6 +79,10 @@ function bc_resolve_safe_from_address($connection_server, $preferred = null)
     $q = mysqli_query($connection_server, "SELECT smtp_user FROM sas_super_admin LIMIT 1");
     if ($q && ($r = mysqli_fetch_assoc($q)) && !empty($r['smtp_user'])) $candidates[] = $r['smtp_user'];
 
+    $host = strtolower(preg_replace('/^www\./', '', explode(':', (string)($_SERVER['HTTP_HOST'] ?? ''))[0]));
+    if ($host !== '' && $host !== 'localhost' && strpos($host, '.') !== false && !filter_var($host, FILTER_VALIDATE_IP)) {
+        $candidates[] = 'notification@' . $host;
+    }
     $candidates[] = 'notification@cheaperdata.com.ng';
     foreach ($candidates as $addr) {
         if (is_string($addr) && filter_var(trim($addr), FILTER_VALIDATE_EMAIL)) {
@@ -198,7 +202,15 @@ function customBCMailSender($from,$to,$subject,$message,$headers, $background = 
 function bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $platform_only = false, $preloaded_smtp = null, $preloaded_safe_from = null) {
     global $connection_server;
     $sent = false;
+    $smtp_user = null;
+    $smtpMAIL = null;
 	try {
+        $smtp_config = is_array($preloaded_smtp) ? $preloaded_smtp : bc_resolve_smtp_config($platform_only);
+
+        if ($platform_only && (!$smtp_config || !filter_var($smtp_config['smtp_user']??'',FILTER_VALIDATE_EMAIL))) return false;
+        if (!$smtp_config) {
+            throw new RuntimeException('SMTP is not configured; falling back to PHP mail()');
+        }
         if (!bc_mailer_library_available()) {
             // Thrown INSIDE the try on purpose: the catch below then runs the mail() fallback
             // instead of "Class PHPMailer not found" escaping as a fatal error. It also has to be
@@ -206,13 +218,10 @@ function bc_deliver_prepared_mail($from, $to, $subject, $message, $headers, $pla
             throw new RuntimeException('PHPMailer library is not installed');
         }
 		$smtpMAIL = new PHPMailer(true);
-        $smtp_config = is_array($preloaded_smtp) ? $preloaded_smtp : bc_resolve_smtp_config($platform_only);
-
-        if ($platform_only && (!$smtp_config || !filter_var($smtp_config['smtp_user']??'',FILTER_VALIDATE_EMAIL))) return false;
 
 		 //Server settings
-		$smtp_host = $smtp_config['smtp_host'] ?? 'mail.cheaperdata.com.ng';
-        $smtp_user = $smtp_config['smtp_user'] ?? 'notification@cheaperdata.com.ng';
+		$smtp_host = $smtp_config['smtp_host'] ?? '';
+        $smtp_user = $smtp_config['smtp_user'] ?? '';
         $smtp_pass = $smtp_config['smtp_pass'] ?? '';
         $smtp_port = (int)($smtp_config['smtp_port'] ?? 25);
         $smtp_sec = $smtp_config['smtp_sec'] ?? 'tls';
@@ -319,31 +328,20 @@ function sendEmailWithAttachments($to, $subject, $message, $from_name, $from_ema
     require_once __DIR__ . '/email-design.php';
     $message = mailDesignTemplate($subject, $message, array(), true);
     $sent = false;
+    $smtpMAIL = null;
     try {
+        // Resolve SMTP Context (Vendor vs Platform)
+        $smtp_config = bc_resolve_smtp_config(false);
+        if (!$smtp_config) {
+            throw new RuntimeException('SMTP is not configured; falling back to PHP mail()');
+        }
         if (!bc_mailer_library_available()) {
             throw new RuntimeException('PHPMailer library is not installed');
         }
         $smtpMAIL = new PHPMailer(true);
-        // Resolve SMTP Context (Vendor vs Platform)
-        $vid = resolveVendorID();
-        $smtp_config = null;
 
-        if ($vid > 0) {
-            $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_vendors WHERE id='$vid' LIMIT 1");
-            if ($q && ($r = mysqli_fetch_assoc($q))) {
-                if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-            }
-        }
-
-        if (!$smtp_config) {
-            $q = mysqli_query($connection_server, "SELECT smtp_host, smtp_user, smtp_pass, smtp_port, smtp_sec FROM sas_super_admin LIMIT 1");
-            if ($q && ($r = mysqli_fetch_assoc($q))) {
-                if (!empty($r['smtp_host']) && !empty($r['smtp_user'])) $smtp_config = $r;
-            }
-        }
-
-        $smtp_host = $smtp_config['smtp_host'] ?? 'mail.cheaperdata.com.ng';
-        $smtp_user = $smtp_config['smtp_user'] ?? 'notification@cheaperdata.com.ng';
+        $smtp_host = $smtp_config['smtp_host'] ?? '';
+        $smtp_user = $smtp_config['smtp_user'] ?? '';
         $smtp_pass = $smtp_config['smtp_pass'] ?? '';
         $smtp_port = (int)($smtp_config['smtp_port'] ?? 25);
         $smtp_sec = $smtp_config['smtp_sec'] ?? 'tls';

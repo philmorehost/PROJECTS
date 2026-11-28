@@ -15,7 +15,6 @@ function bc_action_policy_handle($platform,$actor) {
     if(!$platform && function_exists('bc_demo_edits_allowed') && !bc_demo_edits_allowed($connection_server))$reply(false,'Demo Mode is ON — website settings are read-only. Enter the Super Admin Demo security lock key (top of this page) to make changes.');
     if(!$platform && function_exists('bc_demo_guard_edit'))bc_demo_guard_edit($connection_server);
     if(isset($_POST['send-channel-code'])){
-        if(bc_gauth_enrolled($fresh))$reply(false,'Use your enrolled authenticator to verify a security-policy change.');
         try{
             $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'action_channel_policy','Change action verification policy');
         }catch(Throwable $e){$err='Could not send the verification code. Please try again.';}
@@ -23,7 +22,8 @@ function bc_action_policy_handle($platform,$actor) {
     }
     if(!is_string($_POST['current_password']??null) || !bc_verify_password($_POST['current_password'],$fresh['password']))$reply(false,'Current password is incorrect.');
     $factor=is_string($_POST['otp_code']??null)?$_POST['otp_code']:'';
-    $input=['pin'=>is_string($_POST['pin']??null)?$_POST['pin']:'','totp_code'=>$factor,'otp_code'=>$factor];
+    $method=is_string($_POST['factor_method']??null)?$_POST['factor_method']:'';
+    $input=['pin'=>is_string($_POST['pin']??null)?$_POST['pin']:'','totp_code'=>$factor,'otp_code'=>$factor,'factor_method'=>$method];
     $error=$platform?bc_stepup_spadmin_verify($fresh,$input,'action_channel_policy'):bc_stepup_admin_verify($fresh,$input,'action_channel_policy');
     if($error!=='')$reply(false,$error);
     $inherit=!$platform && isset($_POST['inherit_action_channels']);
@@ -88,18 +88,24 @@ function bc_action_policy_form($platform,$actor) {
     $table=$platform?'sas_super_admin':'sas_vendors';
     try{$p=bc_action_channels($table,$actor);}catch(Throwable $e){echo '<p>Action verification policy unavailable.</p>';return;}
     ?>
-    <section class="border rounded p-3 my-4"><h5>Action verification: Google Authenticator / Email OTP</h5>
-    <p><?php echo $platform?'Sets platform-admin action verification and the default for vendors without an override.':'Choose an independent policy for this vendor and its users. This does not affect other vendors.'; ?> Existing authenticator enrolments and separate forced-setup mandates are retained. These controls govern shared PIN + step-up action checks, not login/recovery OTP or specialist custody approvals.</p>
+    <section class="border rounded p-3 my-4"><h5>Action verification: Security PIN + Email OTP / Google Authenticator</h5>
+    <p><?php echo $platform?'Sets platform-admin action verification and the default for vendors without an override.':'Choose an independent policy for this vendor and its users. This does not affect other vendors.'; ?> You may use <strong>Security PIN + Email OTP only</strong> (uncheck Google Authenticator, keep Email OTP checked), <strong>Security PIN + Google Authenticator</strong>, or enable both. Existing authenticator enrolments and separate forced-setup mandates are retained.</p>
     <form method="post" data-channel-policy><?php echo bc_csrf_field(); ?>
     <label class="d-block"><input type="checkbox" name="action_google" <?php echo $p['google']?'checked':''; ?>> Google Authenticator ON</label>
     <label class="d-block"><input type="checkbox" name="action_email" <?php echo $p['email']?'checked':''; ?>> Email OTP ON</label>
     <?php if(!$platform): ?><label class="d-block"><input type="checkbox" name="inherit_action_channels"> Use platform defaults instead of my choices</label><?php endif; ?>
     <label class="d-block text-danger"><input type="checkbox" name="ack_pin_only"> I understand: turning both OFF allows PIN-only actions and is less secure.</label>
-    <p>Policy changes always require your current password, PIN, and enrolled authenticator (or email OTP if not enrolled), even when both channels are OFF.</p>
+    <p>Policy changes always require your current password, Security PIN, and an Email OTP or enrolled Google Authenticator code.</p>
     <label class="d-block">Current password<input class="form-control" type="password" name="current_password" autocomplete="current-password" required></label>
     <label class="d-block">Security PIN<input class="form-control" type="password" name="pin" autocomplete="off" required></label>
-    <label class="d-block"><?php echo bc_gauth_enrolled($actor)?'Google Authenticator code':'Email OTP'; ?><input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
-    <?php if(!bc_gauth_enrolled($actor)): ?><button type="button" class="btn btn-outline-primary my-2" data-security-send="send-channel-code">Send code</button><?php endif; ?>
+    <?php if(bc_gauth_enrolled($actor)): ?>
+    <label class="d-block">Verification method<select class="form-select" name="factor_method"><option value="google">Google Authenticator code</option><option value="email">Email OTP</option></select></label>
+    <label class="d-block">Authenticator / Email OTP code<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
+    <?php else: ?>
+    <input type="hidden" name="factor_method" value="email">
+    <label class="d-block">Email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
+    <?php endif; ?>
+    <button type="button" class="btn btn-outline-primary my-2" data-security-send="send-channel-code">Send code</button>
     <p data-wallet-status role="status" aria-live="polite"></p><button class="btn btn-primary" name="save-action-channels" value="1">Save action verification policy</button></form></section>
     <?php
 }

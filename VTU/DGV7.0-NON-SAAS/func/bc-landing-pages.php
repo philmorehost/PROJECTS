@@ -522,7 +522,7 @@ if (!function_exists('bc_landing_render_services_index')) {
             } else {
                 $coming_soon[$slug] = array(
                     'service' => $s,
-                    'reason' => ($ctrl === 'crypto_hub') ? 'Pending replacement integration' : 'Coming Soon',
+                    'reason' => 'Coming Soon',
                 );
             }
         }
@@ -575,8 +575,8 @@ if (!function_exists('bc_landing_render_services_index')) {
     <?php if (!empty($coming_soon)): ?>
     <div class="m-cs-band" id="coming-soon">
         <p class="eyebrow"><i></i>Coming Soon &amp; Service Rollout</p>
-        <h3 style="margin-top:8px">Services currently paused or pending integration</h3>
-        <p class="small" style="margin-top:4px">Services turned off in the Site Owner Service Control Center or awaiting replacement provider integration appear here until activated.</p>
+        <h3 style="margin-top:8px">Services currently paused in Service Control</h3>
+        <p class="small" style="margin-top:4px">Services turned off in the Site Owner Service Control Center appear here until activated.</p>
         <div class="m-cs-grid">
             <?php foreach ($coming_soon as $slug => $cs): $s = $cs['service']; ?>
             <a class="m-cs-item" href="/services/<?php echo bc_landing_e($slug); ?>.php">
@@ -610,7 +610,7 @@ if (!function_exists('bc_landing_render_service')) {
         $ctrl = bc_landing_service_control_key($slug);
         $is_live = bc_meridian_service_enabled($ctrl, $vid);
         $world = ($slug === 'bulk-sms') ? 'business' : 'personal';
-        $status_label = ($ctrl === 'crypto_hub') ? 'Coming Soon — Pending replacement integration' : 'Coming Soon — Currently paused by platform operator';
+        $status_label = 'Coming Soon — Currently paused by platform operator';
         bc_landing_head($ctx, $s['name'], $s['tagline'] . ' — on ' . $ctx['site_name'] . '.', $world);
         bc_landing_nav($ctx, 'services', $world);
         ?>

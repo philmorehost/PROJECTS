@@ -15,7 +15,6 @@ function bc_question_policy_handle($platform,$actor) {
     if(!$platform && function_exists('bc_demo_edits_allowed') && !bc_demo_edits_allowed($connection_server))$reply(false,'Demo Mode is ON — website settings are read-only. Enter the Super Admin Demo security lock key (top of this page) to make changes.');
     if(!$platform && function_exists('bc_demo_guard_edit'))bc_demo_guard_edit($connection_server);
     if(isset($_POST['send-question-code'])){
-        if(bc_gauth_enrolled($fresh))$reply(false,'Use your enrolled authenticator to verify a security-policy change.');
         try{
             $err=bc_stepup_send_email_otp($platform?0:$id,(string)$fresh['email'],(string)$fresh['email'],'security_question_policy','Change security question policy');
         }catch(Throwable $e){$err='Could not send the verification code. Please try again.';}
@@ -23,7 +22,8 @@ function bc_question_policy_handle($platform,$actor) {
     }
     if(!is_string($_POST['current_password']??null) || !bc_verify_password($_POST['current_password'],$fresh['password']))$reply(false,'Current password is incorrect.');
     $factor=is_string($_POST['otp_code']??null)?$_POST['otp_code']:'';
-    $input=['pin'=>is_string($_POST['pin']??null)?$_POST['pin']:'','totp_code'=>$factor,'otp_code'=>$factor];
+    $method=is_string($_POST['factor_method']??null)?$_POST['factor_method']:'';
+    $input=['pin'=>is_string($_POST['pin']??null)?$_POST['pin']:'','totp_code'=>$factor,'otp_code'=>$factor,'factor_method'=>$method];
     $error=$platform?bc_stepup_spadmin_verify($fresh,$input,'security_question_policy'):bc_stepup_admin_verify($fresh,$input,'security_question_policy');
     if($error!=='')$reply(false,$error);
     $inherit=false;
@@ -94,8 +94,14 @@ function bc_question_policy_form($actor) {
  <label class="d-block text-danger"><input type="checkbox" name="ack_question_off"> I understand that disabling the question gate reduces shared-device protection.</label>
  <label class="d-block">Current password<input class="form-control" type="password" name="current_password" autocomplete="current-password" required></label>
  <label class="d-block">Security PIN<input class="form-control" type="password" name="pin" autocomplete="off" required></label>
+ <?php if(bc_gauth_enrolled($actor)): ?>
+ <label class="d-block">Verification method<select class="form-select" name="factor_method"><option value="google">Google Authenticator code</option><option value="email">Email OTP</option></select></label>
  <label class="d-block">Authenticator / email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
- <?php if(!bc_gauth_enrolled($actor)): ?><button type="button" class="btn btn-outline-primary" data-security-send="send-question-code">Send code</button><?php endif; ?>
+ <?php else: ?>
+ <input type="hidden" name="factor_method" value="email">
+ <label class="d-block">Email OTP<input class="form-control" name="otp_code" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code" required></label>
+ <?php endif; ?>
+ <button type="button" class="btn btn-outline-primary my-2" data-security-send="send-question-code">Send code</button>
  <p data-wallet-status role="status"></p><button class="btn btn-primary" name="save-question-policy" value="1">Save security question policy</button>
  </form></section><?php
 }
