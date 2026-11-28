@@ -12,6 +12,7 @@ function bc_action_policy_handle($platform,$actor) {
         $fresh=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1",[$id]);
     }catch(Throwable $e){$reply(false,'Could not load account details. Please try again.');}
     if(!$fresh || (int)$fresh['status']!==1 || !empty($fresh['is_blocked']) || !empty($fresh['force_password_change']))$reply(false,'Account restricted.');
+    if(!$platform && function_exists('bc_demo_edits_allowed') && !bc_demo_edits_allowed($connection_server))$reply(false,'Demo Mode is ON — website settings are read-only. Enter the Super Admin Demo security lock key (top of this page) to make changes.');
     if(!$platform && function_exists('bc_demo_guard_edit'))bc_demo_guard_edit($connection_server);
     if(isset($_POST['send-channel-code'])){
         if(bc_gauth_enrolled($fresh))$reply(false,'Use your enrolled authenticator to verify a security-policy change.');
@@ -31,18 +32,49 @@ function bc_action_policy_handle($platform,$actor) {
     $begun=false;
     try{
         $store=$platform?'sas_super_admin_options':'sas_settings';
-        foreach([$table,$store] as $t){$q=mysqli_query($connection_server,"SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$t'");$r=$q?mysqli_fetch_assoc($q):null;if(!$r || strtoupper($r['ENGINE'])!=='INNODB')throw new RuntimeException('schema');}
         $q=mysqli_query($connection_server,'SELECT @@session.autocommit AS auto_commit');$tx=$q?mysqli_fetch_assoc($q):null;
-        if(!$tx || (int)$tx['auto_commit']!==1 || mysqli_query($connection_server,'SET TRANSACTION ISOLATION LEVEL READ COMMITTED')!==true)throw new RuntimeException('outer_transaction');
+        if(!$tx || (int)$tx['auto_commit']!==1)throw new RuntimeException('outer_transaction');
+        foreach([$table,$store] as $t){
+            $q=mysqli_query($connection_server,"SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$t'");
+            $r=$q?mysqli_fetch_assoc($q):null;
+            if($r && strtoupper($r['ENGINE'])!=='INNODB'){
+                @mysqli_query($connection_server,"ALTER TABLE `$t` ENGINE=InnoDB");
+                $q=mysqli_query($connection_server,"SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='$t'");
+                $r=$q?mysqli_fetch_assoc($q):null;
+            }
+            if(!$r || strtoupper($r['ENGINE'])!=='INNODB')throw new RuntimeException('schema');
+        }
+        $where=$platform?"option_name='action_security_channels'":"vendor_id=$id AND setting_name='action_security_channels'";
+        if(!$platform){
+            $q_cnt=mysqli_query($connection_server,"SELECT COUNT(*) AS cnt FROM sas_settings WHERE $where");
+            $r_cnt=$q_cnt?mysqli_fetch_assoc($q_cnt):null;
+            if($r_cnt && (int)$r_cnt['cnt']>1){
+                $q_id_col=mysqli_query($connection_server,"SHOW COLUMNS FROM sas_settings LIKE 'id'");
+                if($q_id_col && mysqli_num_rows($q_id_col)===1){
+                    $q_dup=mysqli_query($connection_server,"SELECT id FROM sas_settings WHERE $where ORDER BY id DESC LIMIT 1");
+                    $keep=$q_dup?mysqli_fetch_assoc($q_dup):null;
+                    $keep_id=(int)($keep['id']??0);
+                    if($keep_id>0)mysqli_query($connection_server,"DELETE FROM sas_settings WHERE $where AND id<>$keep_id");
+                }else{
+                    mysqli_query($connection_server,"DELETE FROM sas_settings WHERE $where");
+                }
+            }
+        }
+        if(mysqli_query($connection_server,'SET TRANSACTION ISOLATION LEVEL READ COMMITTED')!==true)throw new RuntimeException('outer_transaction');
         if(!mysqli_begin_transaction($connection_server))throw new RuntimeException('transaction');$begun=true;
         $locked=bc_q_row("SELECT * FROM `$table` WHERE id=? LIMIT 1 FOR UPDATE",[$id]);
         if(!$locked || (int)$locked['status']!==1 || !empty($locked['is_blocked']) || !empty($locked['force_password_change']))throw new RuntimeException('restricted');
         foreach(['password','security_pin','totp_secret','two_factor_type'] as $key)if(($locked[$key]??'')!==($fresh[$key]??''))throw new RuntimeException('identity_changed');
-        $where=$platform?"option_name='action_security_channels'":"vendor_id=$id AND setting_name='action_security_channels'";
         $q=mysqli_query($connection_server,"SELECT * FROM $store WHERE $where LIMIT 2 FOR UPDATE");if(!$q || mysqli_num_rows($q)>1)throw new RuntimeException('duplicate_policy');
+        $exists=mysqli_num_rows($q)===1;
         $safe=mysqli_real_escape_string($connection_server,$value);
-        if($platform)$sql="INSERT INTO sas_super_admin_options (option_name,option_value) VALUES ('action_security_channels','$safe') ON DUPLICATE KEY UPDATE option_value='$safe'";
-        else $sql="INSERT INTO sas_settings (vendor_id,setting_name,setting_value) VALUES ($id,'action_security_channels','$safe') ON DUPLICATE KEY UPDATE setting_value='$safe'";
+        if($exists){
+            $col=$platform?'option_value':'setting_value';
+            $sql="UPDATE $store SET $col='$safe' WHERE $where";
+        }else{
+            if($platform)$sql="INSERT INTO sas_super_admin_options (option_name,option_value) VALUES ('action_security_channels','$safe')";
+            else $sql="INSERT INTO sas_settings (vendor_id,setting_name,setting_value) VALUES ($id,'action_security_channels','$safe')";
+        }
         if(!mysqli_query($connection_server,$sql))throw new RuntimeException('save');
         $q=mysqli_query($connection_server,"SELECT * FROM $store WHERE $where LIMIT 2");$r=$q?mysqli_fetch_assoc($q):null;
         if(!$r || mysqli_num_rows($q)!==1 || $r[$platform?'option_value':'setting_value']!==$value)throw new RuntimeException('unconfirmed');

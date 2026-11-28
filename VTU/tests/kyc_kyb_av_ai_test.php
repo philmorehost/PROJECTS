@@ -238,6 +238,20 @@ $spAi = file_get_contents($root . '/DGV7.0-SAAS/bc-spadmin/AIManagement.php');
 kchk(strpos($spAi, 'av_scan_cost') !== false && strpos($spAi, 'kyc_report_cost') !== false && strpos($spAi, 'support_reply_cost') !== false && strpos($spAi, 'sas_kyc_av_logs') !== false, 'SAAS spadmin AIManagement configures AV/KYC/Support rates and views AV reports');
 kchk(strpos($spAi, 'bc_kyc_ai_ensure_schema($connection_server)') !== false, 'SAAS spadmin AIManagement passes connection_server to bc_kyc_ai_ensure_schema()');
 
+// Regression: AIEngine::buildPostHeaders() never emits duplicate Content-Type headers
+$hDefault = AIEngine::buildPostHeaders([]);
+kchk($hDefault === ['Content-Type: application/json'], 'AIEngine::buildPostHeaders defaults to a single Content-Type: application/json header');
+$hDedup = AIEngine::buildPostHeaders([
+    'Content-Type: application/json',
+    'content-type: application/json',
+    'Authorization: Bearer test-key',
+]);
+$ctCount = 0;
+foreach ($hDedup as $hdr) {
+    if (stripos($hdr, 'content-type:') === 0) $ctCount++;
+}
+kchk($ctCount === 1 && in_array('Authorization: Bearer test-key', $hDedup, true), 'AIEngine::buildPostHeaders deduplicates Content-Type headers while preserving auth headers');
+
 // Cleanup
 foreach (glob($tmpDir . '/*') ?: [] as $f) @unlink($f);
 @rmdir($tmpDir);

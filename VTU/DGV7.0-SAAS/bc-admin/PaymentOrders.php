@@ -156,6 +156,92 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
         exit();
     }
 
+    // Bulk delete pending payment orders (website sas_submitted_payments and/or app manual_funding)
+    if (isset($_POST['bulk_delete_pending'])) {
+        if (function_exists('bc_validate_csrf')) bc_validate_csrf();
+        $admin_vid = (int)$get_logged_admin_details["id"];
+        $delete_scope = trim(strip_tags((string)($_POST['delete_scope'] ?? 'selected')));
+        if (!in_array($delete_scope, array('selected', 'all_web', 'all_app', 'all_both'), true)) {
+            $_SESSION["product_purchase_response"] = "Invalid bulk delete scope.";
+            if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
+            header("Location: " . $po_redirect_url);
+            exit();
+        }
+        $sec29_pin_err = sec29_verify_admin_pin_only($get_logged_admin_details, $_POST, 'payment_order_delete');
+        if ($sec29_pin_err !== '') {
+            $_SESSION["product_purchase_response"] = $sec29_pin_err;
+            if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
+            header("Location: " . $po_redirect_url);
+            exit();
+        }
+
+        $deleted_web = 0;
+        $deleted_app = 0;
+
+        if ($delete_scope === 'selected') {
+            $raw_web = is_array($_POST['selected_web_refs'] ?? null) ? $_POST['selected_web_refs'] : array();
+            $raw_app = is_array($_POST['selected_app_refs'] ?? null) ? $_POST['selected_app_refs'] : array();
+            $web_refs = array_values(array_unique(array_filter(array_map(function ($r) {
+                return is_string($r) ? trim(strip_tags($r)) : '';
+            }, $raw_web), function ($r) { return $r !== ''; })));
+            $app_refs = array_values(array_unique(array_filter(array_map(function ($r) {
+                return is_string($r) ? trim(strip_tags($r)) : '';
+            }, $raw_app), function ($r) { return $r !== ''; })));
+
+            if (empty($web_refs) && empty($app_refs)) {
+                $_SESSION["product_purchase_response"] = "Select at least one pending payment order to delete.";
+                if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
+                header("Location: " . $po_redirect_url);
+                exit();
+            }
+
+            foreach (array_chunk($web_refs, 200) as $chunk) {
+                $in_sql = implode(',', array_map(function ($r) use ($connection_server) {
+                    return "'" . mysqli_real_escape_string($connection_server, $r) . "'";
+                }, $chunk));
+                if (mysqli_query($connection_server, "DELETE FROM sas_submitted_payments WHERE vendor_id='$admin_vid' AND status='2' AND reference IN ($in_sql)")) {
+                    $deleted_web += max(0, (int)mysqli_affected_rows($connection_server));
+                }
+            }
+            foreach (array_chunk($app_refs, 200) as $chunk) {
+                $in_sql = implode(',', array_map(function ($r) use ($connection_server) {
+                    return "'" . mysqli_real_escape_string($connection_server, $r) . "'";
+                }, $chunk));
+                if (mysqli_query($connection_server, "DELETE FROM sas_transactions WHERE vendor_id='$admin_vid' AND status='2' AND product_unique_id='manual_funding' AND reference IN ($in_sql)")) {
+                    $deleted_app += max(0, (int)mysqli_affected_rows($connection_server));
+                }
+            }
+        } else {
+            $filter_sq = trim(strip_tags((string)($_POST['filter_searchq'] ?? '')));
+            $bulk_search_sql = "";
+            if ($filter_sq !== '' && !empty($_POST['apply_search_filter'])) {
+                $f_esc = mysqli_real_escape_string($connection_server, $filter_sq);
+                $bulk_search_sql = " AND (reference LIKE '%$f_esc%' OR description LIKE '%$f_esc%' OR username LIKE '%$f_esc%' OR amount LIKE '%$f_esc%')";
+            }
+            if ($delete_scope === 'all_web' || $delete_scope === 'all_both') {
+                if (mysqli_query($connection_server, "DELETE FROM sas_submitted_payments WHERE vendor_id='$admin_vid' AND status='2' $bulk_search_sql")) {
+                    $deleted_web += max(0, (int)mysqli_affected_rows($connection_server));
+                }
+            }
+            if ($delete_scope === 'all_app' || $delete_scope === 'all_both') {
+                if (mysqli_query($connection_server, "DELETE FROM sas_transactions WHERE vendor_id='$admin_vid' AND status='2' AND product_unique_id='manual_funding' $bulk_search_sql")) {
+                    $deleted_app += max(0, (int)mysqli_affected_rows($connection_server));
+                }
+            }
+        }
+
+        $total_deleted = $deleted_web + $deleted_app;
+        if ($total_deleted > 0 && function_exists('bc_sec_audit')) {
+            bc_sec_audit($admin_vid, 'admin', (string)$get_logged_admin_details["email"], 'payment_orders_bulk_deleted', $delete_scope, "Deleted $total_deleted pending payment order(s) (web=$deleted_web, app=$deleted_app)");
+        }
+        $_SESSION["product_purchase_response"] = $total_deleted > 0
+            ? "Deleted $total_deleted pending payment order(s) (Website: $deleted_web, App: $deleted_app)."
+            : "No matching pending payment orders were found to delete.";
+        if (session_status() === PHP_SESSION_ACTIVE) { @session_write_close(); }
+        header("Location: " . $po_redirect_url);
+        exit();
+    }
+
     if(isset($_POST["order-ref"])){
         $admin_vid = (int)$get_logged_admin_details["id"];
         $status = mysqli_real_escape_string($connection_server, trim(strip_tags($_POST["order-status"] ?? '')));
@@ -421,15 +507,31 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
 
                         <!-- PENDING -->
                         <div class="tab-pane fade <?php echo $active_tab === 'pending' ? 'show active' : ''; ?>" id="po-pending">
+                            <?php if ($count_pending_all > 0): ?>
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 bg-light border rounded-4 p-3 mb-4">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-secondary-subtle text-dark border px-3 py-2 rounded-pill" id="poSelectedBadge">0 selected</span>
+                                    <span class="small text-muted">Select pending orders below or wipe all pending spam at once (approved &amp; rejected orders are never deleted).</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-3" id="poDeleteSelectedBtn" disabled data-bs-toggle="modal" data-bs-target="#bulkDeleteOrdersModal" data-mode="selected">
+                                        <i class="bi bi-trash3 me-1"></i>Delete Selected
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm rounded-pill px-3" id="poDeleteAllBtn" data-bs-toggle="modal" data-bs-target="#bulkDeleteOrdersModal" data-mode="all">
+                                        <i class="bi bi-trash3-fill me-1"></i>Delete All Pending (<?php echo $count_pending_all; ?>)
+                                    </button>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                             <div class="row g-4">
                                 <div class="col-xl-6">
                                     <h6 class="fw-bold mb-3 text-primary d-flex align-items-center"><i class="bi bi-globe2 me-2"></i>Website Pending <span class="badge bg-primary bg-opacity-10 text-primary ms-2"><?php echo $count_web_pending; ?></span></h6>
                                     <div class="table-responsive bg-light rounded-4 border p-2">
                                     <?php
                                         $query_result = $get_user_pending_transaction_details;
-                                        $is_admin = true; $is_payment_order = true;
+                                        $is_admin = true; $is_payment_order = true; $po_bulk_select_source = 'web';
                                         include("../func/history-table.php");
-                                        unset($is_payment_order);
+                                        unset($is_payment_order, $po_bulk_select_source);
                                     ?>
                                     </div>
                                 </div>
@@ -438,9 +540,9 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
                                     <div class="table-responsive bg-light rounded-4 border p-2">
                                     <?php
                                         $query_result = $get_app_pending_transaction_details;
-                                        $is_admin = true; $inline_approve_page = "PaymentOrders.php";
+                                        $is_admin = true; $inline_approve_page = "PaymentOrders.php"; $po_bulk_select_source = 'app';
                                         include("../func/history-table.php");
-                                        unset($inline_approve_page);
+                                        unset($inline_approve_page, $po_bulk_select_source);
                                     ?>
                                     </div>
                                 </div>
@@ -520,5 +622,138 @@ bc_adm_head("Payment Orders | " . ($get_all_super_admin_site_details["site_title
 
 
 
+
+<?php if ($count_pending_all > 0): ?>
+<div class="modal fade" id="bulkDeleteOrdersModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="post" action="PaymentOrders.php" class="modal-content border-0 shadow" id="bulkDeleteOrdersForm">
+      <?php if (function_exists('bc_csrf_field')) echo bc_csrf_field(); ?>
+      <input type="hidden" name="bulk_delete_pending" value="1">
+      <input type="hidden" name="return_tab" value="pending">
+      <input type="hidden" name="return_searchq" value="<?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="filter_searchq" value="<?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="delete_scope" id="poBulkDeleteScope" value="selected">
+      <div id="poBulkSelectedInputs"></div>
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold text-danger" id="poBulkModalTitle">Delete Pending Payment Orders</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3" id="poBulkModalDesc">Permanently delete pending payment orders. Approved and rejected orders are never affected.</p>
+        <div class="mb-3 d-none" id="poBulkScopeGroup">
+          <label class="form-label small fw-bold text-muted">WHICH PENDING ORDERS TO DELETE</label>
+          <select class="form-select" id="poBulkAllScopeSelect">
+            <option value="all_both">All Pending Orders — Website (<?php echo $count_web_pending; ?>) + App (<?php echo $count_app_pending; ?>)</option>
+            <?php if ($count_web_pending > 0): ?>
+            <option value="all_web">Website Pending Only (<?php echo $count_web_pending; ?>)</option>
+            <?php endif; ?>
+            <?php if ($count_app_pending > 0): ?>
+            <option value="all_app">App Pending Only (<?php echo $count_app_pending; ?>)</option>
+            <?php endif; ?>
+          </select>
+          <?php if ($searchq !== ''): ?>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="apply_search_filter" value="1" id="poApplySearchFilter" checked>
+            <label class="form-check-label small" for="poApplySearchFilter">
+              Only delete pending orders matching filter "<strong><?php echo htmlspecialchars($searchq, ENT_QUOTES, 'UTF-8'); ?></strong>"
+            </label>
+          </div>
+          <?php endif; ?>
+        </div>
+        <div class="mb-1">
+          <label class="form-label small fw-bold text-muted">SECURITY PIN</label>
+          <input name="pin" type="password" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" class="form-control text-center fw-bold" placeholder="****" required autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Delete Permanently</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+    var badge = document.getElementById('poSelectedBadge');
+    var delSelectedBtn = document.getElementById('poDeleteSelectedBtn');
+    var modalEl = document.getElementById('bulkDeleteOrdersModal');
+    if (!badge || !delSelectedBtn || !modalEl) return;
+
+    function updateSelectedCount() {
+        var checked = document.querySelectorAll('.po-row-check:checked');
+        badge.textContent = checked.length + ' selected';
+        delSelectedBtn.disabled = checked.length === 0;
+        document.querySelectorAll('.po-select-all').forEach(function (master) {
+            var src = master.getAttribute('data-po-source');
+            var allRows = document.querySelectorAll('.po-check-' + src);
+            var checkedRows = document.querySelectorAll('.po-check-' + src + ':checked');
+            master.checked = allRows.length > 0 && checkedRows.length === allRows.length;
+            master.indeterminate = checkedRows.length > 0 && checkedRows.length < allRows.length;
+        });
+    }
+
+    document.querySelectorAll('.po-select-all').forEach(function (master) {
+        master.addEventListener('change', function () {
+            var src = master.getAttribute('data-po-source');
+            document.querySelectorAll('.po-check-' + src).forEach(function (cb) {
+                cb.checked = master.checked;
+            });
+            updateSelectedCount();
+        });
+    });
+
+    document.querySelectorAll('.po-row-check').forEach(function (cb) {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+
+    var allScopeSelect = document.getElementById('poBulkAllScopeSelect');
+    var scopeInput = document.getElementById('poBulkDeleteScope');
+    if (allScopeSelect) {
+        allScopeSelect.addEventListener('change', function () {
+            scopeInput.value = allScopeSelect.value;
+        });
+    }
+
+    modalEl.addEventListener('show.bs.modal', function (ev) {
+        var btn = ev.relatedTarget;
+        var mode = btn ? btn.getAttribute('data-mode') : 'selected';
+        var selectedBox = document.getElementById('poBulkSelectedInputs');
+        var scopeGroup = document.getElementById('poBulkScopeGroup');
+        var title = document.getElementById('poBulkModalTitle');
+        var desc = document.getElementById('poBulkModalDesc');
+        selectedBox.innerHTML = '';
+
+        if (mode === 'all') {
+            scopeGroup.classList.remove('d-none');
+            scopeInput.value = allScopeSelect ? allScopeSelect.value : 'all_both';
+            title.textContent = 'Delete All Pending Orders';
+            desc.textContent = 'This will permanently delete all matching pending payment orders. Approved and rejected orders will never be touched.';
+        } else {
+            scopeGroup.classList.add('d-none');
+            scopeInput.value = 'selected';
+            var webChecked = document.querySelectorAll('.po-check-web:checked');
+            var appChecked = document.querySelectorAll('.po-check-app:checked');
+            webChecked.forEach(function (cb) {
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'selected_web_refs[]';
+                inp.value = cb.value;
+                selectedBox.appendChild(inp);
+            });
+            appChecked.forEach(function (cb) {
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'selected_app_refs[]';
+                inp.value = cb.value;
+                selectedBox.appendChild(inp);
+            });
+            var total = webChecked.length + appChecked.length;
+            title.textContent = 'Delete ' + total + ' Selected Pending Order(s)';
+            desc.textContent = 'Permanently delete ' + total + ' selected pending order(s) (Website: ' + webChecked.length + ', App: ' + appChecked.length + '). Approved and rejected orders are never affected.';
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 
 <?php bc_adm_foot(array("area" => "admin")); ?>
