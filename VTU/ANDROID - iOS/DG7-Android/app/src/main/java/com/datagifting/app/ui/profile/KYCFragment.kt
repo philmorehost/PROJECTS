@@ -64,6 +64,8 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
     private var selfieUri: Uri? = null
     private var voveidInitialized = false
     private var formsExpandedWhilePending = false
+    private var currentKycStatus = -1
+    private var kycPollJob: kotlinx.coroutines.Job? = null
     private val idTypes = listOf("National ID", "NIN", "Passport", "Driver's Licence", "Voter's Card", "BVN")
 
     private val pickGovtId = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -426,7 +428,7 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
         binding.btnRefreshKycStatus.setOnClickListener { loadKYCStatus() }
         binding.btnPendingRefresh.setOnClickListener { loadKYCStatus() }
         binding.btnKycSignOut.setOnClickListener {
-            PreferenceManager(requireContext()).clear()
+            PreferenceManager(requireContext()).signOutPreservingBiometric()
             startActivity(Intent(requireContext(), LoginActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             })
@@ -500,11 +502,36 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
         }
     }
 
-    private fun loadKYCStatus() {
-        binding.progressBar.visibility = View.VISIBLE
+    override fun onResume() {
+        super.onResume()
+        loadKYCStatus(silent = true)
+        startPollingIfPending()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        kycPollJob?.cancel()
+        kycPollJob = null
+    }
+
+    private fun startPollingIfPending() {
+        kycPollJob?.cancel()
+        kycPollJob = viewLifecycleOwner.lifecycleScope.launch {
+            while (currentKycStatus != 2) {
+                kotlinx.coroutines.delay(6000)
+                if (_binding != null && isResumed) {
+                    loadKYCStatus(silent = true)
+                }
+            }
+        }
+    }
+
+    private fun loadKYCStatus(silent: Boolean = false) {
+        if (!silent) binding.progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
                 val prefs = PreferenceManager(requireContext())
+                val wasLocked = prefs.getBoolean("kyc_gate_locked", false)
                 val api = RetrofitClient.getService()
                 val resp = api.kycAction(mapOf("api_key" to prefs.getApiKey(), "action" to "status"))
                 val body = resp.body()
@@ -513,6 +540,7 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
                     binding.progressBar.visibility = View.GONE
                     if (body?.get("status") == "success") {
                         val kycStatus = (body["kyc_status"] as? Number)?.toInt() ?: 0
+                        currentKycStatus = kycStatus
                         val statusName = body["kyc_name"] as? String ?: "Unverified"
                         val bvnSet = body["bvn_set"] as? String ?: "No"
                         val ninSet = body["nin_set"] as? String ?: "No"
@@ -523,7 +551,12 @@ class KYCFragment : Fragment(R.layout.fragment_kyc) {
                         val aiGrade = (body["ai_grade"] as? String).orEmpty()
                         val aiReason = (body["ai_reason"] as? String).orEmpty()
 
+                        com.datagifting.app.util.OnboardingCoordinator.syncFlags(prefs, body)
                         prefs.saveBoolean("kyc_gate_locked", gateLocked)
+                        if (wasLocked && !gateLocked) {
+                            prefs.saveBoolean("kyc_just_unlocked", true)
+                            kycPollJob?.cancel()
+                        }
                         (activity as? MainActivity)?.refreshComplianceGate()
 
                         binding.tvKycStatus.text = "KYC Status: $statusName"

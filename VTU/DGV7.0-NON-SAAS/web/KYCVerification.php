@@ -32,6 +32,26 @@ if ($q_self) $kyc_self = mysqli_fetch_assoc($q_self) ?: [];
 $kyc_status = (int)($kyc_self['kyc_status'] ?? $get_logged_user_details['kyc_status']);
 $kyc_still_needed = $enabled_checks ? bc_kyc_checks_pending($kyc_self, $enabled_checks) : [];
 
+if (isset($_GET['poll']) && $_GET['poll'] === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $fresh_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='" . (int)$get_logged_user_details['id'] . "' LIMIT 1");
+    $fresh_u = ($fresh_q && mysqli_num_rows($fresh_q) === 1) ? mysqli_fetch_assoc($fresh_q) : $get_logged_user_details;
+    $fresh_status = (int)($fresh_u['kyc_status'] ?? $kyc_status);
+    $approved = function_exists('bc_kyc_approval_current') ? bc_kyc_approval_current($fresh_u) : ($fresh_status === 2);
+    $next_url = function_exists('bc_web_next_onboarding_url')
+        ? bc_web_next_onboarding_url($connection_server, $fresh_u, (int)$vid)
+        : '/web/Dashboard.php';
+    echo json_encode([
+        'status' => 'success',
+        'kyc_status' => $fresh_status,
+        'approved' => $approved,
+        'kyc_reject_reason' => (string)($fresh_u['kyc_reject_reason'] ?? ''),
+        'next_url' => $next_url,
+    ]);
+    exit;
+}
+
 $is_kyc_enabled = isKYCEnforced($vid);
 
 // AI KYC Compliance Engine + Pre-Upload Antivirus Scanner + Notifications
@@ -501,6 +521,12 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
                             <i class="bi bi-patch-check-fill text-success display-1"></i>
                             <h4 class="fw-bold mt-2">Fully Verified</h4>
                             <p class="text-muted small">Your identity has been confirmed. You have unrestricted access to all services.</p>
+                            <?php
+                            $kyc_next_step_url = function_exists('bc_web_next_onboarding_url')
+                                ? bc_web_next_onboarding_url($connection_server, $get_logged_user_details, (int)$vid)
+                                : '/web/Dashboard.php';
+                            ?>
+                            <a href="<?php echo htmlspecialchars($kyc_next_step_url, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-success rounded-pill px-4 mt-2 fw-bold">Continue</a>
                         <?php elseif($kyc_status == 1): ?>
                             <i class="bi bi-clock-history text-warning display-1"></i>
                             <h4 class="fw-bold mt-2">Under Review</h4>
@@ -848,6 +874,39 @@ bc_app_head("Identity Verification (KYC) | " . ($get_all_site_details["site_titl
     });
   });
 })();
+<?php if ($kyc_status !== 2): ?>
+(function(){
+  var polling = false;
+  function checkKycApproval() {
+    if (polling) return;
+    polling = true;
+    fetch('KYCVerification.php?poll=1', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (d && d.approved) {
+          var dest = d.next_url || '/web/Dashboard.php';
+          if (window.Swal) {
+            Swal.fire({
+              icon: 'success',
+              title: 'KYC Approved!',
+              text: 'Your identity has been verified. Continuing setup…',
+              timer: 1800,
+              showConfirmButton: false
+            }).then(function(){ window.location.href = dest; });
+          } else {
+            window.location.href = dest;
+          }
+        }
+      })
+      .catch(function(){})
+      .finally(function(){ polling = false; });
+  }
+  setInterval(checkKycApproval, 6000);
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') checkKycApproval();
+  });
+})();
+<?php endif; ?>
 </script>
 
 <?php bc_app_foot(); ?>

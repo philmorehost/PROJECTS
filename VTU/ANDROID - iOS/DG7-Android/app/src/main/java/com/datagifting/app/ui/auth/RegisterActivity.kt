@@ -151,12 +151,16 @@ class RegisterActivity : AppCompatActivity() {
     }
 
     private fun autoLogin(username: String, password: String) {
+        val prefs = com.datagifting.app.util.PreferenceManager(this)
+        if (prefs.isLoggedIn()) {
+            startActivity(com.datagifting.app.util.OnboardingCoordinator.nextActivityIntent(this, prefs))
+            finish()
+            return
+        }
         lifecycleScope.launch {
             when (val login = authRepo.loginStart(username, password)) {
                 is LoginOutcome.Success -> {
-                    startActivity(Intent(this@RegisterActivity, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    })
+                    startActivity(com.datagifting.app.util.OnboardingCoordinator.nextActivityIntent(this@RegisterActivity, prefs))
                     finish()
                 }
                 is LoginOutcome.OtpRequired -> {

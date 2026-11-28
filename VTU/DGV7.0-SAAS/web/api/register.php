@@ -180,22 +180,57 @@ if (mysqli_query($connection_server, $query)) {
     }
     sendVendorEmail($email, $raw_reg_template_subject, $raw_reg_template_body);
 
-    echo json_encode([
+    $new_id = (int)mysqli_insert_id($connection_server);
+    $new_user_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE id='$new_id' LIMIT 1");
+    $new_user = ($new_user_q && mysqli_num_rows($new_user_q) === 1)
+        ? mysqli_fetch_assoc($new_user_q)
+        : [
+            'id' => $new_id,
+            'vendor_id' => (int)$vendor_id,
+            'username' => $user,
+            'firstname' => $first,
+            'lastname' => $last,
+            'email' => $email,
+            'phone_number' => $phone,
+            'balance' => '0.00',
+            'account_level' => '1',
+            'api_key' => $api_key,
+            'kyc_status' => 0,
+            'two_factor_type' => 'none',
+            'security_pin' => '',
+            'security_quest' => '',
+            'security_answer' => '',
+        ];
+
+    $onboarding_extra = function_exists('bc_app_onboarding_fields')
+        ? bc_app_onboarding_fields($connection_server, $new_user, (int)$vendor_id, $get_vendor)
+        : [];
+    $bc_reg_payload = [
         "status" => "success",
         "message" => "Registration successful",
-        "data" => [
-            "username" => $user,
-            "firstname" => $first,
-            "lastname" => $last,
-            "api_key" => $api_key,
-            "balance" => "0.00",
-            "account_level" => "1",
-            "email" => $email,
-            "phone" => $phone,
-            "kyc_verified" => "Yes",
-            "kyc_status" => 2
-        ]
-    ]);
+        "data" => array_merge([
+            "username" => $new_user['username'] ?? $user,
+            "firstname" => $new_user['firstname'] ?? $first,
+            "lastname" => $new_user['lastname'] ?? $last,
+            "api_key" => "",
+            "balance" => $new_user['balance'] ?? "0.00",
+            "account_level" => (string)($new_user['account_level'] ?? "1"),
+            "level_name" => function_exists('accountLevel') ? accountLevel($new_user['account_level'] ?? "1") : "Smart User",
+            "email" => $new_user['email'] ?? $email,
+            "phone" => $new_user['phone_number'] ?? $phone,
+            "kyc_verified" => ((int)($new_user['kyc_status'] ?? 0) === 2) ? "Yes" : "No",
+            "kyc_status" => (int)($new_user['kyc_status'] ?? 0),
+            "ai_status" => (int)($get_vendor['ai_status'] ?? 0),
+        ], $onboarding_extra)
+    ];
+    if (function_exists('bc_app_token_issue')) {
+        $bc_app_session = bc_app_token_issue($new_user, $vendor_id, $input['platform'] ?? 'android', $input['device_label'] ?? null);
+        if ($bc_app_session) {
+            $bc_reg_payload['data']['app_token'] = $bc_app_session['token'];
+            $bc_reg_payload['data']['app_token_expires_at'] = $bc_app_session['expires_at'];
+        }
+    }
+    echo json_encode($bc_reg_payload);
 } else {
     echo json_encode(["status" => "error", "message" => "Database error: " . mysqli_error($connection_server)]);
 }

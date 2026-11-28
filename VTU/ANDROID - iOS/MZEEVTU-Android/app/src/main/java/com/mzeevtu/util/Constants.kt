@@ -30,6 +30,15 @@ object Constants {
     const val KEY_HAS_SECURITY_QUEST = "has_security_quest"
     const val LOCK_TIMEOUT_MINUTES = 5L
 
+    // Sequential security onboarding & biometric re-entry
+    const val KEY_TOTP_REQUIRED = "totp_required"
+    const val KEY_TOTP_ENABLED = "totp_enabled"
+    const val KEY_SECURITY_QUEST_REQUIRED = "security_quest_required"
+    const val KEY_SECURITY_QUEST_SET = "security_quest_set"
+    const val KEY_BIOMETRIC_SESSION_TOKEN = "biometric_session_token"
+    const val KEY_BIOMETRIC_USERNAME = "biometric_username"
+    const val KEY_BIOMETRIC_PROMPT_SHOWN = "biometric_prompt_shown"
+
     // Notification
     const val CHANNEL_BULK = "bulk_transactions"
     const val WORK_BULK_POLL = "bulk_poll_work"

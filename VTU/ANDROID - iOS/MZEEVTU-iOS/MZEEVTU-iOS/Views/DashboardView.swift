@@ -16,6 +16,7 @@ struct MobileWallet: Identifiable {
 struct DashboardView: View {
     @ObservedObject private var brandTheme = BrandTheme.shared
     @ObservedObject private var complianceGate = ComplianceGateState.shared
+    @ObservedObject private var onboarding = OnboardingState.shared
     @EnvironmentObject var session: SessionManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var name = ""
@@ -28,6 +29,7 @@ struct DashboardView: View {
     @State private var portal: MobileService?
     @State private var receipt: MobileReceipt?
     @State private var showNotifications = false
+    @State private var showBiometricOptInAlert = false
     @State private var locked = UserDefaults.standard.bool(forKey: "mobile_biometric_lock")
     private var orange: Color { brandTheme.ink }
 
@@ -78,7 +80,33 @@ struct DashboardView: View {
         .sheet(item: $portal, onDismiss: { reload() }) { service in MobilePortalView(service: service) }
         .sheet(item: $receipt) { item in MobileReceiptView(receipt: item) }
         .sheet(isPresented: $showNotifications) { ComplianceNotificationsSheet() }
-        .onAppear { reload(); ComplianceGateState.shared.refresh(); if locked { authenticate(enable: false) } }
+        .alert("Enable Face ID / Touch ID Sign-In?", isPresented: $showBiometricOptInAlert) {
+            Button("Enable") {
+                onboarding.markBiometricPromptNeeded(false)
+                authenticate(enable: true)
+            }
+            Button("Not Now", role: .cancel) {
+                onboarding.markBiometricPromptNeeded(false)
+                UserDefaults.standard.set(true, forKey: "biometric_prompt_dismissed")
+            }
+        } message: {
+            Text("Use Face ID or Touch ID on this device for faster sign-in and wallet lock.")
+        }
+        .onAppear {
+            reload()
+            ComplianceGateState.shared.refresh()
+            if locked { authenticate(enable: false) }
+            else if onboarding.biometricPromptNeeded
+                && !AppNetworkService.shared.biometricEnabled
+                && !UserDefaults.standard.bool(forKey: "biometric_prompt_dismissed") {
+                var err: NSError?
+                if LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) {
+                    showBiometricOptInAlert = true
+                } else {
+                    onboarding.markBiometricPromptNeeded(false)
+                }
+            }
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .background && UserDefaults.standard.bool(forKey: "mobile_biometric_lock") { locked = true }
             if phase == .active && locked { authenticate(enable: false) }
@@ -222,7 +250,21 @@ struct DashboardView: View {
         let context=LAContext(); var authError: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &authError) else { error="Biometric authentication is unavailable or not enrolled on this device."; return }
         context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Protect access to your wallet") { success, _ in
-            DispatchQueue.main.async { if success { if enable { UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "mobile_biometric_lock"), forKey: "mobile_biometric_lock") }; locked = false } }
+            DispatchQueue.main.async {
+                if success {
+                    if enable {
+                        let newVal = !UserDefaults.standard.bool(forKey: "mobile_biometric_lock")
+                        UserDefaults.standard.set(newVal, forKey: "mobile_biometric_lock")
+                        if newVal {
+                            AppNetworkService.shared.biometricSessionToken = AppNetworkService.shared.apiKey
+                            AppNetworkService.shared.biometricUsername = UserDefaults.standard.string(forKey: "saved_username")
+                        } else {
+                            AppNetworkService.shared.biometricSessionToken = nil
+                        }
+                    }
+                    locked = false
+                }
+            }
         }
     }
 }

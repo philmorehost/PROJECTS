@@ -1,6 +1,6 @@
 //
 //  KYCView.swift
-//  MZEEVTU-iOS
+//  DG7-iOS
 //
 //  KYC Verification View
 //
@@ -144,6 +144,12 @@ struct KYCView: View {
         }
         .onAppear {
             viewModel.loadKYCStatus()
+        }
+        .onReceive(Timer.publish(every: 6, on: .main, in: .common).autoconnect()) { _ in
+            if viewModel.kycStatus != 2 {
+                viewModel.loadKYCStatus()
+                ComplianceGateState.shared.refresh()
+            }
         }
         .alert("Verification Result", isPresented: $viewModel.showResult) {
             Button("OK") { viewModel.showResult = false }
@@ -641,7 +647,7 @@ struct AIInterviewSection: View {
                     Image(systemName: "mic.fill")
                         .font(.title2)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("AI Compliance Interview")
+                        Text("Titanium AI Interview")
                             .font(.headline)
                         Text("Complete your KYC by talking to our AI Compliance Officer. No forms required.")
                             .font(.caption)
@@ -704,6 +710,7 @@ final class KYCViewModel: ObservableObject {
             self.aiGrade = bcString(json["ai_grade"])
             self.aiReason = bcString(json["ai_reason"])
             DispatchQueue.main.async {
+                OnboardingState.shared.syncFromPayload(json)
                 let enforced = (json["kyc_enforced"] as? Bool) ?? false
                 let gateLocked = (json["kyc_gate_locked"] as? Bool) ?? (enforced && self.kycStatus != 2)
                 ComplianceGateState.shared.locked = gateLocked

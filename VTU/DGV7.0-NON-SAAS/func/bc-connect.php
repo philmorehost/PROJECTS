@@ -155,5 +155,6 @@
         exit();
 	}
 
+require_once __DIR__ . '/bc-onboarding.php';
 require_once __DIR__ . '/bc-enrollment-policy.php';
 if ($connection_server instanceof mysqli) bc_enrollment_session_guard();

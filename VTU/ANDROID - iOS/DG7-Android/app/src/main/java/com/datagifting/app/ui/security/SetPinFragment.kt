@@ -55,7 +55,16 @@ class SetPinFragment : Fragment(R.layout.fragment_set_pin) {
                         MaterialAlertDialogBuilder(requireContext())
                             .setTitle("✅ PIN Set Successfully")
                             .setMessage("Your transaction PIN has been updated.")
-                            .setPositiveButton("OK") { _, _ -> requireActivity().onBackPressedDispatcher.onBackPressed() }.show()
+                            .setCancelable(false)
+                            .setPositiveButton("Continue") { _, _ ->
+                                if (com.datagifting.app.util.OnboardingCoordinator.needsSecurityQuest(prefs)) {
+                                    startActivity(android.content.Intent(requireContext(), LockActivity::class.java))
+                                } else {
+                                    androidx.navigation.fragment.NavHostFragment.findNavController(this@SetPinFragment)
+                                        .popBackStack(R.id.nav_home, false)
+                                    com.datagifting.app.util.OnboardingCoordinator.maybeOfferBiometric(requireActivity(), prefs)
+                                }
+                            }.show()
                     } else if (code == "current_pin_required") {
                         // An existing PIN may only be replaced after proving it. Prompt and retry.
                         promptCurrentPin(pin)

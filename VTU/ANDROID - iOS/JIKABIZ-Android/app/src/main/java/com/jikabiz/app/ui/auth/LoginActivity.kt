@@ -95,8 +95,9 @@ class LoginActivity : AppCompatActivity() {
 
     private fun setupBiometricButton() {
         val biometricEnabled = prefs.getBoolean(Constants.KEY_BIOMETRIC_ENABLED, false)
-        val loggedInBefore = prefs.getString(Constants.KEY_API_KEY).isNotEmpty()
-        if (!biometricEnabled || !loggedInBefore) return
+        val storedToken = prefs.getString(Constants.KEY_BIOMETRIC_SESSION_TOKEN)
+            .ifBlank { prefs.getString(Constants.KEY_API_KEY) }
+        if (!biometricEnabled || storedToken.isBlank()) return
 
         val biometricManager = BiometricManager.from(this)
         val canAuthenticate = biometricManager.canAuthenticate(
@@ -119,7 +120,7 @@ class LoginActivity : AppCompatActivity() {
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                navigateToMain()
+                completeBiometricLogin()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -169,13 +170,57 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
+    private fun completeBiometricLogin() {
+        val token = prefs.getString(Constants.KEY_BIOMETRIC_SESSION_TOKEN)
+            .ifBlank { prefs.getString(Constants.KEY_API_KEY) }
+        if (token.isBlank()) {
+            binding.root.showSnack("Please sign in with your password once to re-enable biometrics.")
+            return
+        }
+        binding.progressBar.show()
+        lifecycleScope.launch {
+            try {
+                prefs.saveString(Constants.KEY_API_KEY, token)
+                prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, true)
+                val resp = RetrofitClient.getService().getProfile(mapOf("api_key" to token))
+                val body = resp.body()
+                if (resp.isSuccessful && body?.get("status") == "success") {
+                    @Suppress("UNCHECKED_CAST")
+                    val data = body["data"] as? Map<String, Any> ?: emptyMap()
+                    prefs.saveLoginData(
+                        apiKey = token,
+                        username = data["username"] as? String ?: prefs.getString(Constants.KEY_BIOMETRIC_USERNAME),
+                        firstname = data["firstname"] as? String ?: "",
+                        lastname = data["lastname"] as? String ?: "",
+                        email = data["email"] as? String ?: "",
+                        phone = data["phone"] as? String ?: "",
+                        balance = data["balance"]?.toString()?.toDoubleOrNull() ?: 0.0,
+                        accountLevel = (data["account_level"] as? Number)?.toInt() ?: 1,
+                        pinSet = data["security_pin_set"] as? Boolean ?: false
+                    )
+                    com.jikabiz.app.util.OnboardingCoordinator.syncFlags(prefs, data)
+                    binding.progressBar.hide()
+                    registerFcmToken()
+                    navigateToMain()
+                } else {
+                    binding.progressBar.hide()
+                    prefs.saveString(Constants.KEY_API_KEY, "")
+                    prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, false)
+                    prefs.saveString(Constants.KEY_BIOMETRIC_SESSION_TOKEN, "")
+                    binding.btnBiometricLogin.visibility = View.GONE
+                    binding.root.showSnack("Your saved biometric session expired. Please sign in with your password.")
+                }
+            } catch (e: Exception) {
+                binding.progressBar.hide()
+                prefs.saveString(Constants.KEY_API_KEY, "")
+                prefs.saveBoolean(Constants.KEY_IS_LOGGED_IN, false)
+                binding.root.showSnack(e.message ?: "Unable to verify biometric session. Check your connection.")
+            }
+        }
+    }
+
     private fun navigateToMain() {
-        // Route through the security-question gate on every login (password or biometric) —
-        // LockActivity itself decides verify-vs-setup based on the server's has_quest state,
-        // then hands off to MainActivity once resolved.
-        startActivity(Intent(this, LockActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
+        startActivity(com.jikabiz.app.util.OnboardingCoordinator.nextActivityIntent(this, prefs))
         finish()
     }
 

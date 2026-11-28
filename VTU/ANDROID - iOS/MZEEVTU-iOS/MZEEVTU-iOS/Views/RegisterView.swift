@@ -327,7 +327,9 @@ struct RegisterView: View {
         UserDefaults.standard.set(uname.isEmpty ? username.lowercased() : uname, forKey: "saved_username")
         // A brand-new account has no PIN. Setting this false is what makes the app entry
         // point show the mandatory PIN screen instead of the dashboard.
-        AppNetworkService.shared.pinSet = false
+        AppNetworkService.shared.pinSet = bcBool(data["security_pin_set"])
+        OnboardingState.shared.syncFromPayload(data)
+        OnboardingState.shared.markBiometricPromptNeeded(true)
 
         if !key.isEmpty {
             dismiss()
@@ -407,6 +409,8 @@ struct RegisterView: View {
         AppNetworkService.shared.apiKey = key
         AppNetworkService.shared.pinSet = bcBool(data["security_pin_set"])
         AppNetworkService.shared.pinRequired = bcBool(data["pin_required"])
+        OnboardingState.shared.syncFromPayload(data)
+        OnboardingState.shared.markBiometricPromptNeeded(true)
         let uname = bcString(data["username"])
         if !uname.isEmpty {
             UserDefaults.standard.set(uname, forKey: "saved_username")

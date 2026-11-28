@@ -491,14 +491,26 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 			.catch(error => console.error('Sync error:', error));
 
 		document.addEventListener('DOMContentLoaded', () => {
-			if (window.PublicKeyCredential && !localStorage.getItem('biometric_registered')) {
-				// Check if they just logged in (Welcome back message)
-				const hasWelcome = document.body.innerText.includes('Welcome Back');
-				if (hasWelcome) {
+			if (!window.PublicKeyCredential || !window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return;
+			const params = new URLSearchParams(window.location.search);
+			const isOnboarding = params.get('onboarding') === '1';
+			if (!isOnboarding && localStorage.getItem('biometric_prompt_dismissed')) return;
+
+			window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+				.then(available => {
+					if (!available) return null;
+					return fetch('biometric-ajax.php?action=status', { credentials: 'same-origin' }).then(r => r.json());
+				})
+				.then(statusData => {
+					if (!statusData || statusData.status !== 'success') return;
+					if (statusData.registered) {
+						try { localStorage.setItem('biometric_registered', '1'); } catch (e) {}
+						return;
+					}
 					setTimeout(() => {
 						Swal.fire({
 							title: 'Enable Biometric Login?',
-							text: 'Login faster next time using your fingerprint or face recognition.',
+							text: 'Sign in faster and securely next time using your fingerprint or face recognition.',
 							icon: 'info',
 							showCancelButton: true,
 							confirmButtonText: 'Enable Now',
@@ -507,11 +519,13 @@ bc_app_topbar(array("title" => "Dashboard", "crumb" => "Home / Dashboard"));
 						}).then((result) => {
 							if (result.isConfirmed) {
 								registerBiometric();
+							} else {
+								try { localStorage.setItem('biometric_prompt_dismissed', '1'); } catch (e) {}
 							}
 						});
-					}, 2000);
-				}
-			}
+					}, isOnboarding ? 600 : 1500);
+				})
+				.catch(() => {});
 		});
 	</script>
 	<?php bc_app_foot(); ?>

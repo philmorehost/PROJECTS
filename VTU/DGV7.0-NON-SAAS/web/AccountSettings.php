@@ -462,5 +462,70 @@ bc_app_head("Account Settings | " . ($get_all_site_details["site_title"]));
       </div>
       </div>
     </section>
+
+    <div class="card shadow-sm border-0 p-4 rounded-4 mt-4" id="biometric-settings-card">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h5 class="fw-bold mb-1"><i class="bi bi-fingerprint me-2 text-primary"></i>Biometric / Passkey Login</h5>
+                <p class="small text-muted mb-0" id="biometric-status-text">Checking device biometric availability…</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" id="btn-enable-biometric" class="btn btn-primary rounded-3 fw-bold" style="display:none;">Enable Biometric Login</button>
+                <button type="button" id="btn-remove-biometric" class="btn btn-outline-danger rounded-3 fw-bold" style="display:none;">Remove Passkeys</button>
+            </div>
+        </div>
+    </div>
+    <script src="/asset/biometric-handler.js"></script>
+    <script>
+    (function(){
+        var statusEl = document.getElementById('biometric-status-text');
+        var enableBtn = document.getElementById('btn-enable-biometric');
+        var removeBtn = document.getElementById('btn-remove-biometric');
+        function refreshBioStatus() {
+            if (!window.PublicKeyCredential || !window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                if (statusEl) statusEl.textContent = 'This browser or device does not support platform biometrics.';
+                return;
+            }
+            window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function(avail){
+                if (!avail) {
+                    if (statusEl) statusEl.textContent = 'No fingerprint or face recognition sensor is available on this device.';
+                    return null;
+                }
+                return fetch('biometric-ajax.php?action=status', { credentials: 'same-origin' }).then(function(r){ return r.json(); });
+            }).then(function(d){
+                if (!d || d.status !== 'success') return;
+                if (d.registered) {
+                    if (statusEl) statusEl.innerHTML = '<span class="text-success fw-bold">Enabled</span> — You can sign in using fingerprint or face recognition.';
+                    if (enableBtn) { enableBtn.textContent = 'Add Another Passkey'; enableBtn.style.display = 'inline-block'; }
+                    if (removeBtn) removeBtn.style.display = 'inline-block';
+                } else {
+                    if (statusEl) statusEl.textContent = 'Not yet enabled on this account. Enable fingerprint or face sign-in for faster access.';
+                    if (enableBtn) { enableBtn.textContent = 'Enable Biometric Login'; enableBtn.style.display = 'inline-block'; }
+                    if (removeBtn) removeBtn.style.display = 'none';
+                }
+            }).catch(function(){});
+        }
+        if (enableBtn) {
+            enableBtn.addEventListener('click', async function(){
+                var ok = await registerBiometric();
+                if (ok) refreshBioStatus();
+            });
+        }
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function(){
+                fetch('biometric-ajax.php?action=remove', { method: 'POST', credentials: 'same-origin' })
+                    .then(function(r){ return r.json(); })
+                    .then(function(d){
+                        if (d && d.status === 'success') {
+                            try { localStorage.removeItem('biometric_registered'); } catch(e) {}
+                            if (window.Swal) Swal.fire('Removed', 'Biometric passkeys removed.', 'success');
+                            refreshBioStatus();
+                        }
+                    });
+            });
+        }
+        document.addEventListener('DOMContentLoaded', refreshBioStatus);
+    })();
+    </script>
 	
 	<?php bc_app_foot(); ?>

@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isCurrentlyOnline = true
     private var kycGateLocked = false
+    private var kycPollJob: kotlinx.coroutines.Job? = null
 
     private val complianceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -129,6 +130,47 @@ class MainActivity : AppCompatActivity() {
         // Resume an IMMEDIATE update the user interrupted, so the old code cannot keep running.
         AppUpdateChecker.resumePendingImmediateUpdate(this)
         refreshComplianceGate()
+        startKycPollingIfNeeded()
+        runOnboardingChecks()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        kycPollJob?.cancel()
+        kycPollJob = null
+    }
+
+    private fun startKycPollingIfNeeded() {
+        kycPollJob?.cancel()
+        if (!kycGateLocked) return
+        kycPollJob = lifecycleScope.launch {
+            while (kycGateLocked) {
+                kotlinx.coroutines.delay(6000)
+                refreshComplianceGate()
+            }
+        }
+    }
+
+    private fun runOnboardingChecks() {
+        if (com.datagifting.app.util.OnboardingCoordinator.needsTotp(prefs)) {
+            startActivity(Intent(this, com.datagifting.app.ui.security.TotpSetupActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+            finish()
+            return
+        }
+        if (kycGateLocked) return
+        if (com.datagifting.app.util.OnboardingCoordinator.needsPin(prefs)) {
+            if (::navController.isInitialized && navController.currentDestination?.id != R.id.nav_set_pin) {
+                runCatching { navController.navigate(R.id.nav_set_pin) }
+            }
+            return
+        }
+        if (com.datagifting.app.util.OnboardingCoordinator.needsSecurityQuest(prefs)) {
+            startActivity(Intent(this, com.datagifting.app.ui.security.LockActivity::class.java))
+            return
+        }
+        com.datagifting.app.util.OnboardingCoordinator.maybeOfferBiometric(this, prefs)
     }
 
     fun refreshComplianceGate() {
@@ -139,10 +181,25 @@ class MainActivity : AppCompatActivity() {
                 val resp = RetrofitClient.getService().kycAction(mapOf("api_key" to apiKey, "action" to "status"))
                 val body = resp.body()
                 if (resp.isSuccessful && body?.get("status") == "success") {
+                    val wasLocked = kycGateLocked
+                    com.datagifting.app.util.OnboardingCoordinator.syncFlags(prefs, body)
                     val locked = (body["kyc_gate_locked"] as? Boolean)
                         ?: (((body["kyc_enforced"] as? Boolean) == true) && ((body["kyc_status"] as? Number)?.toInt() != 2))
                     prefs.saveBoolean("kyc_gate_locked", locked)
                     applyKycGateLock(locked)
+                    if (locked) {
+                        if (kycPollJob == null || kycPollJob?.isActive != true) startKycPollingIfNeeded()
+                    } else {
+                        kycPollJob?.cancel()
+                        kycPollJob = null
+                        if (wasLocked) {
+                            Snackbar.make(binding.root, "Identity verified! Continuing setup…", Snackbar.LENGTH_SHORT).show()
+                            if (::navController.isInitialized && navController.currentDestination?.id == R.id.nav_kyc) {
+                                navController.popBackStack(R.id.nav_home, false)
+                            }
+                            runOnboardingChecks()
+                        }
+                    }
                 }
             } catch (_: Exception) { }
         }
@@ -153,6 +210,10 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.visibility = if (locked) View.GONE else View.VISIBLE
         if (locked && ::navController.isInitialized && navController.currentDestination?.id != R.id.nav_kyc) {
             runCatching { navController.navigate(R.id.nav_kyc) }
+        } else if (!locked && ::navController.isInitialized && navController.currentDestination?.id == R.id.nav_kyc && prefs.getBoolean("kyc_just_unlocked", false)) {
+            prefs.saveBoolean("kyc_just_unlocked", false)
+            navController.popBackStack(R.id.nav_home, false)
+            runOnboardingChecks()
         }
     }
 

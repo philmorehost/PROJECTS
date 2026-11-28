@@ -94,6 +94,7 @@ class LockActivity : AppCompatActivity() {
                     return@launch
                 }
                 if (body["enabled"] == false) {
+                    prefs.saveBoolean(Constants.KEY_SECURITY_QUEST_REQUIRED, false)
                     runOnUiThread { setLoading(false); markVerifiedAndFinish() }
                     return@launch
                 }
@@ -266,6 +267,7 @@ class LockActivity : AppCompatActivity() {
     }
 
     private fun markVerifiedAndFinish() {
+        prefs.saveBoolean(Constants.KEY_SECURITY_QUEST_SET, true)
         prefs.saveLong(Constants.KEY_SECURITY_VERIFIED_AT, System.currentTimeMillis())
         // LockActivity is launched from the Application context (DGApp), which requires
         // FLAG_ACTIVITY_NEW_TASK and can land it in a separate task from MainActivity. Relying on

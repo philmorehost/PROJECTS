@@ -14,7 +14,10 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
 		if(!empty(trim($redirecturl)) && file_exists("..".$redirect_path)){
 			header("Location: ".$redirecturl);
 		}else{
-			header("Location: /web/Dashboard.php");
+			$next_url = function_exists('bc_web_next_onboarding_url')
+				? bc_web_next_onboarding_url($connection_server, $get_logged_user_details, (int)($select_vendor_table['id'] ?? 0), $select_vendor_table)
+				: '/web/Dashboard.php';
+			header("Location: " . $next_url);
 		}
         exit();
     }
@@ -126,7 +129,10 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                 // personal-app redirect apply. It can never run before authentication.
                 bc_fintech_web_login_flow($pending_row, $pending_vendor_id);
 
-                header("Location: Dashboard.php");
+                $next_url = function_exists('bc_web_next_onboarding_url')
+                    ? bc_web_next_onboarding_url($connection_server, $pending_row, (int)$pending_vendor_id)
+                    : 'Dashboard.php';
+                header("Location: " . $next_url);
                 exit();
             }
         }
@@ -181,7 +187,10 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                     if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp(); // §33 session epoch
                     // DGV7: same post-authentication app routing as the password path.
                     bc_fintech_web_login_flow($user_detail, (int)$vendor_id);
-                    header("Location: Dashboard.php");
+                    $next_url = function_exists('bc_web_next_onboarding_url')
+                        ? bc_web_next_onboarding_url($connection_server, $user_detail, (int)$vendor_id)
+                        : 'Dashboard.php';
+                    header("Location: " . $next_url);
                     exit();
                 } else {
                     $_SESSION["product_purchase_response"] = "Account is not active.";
