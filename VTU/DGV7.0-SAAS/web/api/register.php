@@ -162,6 +162,7 @@ if (($get_vendor["reg_otp_enabled"] ?? 1) == 1) {
     }
 }
 
+if (function_exists('bc_ensure_security_tables')) { bc_ensure_security_tables(); }
 $has_country_col = function_exists('bc_ensure_user_country_column') && bc_ensure_user_country_column($connection_server);
 $country_col_sql = $has_country_col ? ", country" : "";
 $country_val_sql = $has_country_col ? ", '$country'" : "";

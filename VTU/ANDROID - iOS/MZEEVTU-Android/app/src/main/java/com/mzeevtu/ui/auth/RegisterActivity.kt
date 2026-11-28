@@ -162,11 +162,19 @@ class RegisterActivity : AppCompatActivity() {
                 is LoginOutcome.OtpRequired -> {
                     // Login OTP is on for this vendor: send the user to the sign-in screen
                     // rather than guessing a session state here.
-                    snack("Account created. Please sign in with the code we email you.")
+                    android.widget.Toast.makeText(
+                        this@RegisterActivity,
+                        "Account created. Please sign in with the code we email you.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                     finish()
                 }
                 is LoginOutcome.Failure -> {
-                    snack("Registered! Please login.")
+                    android.widget.Toast.makeText(
+                        this@RegisterActivity,
+                        "Registered! Please login.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                     finish()
                 }
             }
