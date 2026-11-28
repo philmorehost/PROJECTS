@@ -88,10 +88,13 @@ if (mysqli_num_rows($check_user) == 1) {
                 $kyc_gate_locked = !$is_kyc_compliant && $kyc_enforced;
             }
 
+            $onboarding_extra = function_exists('bc_app_onboarding_fields')
+                ? bc_app_onboarding_fields($connection_server, $user_detail, (int)$vendor_id, $get_vendor)
+                : [];
             $bc_login_payload = [
                 "status" => "success",
                 "message" => "Login successful",
-                "data" => [
+                "data" => array_merge([
                     "username" => $user_detail['username'],
                     "firstname" => $user_detail['firstname'],
                     "lastname" => $user_detail['lastname'],
@@ -112,7 +115,7 @@ if (mysqli_num_rows($check_user) == 1) {
                     "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
                     "totp_enabled" => (($user_detail['two_factor_type'] ?? 'none') === 'totp') ? 1 : 0,
                     "ai_status" => (int)$get_vendor['ai_status']
-                ]
+                ], $onboarding_extra)
             ];
             // Revocable first-party app session; api_key stays for existing app builds but is
             // no longer the app credential of record.

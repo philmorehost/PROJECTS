@@ -52,7 +52,16 @@ class SetPinFragment : Fragment(R.layout.fragment_set_pin) {
                         MaterialAlertDialogBuilder(requireContext())
                             .setTitle("\u2705 PIN Set Successfully")
                             .setMessage("Your transaction PIN has been updated.")
-                            .setPositiveButton("OK") { _, _ -> requireActivity().onBackPressedDispatcher.onBackPressed() }.show()
+                            .setCancelable(false)
+                            .setPositiveButton("Continue") { _, _ ->
+                                if (com.mzeevtu.util.OnboardingCoordinator.needsSecurityQuest(prefs)) {
+                                    startActivity(android.content.Intent(requireContext(), LockActivity::class.java))
+                                } else {
+                                    androidx.navigation.fragment.NavHostFragment.findNavController(this@SetPinFragment)
+                                        .popBackStack(R.id.nav_home, false)
+                                    com.mzeevtu.util.OnboardingCoordinator.maybeOfferBiometric(requireActivity(), prefs)
+                                }
+                            }.show()
                     } else snack(msg)
                 }
             } catch (e: Exception) {

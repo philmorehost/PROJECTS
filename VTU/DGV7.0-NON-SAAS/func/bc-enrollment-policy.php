@@ -26,8 +26,10 @@ function bc_enrollment_reason($row,$role,$refresh=false) {
 }
 function bc_enrollment_url($role) {return $role==='vendor'?'/bc-admin/SecuritySetup.php':'/web/SecuritySetup.php';}
 function bc_enrollment_api_guard($row,$role='user') {
-    if(basename($_SERVER['SCRIPT_NAME']??'')==='logout.php')return;
+    $script=basename($_SERVER['SCRIPT_NAME']??'');
+    if($script==='logout.php')return;
     $reason=bc_enrollment_reason($row,$role);
+    if($script==='totp-setup.php' && $reason==='AUTHENTICATOR_SETUP_REQUIRED')return;
     if($reason!=='') {
         http_response_code(403);header('Content-Type: application/json');
         echo json_encode(['status'=>'error','code'=>$reason,'message'=>$reason==='PASSWORD_CHANGE_REQUIRED'?'Change your password and security PIN on the website before continuing.':'Complete Google Authenticator setup on the website before continuing.','setup_url'=>bc_enrollment_url($role)]);exit;
@@ -110,7 +112,8 @@ function bc_enrollment_setup_page($role,$actor) {
         } else $error='Complete the required security step first.';
     }
     $reason=bc_enrollment_reason($actor,$role);
-    if($reason===''){header('Location: '.($role==='vendor'?'/bc-admin/Dashboard.php':'/web/Dashboard.php'));exit;}
+    $next_url=$role==='vendor'?'/bc-admin/Dashboard.php':(function_exists('bc_web_next_onboarding_url')?bc_web_next_onboarding_url($connection_server,$actor,(int)($actor['vendor_id']??0)):'/web/Dashboard.php');
+    if($reason===''){header('Location: '.$next_url);exit;}
     header('Cache-Control: no-store');
     $e=function($s){return htmlspecialchars((string)$s,ENT_QUOTES,'UTF-8');};
     echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Required security setup</title><style>body{font:16px system-ui;background:#f1f5f9;color:#172033;margin:0;padding:24px}main{max-width:520px;margin:5vh auto;background:white;padding:28px;border-radius:16px}input,button{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 18px}button{background:#164cd6;color:white;border:0;border-radius:8px}code{overflow-wrap:anywhere}svg{max-width:100%;height:auto}.error{color:#a00}</style><main><h1>Complete security setup</h1><p>Other pages and actions are locked until this required step is completed.</p>';
@@ -121,7 +124,7 @@ function bc_enrollment_setup_page($role,$actor) {
     } else {
         echo '</form>';
         bc_totp_setup_widget();
-        echo '<form>';
+        echo '<script>document.addEventListener("DOMContentLoaded",function(){var a=document.querySelector(".bc-totp-setup [data-continue]");if(a)a.setAttribute("href",'.json_encode($next_url).');});</script><form>';
     }
     echo '</form><a href="'.($role==='vendor'?'/admin-logout.php':'/logout.php').'">Log out</a></main></html>';exit;
 }

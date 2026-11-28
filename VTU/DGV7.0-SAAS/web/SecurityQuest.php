@@ -43,12 +43,10 @@ require_once __DIR__ . '/../func/bc-secure-session.php';
                 if($answer == $get_logged_user_details["security_answer"]){
                     setcookie("security_answer", $answer, time() + (6 * 60 * 60));
                     $_SESSION["product_purchase_response"] = "Hurray!!! Security Verification Successful";
-                    // Redirect to PIN setup for users who haven't set a PIN yet
-                    if (empty($get_logged_user_details["security_pin"]) && empty($get_logged_user_details["transaction_pin"])) {
-                        header("Location: SecurityPIN.php");
-                    } else {
-                        header("Location: Dashboard.php");
-                    }
+                    $next_url = function_exists('bc_web_next_onboarding_url')
+                        ? bc_web_next_onboarding_url($connection_server, $get_logged_user_details, (int)$get_logged_user_details["vendor_id"])
+                        : '/web/Dashboard.php';
+                    header("Location: " . $next_url);
                     exit();
                 }else{
                     //Invalid Security Answer, Try Again

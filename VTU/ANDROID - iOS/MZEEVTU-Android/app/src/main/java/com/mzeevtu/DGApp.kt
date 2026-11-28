@@ -30,6 +30,12 @@ class DGApp : Application(), DefaultLifecycleObserver {
     override fun onStart(owner: LifecycleOwner) {
         val prefs = PreferenceManager(this)
         if (!prefs.isLoggedIn()) return
+        if (com.mzeevtu.util.OnboardingCoordinator.needsTotp(prefs) ||
+            com.mzeevtu.util.OnboardingCoordinator.isKycLocked(prefs) ||
+            com.mzeevtu.util.OnboardingCoordinator.needsPin(prefs) ||
+            !prefs.getBoolean(Constants.KEY_SECURITY_QUEST_REQUIRED, true)) {
+            return
+        }
 
         val lastVerified = prefs.getLong(Constants.KEY_SECURITY_VERIFIED_AT, 0L)
         val timeoutMs = Constants.LOCK_TIMEOUT_MINUTES * 60_000L

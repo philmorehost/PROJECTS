@@ -97,13 +97,17 @@ async function registerBiometric() {
 
         const verificationResult = await verificationResponse.json();
         if (verificationResult.status === 'success') {
+            try { localStorage.setItem('biometric_registered', '1'); } catch (e) {}
             Swal.fire('Success', 'Biometric registered successfully', 'success');
+            return true;
         } else {
             Swal.fire('Error', verificationResult.message || 'Registration failed', 'error');
+            return false;
         }
     } catch (error) {
         console.error('Biometric registration error:', error);
         Swal.fire('Error', 'An unexpected error occurred during biometric registration', 'error');
+        return false;
     }
 }
 
@@ -160,7 +164,8 @@ async function loginWithBiometric() {
 
         const verificationResult = await verificationResponse.json();
         if (verificationResult.status === 'success') {
-            window.location.href = 'Dashboard.php';
+            try { localStorage.setItem('biometric_registered', '1'); } catch (e) {}
+            window.location.href = verificationResult.redirect || 'Dashboard.php';
         } else {
             Swal.fire('Error', verificationResult.message || 'Authentication failed', 'error');
         }

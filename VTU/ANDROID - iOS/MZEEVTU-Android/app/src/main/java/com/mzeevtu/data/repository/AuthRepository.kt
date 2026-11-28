@@ -81,7 +81,14 @@ class AuthRepository(private val context: Context) {
 
             val body = response.body() ?: return RegisterOutcome.Failure("Empty response")
             when ((body["status"] as? String ?: "error").lowercase()) {
-                "success" -> RegisterOutcome.Success(body["message"] as? String ?: "Registration successful")
+                "success" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val data = body["data"] as? Map<String, Any>
+                    if (data != null && !(data["app_token"] as? String).isNullOrBlank()) {
+                        persistLogin(data)
+                    }
+                    RegisterOutcome.Success(body["message"] as? String ?: "Registration successful")
+                }
                 "otp_required" -> RegisterOutcome.OtpRequired(
                     token = body["registration_token"] as? String ?: "",
                     message = body["message"] as? String ?: "Enter the verification code sent to your email."
@@ -101,6 +108,11 @@ class AuthRepository(private val context: Context) {
 
             val body = response.body() ?: return ApiResult.Error("Empty response")
             if ((body["status"] as? String ?: "error") == "success") {
+                @Suppress("UNCHECKED_CAST")
+                val data = body["data"] as? Map<String, Any>
+                if (data != null && !(data["app_token"] as? String).isNullOrBlank()) {
+                    persistLogin(data)
+                }
                 ApiResult.Success(body["message"] as? String ?: "Registration successful")
             } else {
                 ApiResult.Error(body["message"] as? String ?: "Verification failed")
@@ -143,7 +155,12 @@ class AuthRepository(private val context: Context) {
             accountLevel = (data["account_level"] as? Double)?.toInt() ?: 1,
             pinSet = data["security_pin_set"] as? Boolean ?: false
         )
+        com.mzeevtu.util.OnboardingCoordinator.syncFlags(prefs, data)
+        if (prefs.getBoolean(com.mzeevtu.util.Constants.KEY_BIOMETRIC_ENABLED, false)) {
+            prefs.saveString(com.mzeevtu.util.Constants.KEY_BIOMETRIC_SESSION_TOKEN, session)
+            prefs.saveString(com.mzeevtu.util.Constants.KEY_BIOMETRIC_USERNAME, data["username"] as? String ?: "")
+        }
     }
 
-    fun logout() = prefs.clear()
+    fun logout() = prefs.signOutPreservingBiometric()
 }

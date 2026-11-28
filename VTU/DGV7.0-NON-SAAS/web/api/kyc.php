@@ -71,7 +71,10 @@ $enabled_checks = bc_kyc_enabled_checks($connection_server, $vendor_id);
         $ai_dec = function_exists('bc_kyc_ai_get_decision') ? bc_kyc_ai_get_decision($connection_server, (int)$user['id']) : null;
         $notifs = bc_compliance_fetch_user_notifications($connection_server, (int)$vendor_id, (string)$user['username'], 10);
 
-        echo json_encode([
+        $onboarding_extra = function_exists('bc_app_onboarding_fields')
+            ? bc_app_onboarding_fields($connection_server, $user, (int)$vendor_id, $select_vendor_table)
+            : [];
+        echo json_encode(array_merge([
             "status"            => "success",
             "kyc_status"        => (int)$user['kyc_status'],
             "kyc_name"          => $kyc_names[$user['kyc_status']] ?? "Unknown",
@@ -99,7 +102,7 @@ $enabled_checks = bc_kyc_enabled_checks($connection_server, $vendor_id);
             "ai_rating"         => isset($ai_dec['decision']['overall_rating']) ? (int)$ai_dec['decision']['overall_rating'] : null,
             "ai_grade"          => $ai_dec['decision']['overall_grade'] ?? null,
             "notifications"     => $notifs,
-        ]);
+        ], $onboarding_extra));
         exit;
     }
 

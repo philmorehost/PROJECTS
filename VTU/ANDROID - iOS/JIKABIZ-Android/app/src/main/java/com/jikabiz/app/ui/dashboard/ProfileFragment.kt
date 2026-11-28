@@ -87,6 +87,12 @@ class ProfileFragment : Fragment(R.layout.fragment_profile) {
             binding.switchBiometric.isChecked = prefs.getBoolean(Constants.KEY_BIOMETRIC_ENABLED, false)
             binding.switchBiometric.setOnCheckedChangeListener { _, isChecked ->
                 prefs.saveBoolean(Constants.KEY_BIOMETRIC_ENABLED, isChecked)
+                if (isChecked) {
+                    prefs.saveString(Constants.KEY_BIOMETRIC_SESSION_TOKEN, prefs.getApiKey())
+                    prefs.saveString(Constants.KEY_BIOMETRIC_USERNAME, prefs.getString(Constants.KEY_USERNAME))
+                } else {
+                    prefs.saveString(Constants.KEY_BIOMETRIC_SESSION_TOKEN, "")
+                }
                 val msg = if (isChecked) "Biometric login enabled" else "Biometric login disabled"
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
             }
@@ -115,7 +121,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile) {
         }
 
         binding.btnLogout.setOnClickListener {
-            prefs.clear()
+            prefs.signOutPreservingBiometric()
             startActivity(Intent(requireContext(), LoginActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             })

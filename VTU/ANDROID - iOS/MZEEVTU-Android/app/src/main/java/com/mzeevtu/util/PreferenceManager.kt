@@ -55,6 +55,35 @@ class PreferenceManager(context: Context) {
 
     fun clear() = prefs.edit().clear().apply()
 
+    fun signOutPreservingBiometric() {
+        val bioEnabled = getBoolean(Constants.KEY_BIOMETRIC_ENABLED, false)
+        val bioToken = if (bioEnabled) getString(Constants.KEY_BIOMETRIC_SESSION_TOKEN).ifBlank { getApiKey() } else ""
+        val bioUser = if (bioEnabled) getString(Constants.KEY_BIOMETRIC_USERNAME).ifBlank { getString(Constants.KEY_USERNAME) } else ""
+        val darkMode = getBoolean(Constants.KEY_DARK_MODE, false)
+        val siteTitle = getString(Constants.KEY_SITE_TITLE)
+        val logoUrl = getString(Constants.KEY_LOGO_URL)
+        val supEmail = getString(Constants.KEY_SUPPORT_EMAIL)
+        val supWa = getString(Constants.KEY_SUPPORT_WHATSAPP)
+        val regOn = getBoolean(Constants.KEY_REGISTRATION_ENABLED, true)
+        val resetOn = getBoolean(Constants.KEY_PASSWORD_RESET_ENABLED, true)
+        val promptShown = getBoolean(Constants.KEY_BIOMETRIC_PROMPT_SHOWN, false)
+        prefs.edit().clear().apply {
+            putBoolean(Constants.KEY_DARK_MODE, darkMode)
+            putBoolean(Constants.KEY_REGISTRATION_ENABLED, regOn)
+            putBoolean(Constants.KEY_PASSWORD_RESET_ENABLED, resetOn)
+            putBoolean(Constants.KEY_BIOMETRIC_PROMPT_SHOWN, promptShown)
+            if (siteTitle.isNotEmpty()) putString(Constants.KEY_SITE_TITLE, siteTitle)
+            if (logoUrl.isNotEmpty()) putString(Constants.KEY_LOGO_URL, logoUrl)
+            if (supEmail.isNotEmpty()) putString(Constants.KEY_SUPPORT_EMAIL, supEmail)
+            if (supWa.isNotEmpty()) putString(Constants.KEY_SUPPORT_WHATSAPP, supWa)
+            if (bioEnabled && bioToken.isNotBlank()) {
+                putBoolean(Constants.KEY_BIOMETRIC_ENABLED, true)
+                putString(Constants.KEY_BIOMETRIC_SESSION_TOKEN, bioToken)
+                putString(Constants.KEY_BIOMETRIC_USERNAME, bioUser)
+            }
+        }.apply()
+    }
+
     fun saveEnabledServices(services: Set<String>) =
         prefs.edit().putStringSet(Constants.KEY_ENABLED_SERVICES, services).apply()
 

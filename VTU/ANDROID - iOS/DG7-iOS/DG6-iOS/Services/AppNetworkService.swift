@@ -32,6 +32,58 @@ class AppNetworkService {
     }
 
 
+    private func handleRequiredSetup(_ data: Data) -> Bool {
+        return inspectRequiredSetup(data)
+    }
+
+    var biometricEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "mobile_biometric_lock") }
+        set { UserDefaults.standard.set(newValue, forKey: "mobile_biometric_lock") }
+    }
+
+    var biometricUsername: String? {
+        get { UserDefaults.standard.string(forKey: "biometric_username") }
+        set {
+            if let v = newValue, !v.isEmpty { UserDefaults.standard.set(v, forKey: "biometric_username") }
+            else { UserDefaults.standard.removeObject(forKey: "biometric_username") }
+        }
+    }
+
+    var biometricSessionToken: String? {
+        get {
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "platform.app-session.v2", kSecAttrAccount as String: "biometric_bearer",
+                kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+            var result: CFTypeRef?
+            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+                  let data = result as? Data else { return nil }
+            return String(data: data, encoding: .utf8)
+        }
+        set {
+            let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "platform.app-session.v2", kSecAttrAccount as String: "biometric_bearer"]
+            SecItemDelete(query as CFDictionary)
+            if let token = newValue, !token.isEmpty, let data = token.data(using: .utf8) {
+                var item = query
+                item[kSecValueData as String] = data
+                item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+                _ = SecItemAdd(item as CFDictionary, nil)
+            }
+        }
+    }
+
+    func signOutPreservingBiometric() {
+        if biometricEnabled, let active = apiKey, !active.isEmpty {
+            biometricSessionToken = active
+        }
+        apiKey = nil
+        pinSet = false
+        Task { @MainActor in
+            OnboardingState.shared.reset()
+            ComplianceGateState.shared.reset()
+        }
+    }
+
     var apiKey: String? {
         get {
             UserDefaults.standard.removeObject(forKey: "user_api_key")
@@ -351,6 +403,7 @@ final class BrandTheme: ObservableObject {
     }
 }
 
+// No redirects: never forward captured identity evidence or bearer credentials to another URL.
 @MainActor
 final class ComplianceGateState: ObservableObject {
     static let shared = ComplianceGateState()
@@ -403,6 +456,12 @@ final class ComplianceGateState: ObservableObject {
                 self.unreadNotifications = (notifs["unread"] as? Int) ?? 0
             }
             self.locked = gateLocked
+            OnboardingState.shared.kycStatus = st
+            UserDefaults.standard.set(st, forKey: "onb_kyc_status")
+            if !gateLocked && st == 2 {
+                OnboardingState.shared.kycRequiredOnRegister = false
+                UserDefaults.standard.set(false, forKey: "onb_kyc_reg")
+            }
         }
     }
 }
@@ -474,7 +533,8 @@ extension AppNetworkService {
                 fail("Submission result is uncertain. Check your KYC status before retrying.")
                 return
             }
-            if self.inspectRequiredSetup(data) {
+            let setupRequired = self.inspectRequiredSetup(data)
+            if setupRequired {
                 fail("Complete required security setup on the website, then sign in again.")
                 return
             }
@@ -495,7 +555,6 @@ extension AppNetworkService {
     }
 }
 
-// No redirects: never forward captured identity evidence or bearer credentials to another URL.
 private final class KYCEvidenceRedirectGuard: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
@@ -523,7 +582,8 @@ extension AppNetworkService {
         session.dataTask(with: request) { data, response, error in
             defer { session.finishTasksAndInvalidate() }
             guard error == nil, let data = data else { fail("Submission result is uncertain. Check your KYC status before retrying. Your captures were retained in this screen."); return }
-            if self.inspectRequiredSetup(data) { fail("Complete required security setup on the website, then sign in again."); return }
+            let setupRequired = self.inspectRequiredSetup(data)
+            if setupRequired { fail("Complete required security setup on the website, then sign in again."); return }
             guard let http = response as? HTTPURLResponse,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { fail("Could not confirm the server response. Check your KYC status before retrying."); return }
             guard (200..<300).contains(http.statusCode), json["status"] as? String == "success" else { fail(json["desc"] as? String ?? json["message"] as? String ?? "Submission was refused. Sign in again if your session has expired."); return }
@@ -531,5 +591,84 @@ extension AppNetworkService {
             guard (photo == nil || accepted.contains("selfie")), (video == nil || accepted.contains("liveliness_video")) else { fail("The server did not confirm every capture. Check your KYC status; do not assume all files were saved. The backend may need updating."); return }
             DispatchQueue.main.async { completion(.success(json["desc"] as? String ?? "Captures submitted for review. This is not approval.")) }
         }.resume()
+    }
+}
+
+@MainActor
+final class OnboardingState: ObservableObject {
+    static let shared = OnboardingState()
+    @Published var securityQuestRequired: Bool = UserDefaults.standard.bool(forKey: "onb_sq_required")
+    @Published var securityQuestSet: Bool = UserDefaults.standard.object(forKey: "onb_sq_set") as? Bool ?? true
+    @Published var totpRequired: Bool = UserDefaults.standard.bool(forKey: "onb_totp_required")
+    @Published var totpSet: Bool = UserDefaults.standard.object(forKey: "onb_totp_set") as? Bool ?? true
+    @Published var kycRequiredOnRegister: Bool = UserDefaults.standard.bool(forKey: "onb_kyc_reg")
+    @Published var kycStatus: Int = UserDefaults.standard.object(forKey: "onb_kyc_status") as? Int ?? 2
+    @Published var biometricPromptNeeded: Bool = UserDefaults.standard.bool(forKey: "onb_bio_prompt")
+
+    var needsSecurityQuest: Bool { securityQuestRequired && !securityQuestSet }
+    var needsTotp: Bool { totpRequired && !totpSet }
+    var needsKyc: Bool { ComplianceGateState.shared.locked || (kycRequiredOnRegister && kycStatus != 2) }
+
+    func syncFromPayload(_ data: [String: Any]) {
+        func boolVal(_ key: String, fallback: Bool) -> Bool {
+            if let b = data[key] as? Bool { return b }
+            if let n = data[key] as? NSNumber { return n.intValue != 0 }
+            if let s = data[key] as? String { return s == "1" || s.lowercased() == "true" }
+            return fallback
+        }
+        if data["security_pin_set"] != nil { AppNetworkService.shared.pinSet = boolVal("security_pin_set", fallback: AppNetworkService.shared.pinSet) }
+        if data["pin_required"] != nil { AppNetworkService.shared.pinRequired = boolVal("pin_required", fallback: AppNetworkService.shared.pinRequired) }
+        if data["security_quest_required"] != nil {
+            let v = boolVal("security_quest_required", fallback: false)
+            securityQuestRequired = v; UserDefaults.standard.set(v, forKey: "onb_sq_required")
+        }
+        if data["security_quest_set"] != nil {
+            let v = boolVal("security_quest_set", fallback: true)
+            securityQuestSet = v; UserDefaults.standard.set(v, forKey: "onb_sq_set")
+        }
+        if data["totp_required"] != nil {
+            let v = boolVal("totp_required", fallback: false)
+            totpRequired = v; UserDefaults.standard.set(v, forKey: "onb_totp_required")
+        }
+        if data["totp_set"] != nil {
+            let v = boolVal("totp_set", fallback: true)
+            totpSet = v; UserDefaults.standard.set(v, forKey: "onb_totp_set")
+        }
+        if data["kyc_required_on_register"] != nil {
+            let v = boolVal("kyc_required_on_register", fallback: false)
+            kycRequiredOnRegister = v; UserDefaults.standard.set(v, forKey: "onb_kyc_reg")
+        }
+        if let st = (data["kyc_status"] as? Int) ?? Int("\(data["kyc_status"] ?? "")") {
+            kycStatus = st; UserDefaults.standard.set(st, forKey: "onb_kyc_status")
+            ComplianceGateState.shared.kycStatus = st
+        }
+        let enforced = boolVal("kyc_enforced", fallback: false)
+        let gateLocked = data["kyc_gate_locked"] != nil ? boolVal("kyc_gate_locked", fallback: false) : (enforced && kycStatus != 2)
+        ComplianceGateState.shared.locked = gateLocked
+    }
+
+    func markSecurityQuestDone() {
+        securityQuestSet = true
+        UserDefaults.standard.set(true, forKey: "onb_sq_set")
+    }
+
+    func markTotpDone() {
+        totpSet = true
+        UserDefaults.standard.set(true, forKey: "onb_totp_set")
+    }
+
+    func markBiometricPromptNeeded(_ needed: Bool) {
+        biometricPromptNeeded = needed
+        UserDefaults.standard.set(needed, forKey: "onb_bio_prompt")
+    }
+
+    func reset() {
+        securityQuestRequired = false; UserDefaults.standard.removeObject(forKey: "onb_sq_required")
+        securityQuestSet = true; UserDefaults.standard.removeObject(forKey: "onb_sq_set")
+        totpRequired = false; UserDefaults.standard.removeObject(forKey: "onb_totp_required")
+        totpSet = true; UserDefaults.standard.removeObject(forKey: "onb_totp_set")
+        kycRequiredOnRegister = false; UserDefaults.standard.removeObject(forKey: "onb_kyc_reg")
+        kycStatus = 2; UserDefaults.standard.removeObject(forKey: "onb_kyc_status")
+        biometricPromptNeeded = false; UserDefaults.standard.removeObject(forKey: "onb_bio_prompt")
     }
 }

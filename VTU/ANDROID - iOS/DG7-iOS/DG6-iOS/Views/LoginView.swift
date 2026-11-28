@@ -1,4 +1,5 @@
 import SwiftUI
+import LocalAuthentication
 @MainActor
 
 struct LoginView: View {
@@ -13,6 +14,8 @@ struct LoginView: View {
     @State private var passwordResetEnabled = true
     @State private var challenge: String?
     @State private var otp = ""
+    @State private var canBiometricSignIn = false
+    @State private var biometricPrompted = false
 
     var onLoginSuccess: () -> Void
 
@@ -84,6 +87,20 @@ struct LoginView: View {
                 .padding().background(brandTheme.primary).foregroundColor(brandTheme.onPrimary).cornerRadius(12).padding(.horizontal)
                 .disabled(isLoading || email.isEmpty || password.isEmpty)
 
+                if canBiometricSignIn {
+                    Button(action: biometricSignIn) {
+                        Label("Sign in with Face ID / Touch ID", systemImage: "faceid")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .foregroundColor(brandTheme.ink)
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                    .disabled(isLoading)
+                }
+
                 if registrationEnabled {
                     Button("Create an account") { showRegister = true }
                         .font(.subheadline)
@@ -96,7 +113,10 @@ struct LoginView: View {
             Spacer()
         }
         .padding()
-        .onAppear(perform: loadSiteFlags)
+        .onAppear {
+            loadSiteFlags()
+            checkBiometricAvailability()
+        }
         .sheet(isPresented: $showRegister) {
             // Registering signs the user in, so hand control back to the app entry point, which
             // routes a PIN-less account to PinSetupView (the web's SecurityPIN.php step).
@@ -178,11 +198,86 @@ struct LoginView: View {
             AppNetworkService.shared.pinSet = data.security_pin_set ?? false
             AppNetworkService.shared.pinRequired = data.pin_required ?? false
             UserDefaults.standard.set(data.username, forKey: "saved_username")
+            var payload: [String: Any] = [
+                "security_pin_set": data.security_pin_set ?? false,
+                "pin_required": data.pin_required ?? false
+            ]
+            if let v = data.kyc_status { payload["kyc_status"] = v }
+            if let v = data.kyc_enforced { payload["kyc_enforced"] = v }
+            if let v = data.kyc_gate_locked { payload["kyc_gate_locked"] = v }
+            if let v = data.kyc_required_on_register { payload["kyc_required_on_register"] = v }
+            if let v = data.security_quest_required { payload["security_quest_required"] = v }
+            if let v = data.security_quest_set { payload["security_quest_set"] = v }
+            if let v = data.totp_required { payload["totp_required"] = v }
+            if let v = data.totp_set { payload["totp_set"] = v }
+            OnboardingState.shared.syncFromPayload(payload)
+            if AppNetworkService.shared.biometricEnabled {
+                AppNetworkService.shared.biometricSessionToken = session
+                AppNetworkService.shared.biometricUsername = data.username
+            }
             challenge = nil
             otp = ""
             onLoginSuccess()
         } else {
             errorMessage = response.message ?? "Login failed"
+        }
+    }
+
+    private func checkBiometricAvailability() {
+        guard AppNetworkService.shared.biometricEnabled,
+              let token = AppNetworkService.shared.biometricSessionToken, !token.isEmpty else {
+            canBiometricSignIn = false
+            return
+        }
+        let ctx = LAContext()
+        var err: NSError?
+        canBiometricSignIn = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
+        if canBiometricSignIn && !biometricPrompted {
+            biometricPrompted = true
+            biometricSignIn()
+        }
+    }
+
+    private func biometricSignIn() {
+        guard let savedToken = AppNetworkService.shared.biometricSessionToken, !savedToken.isEmpty else {
+            canBiometricSignIn = false
+            return
+        }
+        let ctx = LAContext()
+        ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Sign in to your account") { success, _ in
+            DispatchQueue.main.async {
+                guard success else { return }
+                isLoading = true
+                errorMessage = nil
+                AppNetworkService.shared.apiKey = savedToken
+                AppNetworkService.shared.requestObject("profile.php", params: [:]) { result in
+                    isLoading = false
+                    switch result {
+                    case .success(let json):
+                        if bcString(json["status"]) == "success", let data = json["data"] as? [String: Any] {
+                            OnboardingState.shared.syncFromPayload(data)
+                            if let uname = data["username"] as? String, !uname.isEmpty {
+                                UserDefaults.standard.set(uname, forKey: "saved_username")
+                                AppNetworkService.shared.biometricUsername = uname
+                            }
+                            onLoginSuccess()
+                        } else {
+                            AppNetworkService.shared.apiKey = nil
+                            AppNetworkService.shared.biometricSessionToken = nil
+                            canBiometricSignIn = false
+                            errorMessage = "Session expired. Please sign in with your password."
+                        }
+                    case .failure(let err):
+                        let nsErr = err as NSError
+                        if nsErr.domain == "RequiredSecuritySetup" {
+                            // RequiredSetupView will handle it, or clear token if needed
+                            return
+                        }
+                        AppNetworkService.shared.apiKey = nil
+                        errorMessage = "Could not verify biometric session. Please sign in with your password."
+                    }
+                }
+            }
         }
     }
 }
@@ -326,4 +421,12 @@ struct UserData: Codable {
     // Optional so an older API build that does not send these still decodes.
     let security_pin_set: Bool?
     let pin_required: Bool?
+    let kyc_status: Int?
+    let kyc_enforced: Bool?
+    let kyc_gate_locked: Bool?
+    let kyc_required_on_register: Bool?
+    let security_quest_required: Bool?
+    let security_quest_set: Bool?
+    let totp_required: Bool?
+    let totp_set: Bool?
 }

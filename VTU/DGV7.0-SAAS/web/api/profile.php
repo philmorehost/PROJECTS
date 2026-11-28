@@ -79,9 +79,13 @@ if (mysqli_num_rows($check_user) == 1) {
         $kyc_gate_locked = !$is_kyc_compliant && $kyc_enforced;
     }
 
+    $onboarding_extra = function_exists('bc_app_onboarding_fields')
+        ? bc_app_onboarding_fields($connection_server, $user, (int)$vendor_id, $get_vendor)
+        : [];
+
     echo json_encode([
         "status" => "success",
-        "data" => [
+        "data" => array_merge([
             "username" => $user['username'],
             "firstname" => $user['firstname'],
             "lastname" => $user['lastname'],
@@ -112,7 +116,7 @@ if (mysqli_num_rows($check_user) == 1) {
                 "is_eligible" => $vtu_details['is_eligible'] ? "Yes" : "No",
                 "next_bonus" => $vtu_details['next_bonus_time'] ?? "N/A"
             ]
-        ]
+        ], $onboarding_extra)
     ]);
 } else {
     echo json_encode(["status" => "error", "message" => "Invalid API Key"]);

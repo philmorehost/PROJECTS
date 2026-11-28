@@ -21,7 +21,12 @@ require_once(__DIR__ . "/../func/bc-plate-auth.php");
                 $update = mysqli_query($connection_server, "UPDATE sas_users SET transaction_pin='$pin', security_pin='$hashed_pin' WHERE username='$username' AND vendor_id='$vid'");
                 if($update){
                     $_SESSION["product_purchase_response"] = "Security PIN set successfully!";
-                    header("Location: Dashboard.php");
+                    $fresh_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE username='$username' AND vendor_id='$vid' LIMIT 1");
+                    $fresh_u = ($fresh_q && mysqli_num_rows($fresh_q) === 1) ? mysqli_fetch_assoc($fresh_q) : $get_logged_user_details;
+                    $next_url = function_exists('bc_web_next_onboarding_url')
+                        ? bc_web_next_onboarding_url($connection_server, $fresh_u, (int)$vid)
+                        : '/web/Dashboard.php';
+                    header("Location: " . $next_url);
                     exit();
                 } else {
                     $error = "Failed to update PIN. Please try again.";

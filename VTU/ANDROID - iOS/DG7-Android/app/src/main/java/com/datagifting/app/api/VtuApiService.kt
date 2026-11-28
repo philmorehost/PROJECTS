@@ -175,6 +175,9 @@ interface VtuApiService {
     @POST("web/api/security-quest.php")
     suspend fun securityQuest(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
 
+    @POST("web/api/totp-setup.php")
+    suspend fun totpSetup(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>
+
     // ── Contacts ──────────────────────────────────────────────────────────
     @POST("web/api/contacts.php")
     suspend fun contactsAction(@Body body: @JvmSuppressWildcards Map<String, Any>): Response<Map<String, Any>>

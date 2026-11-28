@@ -6307,10 +6307,14 @@ function bc_user_login_payload($user_detail, $vendor) {
         $kyc_gate_locked = ((int)($user_detail['kyc_status'] ?? 0) !== 2) && $kyc_enforced;
     }
 
+    $onboarding_extra = function_exists('bc_app_onboarding_fields')
+        ? bc_app_onboarding_fields($connection_server, $user_detail, (int)($user_detail['vendor_id'] ?? ($vendor['id'] ?? 0)), $vendor)
+        : array();
+
     return [
         "status" => "success",
         "message" => "Login successful",
-        "data" => [
+        "data" => array_merge([
             "username" => $user_detail['username'],
             "firstname" => $user_detail['firstname'],
             "lastname" => $user_detail['lastname'],
@@ -6334,7 +6338,7 @@ function bc_user_login_payload($user_detail, $vendor) {
             "force_password_change" => !empty($user_detail['force_password_change']) ? 1 : 0,
             "totp_enabled" => (($user_detail['two_factor_type'] ?? 'none') === 'totp') ? 1 : 0,
             "ai_status" => (int)($vendor['ai_status'] ?? 0),
-        ],
+        ], $onboarding_extra),
     ];
 }
 

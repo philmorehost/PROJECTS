@@ -78,7 +78,13 @@ unset($_SESSION['reg_pending'], $_SESSION['reg_otp'], $_SESSION['reg_otp_expires
 
 // Log the new user in
 $_SESSION["user_session"] = $user;
-        bc_browser_binding_new_user($vendor_id,stripslashes($user));
+if (function_exists('bc_auth_epoch_stamp')) bc_auth_epoch_stamp();
+bc_browser_binding_new_user($vendor_id,stripslashes($user));
 
-echo json_encode(["status" => "success", "message" => "Account created successfully!", "redirect" => "SecurityPIN.php"]);
+$new_u_q = mysqli_query($connection_server, "SELECT * FROM sas_users WHERE vendor_id='$vendor_id' AND username='$user' LIMIT 1");
+$new_u_row = ($new_u_q && mysqli_num_rows($new_u_q) === 1) ? mysqli_fetch_assoc($new_u_q) : ['vendor_id' => $vendor_id, 'username' => $user, 'kyc_status' => 0];
+$next_url = function_exists('bc_web_next_onboarding_url') ? bc_web_next_onboarding_url($connection_server, $new_u_row, $vendor_id) : '/web/SecurityPIN.php';
+$next_rel = ltrim(str_replace('/web/', '', $next_url), '/');
+
+echo json_encode(["status" => "success", "message" => "Account created successfully!", "redirect" => $next_rel]);
 exit;

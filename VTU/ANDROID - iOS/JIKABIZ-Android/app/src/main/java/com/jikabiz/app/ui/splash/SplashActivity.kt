@@ -91,19 +91,29 @@ class SplashActivity : AppCompatActivity() {
 
             delay(1000) // Ensure spin animation completes
             // Revalidate returning sessions before opening cached dashboard UI.
-            policyCheck.await()
+            val profileResp = policyCheck.await()
+            if (profileResp is retrofit2.Response<*> && profileResp.isSuccessful) {
+                @Suppress("UNCHECKED_CAST")
+                val data = (profileResp.body() as? Map<String, Any>)?.get("data") as? Map<String, Any>
+                if (data != null) com.jikabiz.app.util.OnboardingCoordinator.syncFlags(prefs, data)
+            }
             if (!com.jikabiz.app.util.RequiredSetup.route(this@SplashActivity)) navigateNext()
         }
     }
 
     private fun navigateNext() {
-        val target = when {
-            !prefs.isLoggedIn() -> LoginActivity::class.java
+        val intent = when {
+            !prefs.isLoggedIn() -> Intent(this, LoginActivity::class.java)
             // When biometric is enabled, route through LoginActivity so the prompt is shown
-            prefs.getBoolean(com.jikabiz.app.util.Constants.KEY_BIOMETRIC_ENABLED, false) -> LoginActivity::class.java
-            else -> MainActivity::class.java
+            prefs.getBoolean(com.jikabiz.app.util.Constants.KEY_BIOMETRIC_ENABLED, false) -> {
+                if (prefs.getString(com.jikabiz.app.util.Constants.KEY_BIOMETRIC_SESSION_TOKEN).isBlank() && prefs.getApiKey().isNotBlank()) {
+                    prefs.saveString(com.jikabiz.app.util.Constants.KEY_BIOMETRIC_SESSION_TOKEN, prefs.getApiKey())
+                }
+                Intent(this, LoginActivity::class.java)
+            }
+            else -> com.jikabiz.app.util.OnboardingCoordinator.nextActivityIntent(this, prefs)
         }
-        startActivity(Intent(this, target))
+        startActivity(intent)
         finish()
     }
 }

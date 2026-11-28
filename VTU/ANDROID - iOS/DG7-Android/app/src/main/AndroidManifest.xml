@@ -56,6 +56,10 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:theme="@style/Theme.DGV6.NoActionBar" />
+        <activity
+            android:name=".ui.security.TotpSetupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DGV6.NoActionBar" />
 
         <!-- FileProvider for sharing receipt images / PDFs -->
         <provider
