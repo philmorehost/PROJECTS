@@ -146,6 +146,7 @@ foreach (['DGV7.0-SAAS', 'DGV7.0-NON-SAAS'] as $ed) {
     token_get_all($mailer_src, TOKEN_PARSE);
     sp_chk(strpos($mailer_src, '$smtpMAIL->Timelimit') === false, "$ed/func/bc-mailer.php does not set undeclared PHPMailer::\$Timelimit dynamic property");
     sp_chk(strpos($mailer_src, '$smtpMAIL->getSMTPInstance()->Timelimit') !== false, "$ed/func/bc-mailer.php configures Timelimit on SMTP instance");
+    sp_chk(strpos($mailer_src, 'SMTP is not configured; falling back to PHP mail()') !== false, "$ed/func/bc-mailer.php skips unconfigured SMTP host and falls back directly to PHP mail()");
 
     $conn_src = file_get_contents($ed . '/func/bc-connect.php');
     token_get_all($conn_src, TOKEN_PARSE);
@@ -190,6 +191,28 @@ $pm->AltBody = 'Code 123456';
 $pm->preSend();
 restore_error_handler();
 sp_chk($captured_php_issues === [], 'PHPMailer configuration matching bc_deliver_prepared_mail emits zero PHP warnings/deprecations: ' . implode('; ', $captured_php_issues));
+
+// 6. Account Settings PIN + Email OTP / Google Authenticator choice & pre-gate initial PIN setup
+sp_chk(strpos($sp_as, 'name="set-spadmin-initial-pin"') !== false, 'bc-spadmin/AccountSettings.php exposes initial Super Admin Security PIN setup');
+$pos_init_pin = strpos($sp_as, 'name="set-spadmin-initial-pin"');
+sp_chk($pos_init_pin !== false && $pos_init_pin < strpos($sp_as, 'Global Security Policy'), 'bc-spadmin/AccountSettings.php places initial PIN setup form outside Global Security Policy form');
+sp_chk(strpos($aps, "if(isset(\$_POST['send-channel-code'])){\n        try{") !== false && strpos($aps, 'factor_method') !== false, 'bc-action-policy-settings.php supports Email OTP + Google Authenticator verification');
+sp_chk(strpos($sqs, "if(isset(\$_POST['send-question-code'])){\n        try{") !== false && strpos($sqs, 'factor_method') !== false, 'bc-security-question-settings.php supports Email OTP + Google Authenticator verification');
+
+require_once 'DGV7.0-SAAS/func/bc-action-channels.php';
+if (!function_exists('bc_csrf_field')) {
+    function bc_csrf_field() { return '<input type="hidden" name="_csrf_token" value="test">'; }
+}
+require_once 'DGV7.0-SAAS/func/bc-action-settings-unlock.php';
+$pin_only_actor = ['id' => 1, 'email' => 'sp@example.test', 'two_factor_type' => 'none', 'totp_secret' => '', 'security_pin' => password_hash('1234', PASSWORD_DEFAULT)];
+sp_chk(bc_action_settings_should_handle('spadmin_settings', ['google' => true, 'email' => true], $pin_only_actor) === true, 'spadmin_settings allows PIN + Email OTP unlock even before Google Authenticator is enrolled');
+sp_chk(bc_action_settings_should_handle('bc_admin_settings', ['google' => true, 'email' => true], $pin_only_actor) === true, 'bc_admin_settings allows PIN + Email OTP unlock even before Google Authenticator is enrolled');
+$both_actor = ['id' => 1, 'email' => 'sp@example.test', 'two_factor_type' => 'totp', 'totp_secret' => 'sealed', 'security_pin' => password_hash('1234', PASSWORD_DEFAULT)];
+sp_chk(bc_action_settings_should_handle('spadmin_settings', ['google' => true, 'email' => true], $both_actor) === true, 'spadmin_settings offers Google Authenticator or Email OTP choice when enrolled');
+$banner_email = bc_action_settings_banner('spadmin_settings', $pin_only_actor);
+sp_chk(is_string($banner_email) && strpos($banner_email, 'data-security-send="send_settings_code"') !== false && strpos($banner_email, 'name="pin"') !== false, 'AccountSettings banner renders Security PIN + Email OTP unlock form');
+$banner_both = bc_action_settings_banner('bc_admin_settings', $both_actor);
+sp_chk(is_string($banner_both) && strpos($banner_both, 'name="factor_method"') !== false && strpos($banner_both, 'data-security-send="send_settings_code"') !== false, 'AccountSettings banner offers both Google Authenticator and Email OTP when enrolled');
 
 echo PHP_EOL . ($fail === 0 ? 'spadmin_account_settings_totp_otp: all checks passed' : "spadmin_account_settings_totp_otp: $fail FAILURES") . PHP_EOL;
 exit($fail === 0 ? 0 : 1);

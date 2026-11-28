@@ -161,7 +161,7 @@ $pillar_cards = array(
 );
 $add_feature($pillar_cards, 'Virtual dollar cards', 'Create, fund and freeze USD virtual cards for subscriptions and global merchants.', '/services/virtual-cards.php', 'virtual_card', 'USD Card');
 $add_feature($pillar_cards, 'Gift card services', 'Purchase and redeem popular global and digital brand gift cards.', '/services/gift-cards.php', 'gift_card', 'Cards');
-$add_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Buy, sell and manage stablecoins and supported digital assets.', '/services/crypto.php', 'crypto_hub', 'Assets', 'Pending replacement integration');
+$add_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Buy, sell and manage stablecoins and supported digital assets.', '/services/crypto.php', 'crypto_hub', 'Assets');
 $personal_pillars[] = $pillar_cards;
 
 // 4. Rewards & Tools

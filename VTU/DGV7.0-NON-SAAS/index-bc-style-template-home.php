@@ -178,7 +178,7 @@ $pillar_cards = array(
 );
 $add_personal_feature($pillar_cards, 'Virtual dollar cards', 'Create, fund, freeze and spend globally with instant card controls.', '/services/virtual-cards.php', 'virtual_card', 'USD');
 $add_personal_feature($pillar_cards, 'Gift card services', 'Buy and trade popular global retail and entertainment gift cards.', '/services/gift-cards.php', 'gift_card', 'Buy · Sell');
-$add_personal_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Digital asset buy/sell and stablecoin wallet routes.', '/services/crypto.php', 'crypto_hub', '', 'Pending replacement integration');
+$add_personal_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Buy, sell and manage stablecoins and supported digital assets.', '/services/crypto.php', 'crypto_hub', 'Digital');
 if (!empty($pillar_cards['items'])) {
     $personal_pillars[] = $pillar_cards;
 }

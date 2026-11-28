@@ -9,6 +9,34 @@ require_once __DIR__.'/../func/bc-action-policy-settings.php';
 bc_action_policy_handle(true,$get_logged_spadmin_details);
 bc_enrollment_policy_save(true, $get_logged_spadmin_details);
 
+if (isset($_POST['set-spadmin-initial-pin'])) {
+    bc_validate_csrf();
+    $sp_id = (int)($get_logged_spadmin_details['id'] ?? 0);
+    $fresh_sp = $sp_id > 0 ? bc_q_row("SELECT id, email, password, status, security_pin FROM sas_super_admin WHERE id=? LIMIT 1", [$sp_id]) : null;
+    $cur_pw = (string)($_POST['current_password'] ?? '');
+    $new_pin = (string)($_POST['initial_pin'] ?? '');
+    $con_pin = (string)($_POST['initial_pin_con'] ?? '');
+    if (!$fresh_sp || (int)($fresh_sp['status'] ?? 0) !== 1) {
+        $_SESSION['product_purchase_response'] = 'Error: Super Admin account could not be verified.';
+    } elseif ($fresh_sp['security_pin'] !== null && $fresh_sp['security_pin'] !== '') {
+        $_SESSION['product_purchase_response'] = 'A Security PIN is already set. Unlock settings to change it.';
+    } elseif (!bc_verify_password($cur_pw, (string)$fresh_sp['password'])) {
+        $_SESSION['product_purchase_response'] = 'Error: Current password is incorrect.';
+    } elseif (!preg_match('/\A[0-9]{4}\z/D', $new_pin)) {
+        $_SESSION['product_purchase_response'] = 'Error: Security PIN must be exactly 4 digits.';
+    } elseif (!hash_equals($new_pin, $con_pin)) {
+        $_SESSION['product_purchase_response'] = 'Error: Security PIN and confirmation do not match.';
+    } else {
+        $affected = null;
+        $ok = bc_q("UPDATE sas_super_admin SET security_pin=? WHERE id=? AND (security_pin IS NULL OR security_pin='')", [password_hash($new_pin, PASSWORD_DEFAULT), $sp_id], $affected);
+        $_SESSION['product_purchase_response'] = ($ok === true && $affected === 1)
+            ? 'Super Admin Security PIN saved. You can now unlock settings with Security PIN + Email OTP or Google Authenticator.'
+            : 'Error: Could not save Security PIN. Please retry.';
+    }
+    header('Location: AccountSettings.php#tab-security');
+    exit();
+}
+
     // Demo-mode blocked feature notice
     if (isset($_GET['demo_blocked']) && bc_is_demo_mode($connection_server)) {
         $blocked_feature = htmlspecialchars($_GET['feature'] ?? 'This feature');
@@ -21,7 +49,7 @@ bc_enrollment_policy_save(true, $get_logged_spadmin_details);
 
     // §44: saving settings on this page requires a Google Authenticator unlock
     // (10-minute window — see bc_gauth_settings_gate in func/bc-stepup.php).
-    if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('spadmin_settings', 'sas_super_admin', $get_logged_spadmin_details, array('save-enrollment-policy', 'totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'gauth-unlock', 'gauth-lock'));
+    if (function_exists('bc_gauth_settings_gate')) bc_gauth_settings_gate('spadmin_settings', 'sas_super_admin', $get_logged_spadmin_details, array('save-enrollment-policy', 'set-spadmin-initial-pin', 'totp-begin', 'totp-confirm', 'totp-disable', 'change-password', 'gauth-unlock', 'gauth-lock'));
 
     if (isset($_GET['refresh_license'])) {
         header('Content-Type: application/json');
@@ -1173,6 +1201,31 @@ bc_adm_head('', array("area" => "spadmin"));
                 <div class="tab-pane fade" id="tab-security">
                     <p><a class="btn btn-outline-primary" href="CryptoCustody.php">Crypto custody accounts and protected evidence</a></p>
                     <p><a class="btn btn-outline-primary" href="CryptoPolicies.php">Crypto platform asset ceilings and emergency stop</a></p>
+                    <?php if (empty($get_logged_spadmin_details['security_pin'])): ?>
+                    <div class="card border border-warning rounded-4 shadow-sm mb-4">
+                        <div class="card-body p-4">
+                            <h5 class="fw-bold mb-2"><i class="bi bi-shield-lock-fill me-2 text-warning"></i>Set Your Initial Super Admin Security PIN</h5>
+                            <p class="text-muted small">Set a 4-digit Security PIN first so you can unlock Account Settings and manage security policies using <strong>Security PIN + Email OTP</strong> or <strong>Security PIN + Google Authenticator</strong>.</p>
+                            <form method="post" class="row g-3"><?php echo bc_csrf_field(); ?>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">CURRENT PASSWORD</label>
+                                    <input type="password" name="current_password" class="form-control" autocomplete="current-password" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">NEW 4-DIGIT PIN</label>
+                                    <input type="password" name="initial_pin" class="form-control" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold">CONFIRM 4-DIGIT PIN</label>
+                                    <input type="password" name="initial_pin_con" class="form-control" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" required>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" name="set-spadmin-initial-pin" value="1" class="btn btn-warning fw-bold px-4 rounded-pill">Save Initial Security PIN</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <?php bc_enrollment_policy_form(true, 0); ?>
                     <?php bc_action_policy_form(true,$get_logged_spadmin_details); ?>
                     <script src="../asset/bc-admin-wallet.js"></script>

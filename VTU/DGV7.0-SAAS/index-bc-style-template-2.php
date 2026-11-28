@@ -184,7 +184,7 @@ $pillar_cards = array(
 );
 $add_feature($pillar_cards, 'Virtual dollar cards', 'Create, fund and freeze USD virtual cards for global subscriptions and online shopping.', '/services/virtual-cards.php', 'virtual_card', 'USD');
 $add_feature($pillar_cards, 'Gift card services', 'Purchase global retail, streaming and gaming gift cards with rapid code delivery.', '/services/gift-cards.php', 'gift_card', 'Global');
-$add_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'USDC, USDT and digital asset rails governed by replacement provider integration.', '/services/crypto.php', 'crypto_hub', 'Digital', 'Pending replacement integration');
+$add_feature($pillar_cards, 'Crypto Buy/Sell and stablecoin services', 'Buy, sell and manage USDC, USDT and supported digital assets.', '/services/crypto.php', 'crypto_hub', 'Digital');
 if (!empty($pillar_cards['items'])) {
     $personal_pillars[] = $pillar_cards;
 }
